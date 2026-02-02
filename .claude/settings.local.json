@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(curl:*)",
+      "Bash(bash:*)",
+      "Bash(export NVM_DIR=\"$HOME/.nvm\")",
+      "Bash([ -s \"$NVM_DIR/nvm.sh\" ])",
+      "Bash(. \"$NVM_DIR/nvm.sh\")",
+      "Bash(nvm install:*)",
+      "Bash(source ~/.nvm/nvm.sh)",
+      "Bash(npx vitest run)",
+      "Bash(pkill:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)",
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(export PATH=\"/home/henry/.nvm/versions/node/v24.13.0/bin:$PATH\")",
+      "Bash(/home/henry/code/proj-cc/node_modules/.bin/tsc:*)",
+      "Bash(tree:*)",
+      "Bash(export PATH=\"$HOME/.nvm/versions/node/v24.13.0/bin:$PATH\")",
+      "Bash(npx next lint)",
+      "Bash(npx next lint:*)",
+      "Bash(npx --yes next lint)"
+    ]
+  }
+}

@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f9fafb;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Pulse animation for move indicators - stationary with size pulse */
+@keyframes move-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.move-indicator-pulse {
+  animation: move-pulse 1.2s ease-in-out infinite;
+}
+
+/* Spinning animation for active player piece highlights */
+@keyframes spin-highlight {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.active-piece-highlight {
+  animation: spin-highlight 1s linear infinite;
+}
+
+/* Smooth piece movement */
+.piece-transition {
+  transition: transform 200ms ease-out;
+}
+
+/* Selection highlight animation */
+@keyframes rotate-dash {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 12;
+  }
+}
+
+.selection-dash {
+  animation: rotate-dash 0.5s linear infinite;
+}
+
+/* Undo indicator animation */
+@keyframes undo-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.undo-indicator-pulse {
+  animation: undo-pulse 1.5s ease-in-out infinite;
+}
+
+/* Longest hop golden glow animation */
+@keyframes longest-hop-glow {
+  0%, 100% {
+    opacity: 0.7;
+    stroke-width: 3;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 4.5;
+  }
+}
+
+.longest-hop-glow {
+  animation: longest-hop-glow 1.5s ease-in-out infinite;
+}
+
+.longest-hop-marker {
+  fill: #f59e0b;
+  animation: move-pulse 1.2s ease-in-out infinite;
+}
+
+/* Replay last-move fade-in */
+@keyframes replay-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.replay-last-move {
+  animation: replay-fade-in 0.3s ease-out;
+}
