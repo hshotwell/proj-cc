@@ -349,6 +349,7 @@ export function Board() {
               activePlayers={gameState?.activePlayers}
               isCustomLayout={gameState?.isCustomLayout}
               playerColors={gameState?.playerColors}
+              customGoalPositions={gameState?.customGoalPositions}
             />
           </g>
         ))}

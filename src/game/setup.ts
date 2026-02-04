@@ -107,6 +107,7 @@ export function createGameFromLayout(layout: BoardLayout): GameState {
     finishedPlayers: [],
     turnNumber: 1,
     isCustomLayout: true,
+    customGoalPositions: layout.goalPositions,
   };
 }
 

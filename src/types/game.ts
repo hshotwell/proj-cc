@@ -57,6 +57,8 @@ export interface GameState {
   playerColors?: ColorMapping;
   // AI player configurations
   aiPlayers?: import('./ai').AIPlayerMap;
+  // Custom goal positions if using a custom layout
+  customGoalPositions?: Partial<Record<PlayerIndex, string[]>>;
 }
 
 // Player configuration (name, color, etc.)
@@ -82,6 +84,8 @@ export interface BoardLayout {
   cells: string[];
   // Starting positions for each player (player index -> array of coord keys)
   startingPositions: Partial<Record<PlayerIndex, string[]>>;
+  // Goal positions for each player (player index -> array of coord keys)
+  goalPositions?: Partial<Record<PlayerIndex, string[]>>;
   createdAt: number;
   isDefault?: boolean;
 }

@@ -53,6 +53,14 @@ export const TRIANGLE_ASSIGNMENTS: Record<PlayerIndex, { home: TriangleIndex; go
   5: { home: 5, goal: 2 }, // Yellow: top-left -> bottom-right
 };
 
+// Maps a goal triangle to the player who is trying to reach it
+export const GOAL_TRIANGLE_TO_PLAYER = Object.entries(
+  TRIANGLE_ASSIGNMENTS
+).reduce((acc, [player, assignment]) => {
+  acc[assignment.goal] = parseInt(player, 10) as PlayerIndex;
+  return acc;
+}, {} as Record<TriangleIndex, PlayerIndex>);
+
 // Maps triangle/sector index to the player who uses it as home
 // Now identity mapping since getTriangleForPosition returns player index directly
 export const TRIANGLE_TO_PLAYER: Record<TriangleIndex, PlayerIndex> = {

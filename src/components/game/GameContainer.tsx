@@ -9,9 +9,11 @@ import { MoveHistory } from './MoveHistory';
 import { GameOverDialog } from './GameOverDialog';
 import { MoveConfirmation } from './MoveConfirmation';
 import { useAITurn } from '@/hooks/useAITurn';
+import { useGameStore } from '@/store/gameStore'; // Import useGameStore
 
 export function GameContainer() {
   useAITurn();
+  const { gameState } = useGameStore(); // Get gameState
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -35,7 +37,10 @@ export function GameContainer() {
           {/* Center - Board */}
           <div className="flex-1 flex items-center justify-center">
             <div className="w-full max-w-2xl aspect-square bg-white rounded-lg shadow-lg p-4">
-              <Board />
+              <Board
+                isCustomLayout={gameState?.isCustomLayout}
+                customGoalPositions={gameState?.customGoalPositions}
+              />
             </div>
           </div>
 

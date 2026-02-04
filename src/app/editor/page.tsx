@@ -3,11 +3,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import type { PlayerIndex, BoardLayout } from '@/types/game';
-import { PLAYER_COLORS, DEFAULT_PLAYER_NAMES, HEX_SIZE, BOARD_PADDING } from '@/game/constants';
+import { PLAYER_COLORS, HEX_SIZE, BOARD_PADDING, TRIANGLE_ASSIGNMENTS } from '@/game/constants';
+import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
 import { cubeToPixel, cubeCoord, coordKey, rotateCube } from '@/game/coordinates';
 import { useLayoutStore } from '@/store/layoutStore';
 
-type EditorMode = 'cells' | 'starting';
+type EditorMode = 'cells' | 'starting' | 'goals';
 type SymmetryMode = 'none' | 'x' | 'y' | 'xy' | '6way';
 
 // Generate all possible hex positions within a radius
@@ -62,6 +63,34 @@ function getSymmetricCoords(key: string, symmetry: SymmetryMode): string[] {
   return Array.from(results);
 }
 
+// Helper to derive standard goal positions from the default layout
+function getStandardGoalPositions(): Record<number, Set<string>> {
+  const goalPositions: Record<number, Set<string>> = {
+    0: new Set(),
+    1: new Set(),
+    2: new Set(),
+    3: new Set(),
+    4: new Set(),
+    5: new Set(),
+  };
+
+  for (const player of ALL_PLAYERS) {
+    const goalTriangle = TRIANGLE_ASSIGNMENTS[player].goal;
+    // Find the player whose home triangle matches this goalTriangle
+    let targetPlayer: PlayerIndex | undefined;
+    for (const p of ALL_PLAYERS) {
+      if (TRIANGLE_ASSIGNMENTS[p].home === goalTriangle) {
+        targetPlayer = p;
+        break;
+      }
+    }
+    if (targetPlayer !== undefined && DEFAULT_BOARD_LAYOUT.startingPositions[targetPlayer]) {
+      goalPositions[player] = new Set(DEFAULT_BOARD_LAYOUT.startingPositions[targetPlayer] || []);
+    }
+  }
+  return goalPositions;
+}
+
 export default function EditorPage() {
   const { layouts, loadLayouts, saveLayout, deleteLayout } = useLayoutStore();
 
@@ -69,6 +98,14 @@ export default function EditorPage() {
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerIndex>(0);
   const [activeCells, setActiveCells] = useState<Set<string>>(new Set());
   const [startingPositions, setStartingPositions] = useState<Record<number, Set<string>>>({
+    0: new Set(),
+    1: new Set(),
+    2: new Set(),
+    3: new Set(),
+    4: new Set(),
+    5: new Set(),
+  });
+  const [goalPositions, setGoalPositions] = useState<Record<number, Set<string>>>({
     0: new Set(),
     1: new Set(),
     2: new Set(),
@@ -126,13 +163,22 @@ export default function EditorPage() {
               }
               return newSp;
             });
+            setGoalPositions((gp) => {
+              const newGp = { ...gp };
+              for (const player of ALL_PLAYERS) {
+                const playerSet = new Set(newGp[player]);
+                playerSet.delete(symKey);
+                newGp[player] = playerSet;
+              }
+              return newGp;
+            });
           } else {
             newSet.add(symKey);
           }
         }
         return newSet;
       });
-    } else {
+    } else if (mode === 'starting') {
       // Set starting position mode
       if (!activeCells.has(key)) return; // Can only place on active cells
 
@@ -169,28 +215,155 @@ export default function EditorPage() {
 
         return newPositions;
       });
+    } else if (mode === 'goals') {
+      // Set goal position mode
+      if (!activeCells.has(key)) return; // Can only place on active cells
+
+      setGoalPositions((prev) => {
+        const newPositions = { ...prev };
+
+        // Check if clicked cell already has a goal from any player
+        let hasExistingGoal = false;
+        for (const player of ALL_PLAYERS) {
+          if (newPositions[player].has(key)) {
+            hasExistingGoal = true;
+            break;
+          }
+        }
+
+        for (const symKey of symmetricKeys) {
+          // Skip if cell is not active
+          if (!activeCells.has(symKey)) continue;
+
+          if (hasExistingGoal) {
+            // Remove goals at symmetric positions
+            for (const player of ALL_PLAYERS) {
+              const newSet = new Set(newPositions[player]);
+              newSet.delete(symKey);
+              newPositions[player] = newSet;
+            }
+          } else {
+            // Add goal for selected player
+            const newSet = new Set(newPositions[selectedPlayer]);
+            newSet.add(symKey);
+            newPositions[selectedPlayer] = newSet;
+          }
+        }
+
+        return newPositions;
+      });
     }
   };
 
-  const getCellColor = (key: string): string => {
-    // Check if it's a starting position
-    for (const player of ALL_PLAYERS) {
-      if (startingPositions[player].has(key)) {
-        return PLAYER_COLORS[player];
+  // Stats calculation memo
+  const pieceCounts = useMemo(() => {
+    return ALL_PLAYERS.map((p) => startingPositions[p].size);
+  }, [startingPositions]);
+
+  const handleSave = () => {
+    const layout: BoardLayout = {
+      id: selectedLayoutId || `layout-${Date.now()}`,
+      name: layoutName,
+      cells: Array.from(activeCells),
+      startingPositions: Object.fromEntries(
+        ALL_PLAYERS.map((p) => [p, Array.from(startingPositions[p])])
+      ) as Record<PlayerIndex, string[]>,
+      goalPositions: Object.fromEntries(
+        ALL_PLAYERS.map((p) => [p, Array.from(goalPositions[p])])
+      ) as Record<PlayerIndex, string[]>,
+      createdAt: Date.now(),
+    };
+    saveLayout(layout);
+    setSelectedLayoutId(layout.id);
+    alert('Layout saved!');
+  };
+
+  const handleLoad = (layout: BoardLayout) => {
+    setActiveCells(new Set(layout.cells));
+    setStartingPositions(
+      Object.fromEntries(
+        ALL_PLAYERS.map((p) => [p, new Set(layout.startingPositions[p] || [])])
+      ) as Record<number, Set<string>>
+    );
+    setGoalPositions(
+      Object.fromEntries(
+        ALL_PLAYERS.map((p) => [p, new Set(layout.goalPositions?.[p] || [])])
+      ) as Record<number, Set<string>>
+    );
+    setLayoutName(layout.name);
+    setSelectedLayoutId(layout.id);
+  };
+
+  const handleClear = () => {
+    setActiveCells(new Set());
+    setStartingPositions({
+      0: new Set(),
+      1: new Set(),
+      2: new Set(),
+      3: new Set(),
+      4: new Set(),
+      5: new Set(),
+    });
+    setGoalPositions({
+      0: new Set(),
+      1: new Set(),
+      2: new Set(),
+      3: new Set(),
+      4: new Set(),
+      5: new Set(),
+    });
+    setLayoutName('My Board');
+    setSelectedLayoutId(null);
+  };
+
+  const handleFillAll = () => {
+    setActiveCells(new Set(allPositions));
+  };
+
+  const handleLoadStandardLayout = () => {
+    setActiveCells(new Set(DEFAULT_BOARD_LAYOUT.cells));
+    setStartingPositions({
+      0: new Set(), 1: new Set(), 2: new Set(),
+      3: new Set(), 4: new Set(), 5: new Set(),
+    });
+    setGoalPositions({ // Clear goal positions
+      0: new Set(), 1: new Set(), 2: new Set(),
+      3: new Set(), 4: new Set(), 5: new Set(),
+    });
+    setLayoutName(DEFAULT_BOARD_LAYOUT.name);
+    setSelectedLayoutId(DEFAULT_BOARD_LAYOUT.id);
+  };
+
+  const handleExport = () => {
+    const layout: BoardLayout = {
+      id: selectedLayoutId || `layout-${Date.now()}`,
+      name: layoutName,
+      cells: Array.from(activeCells),
+      startingPositions: Object.fromEntries(
+        ALL_PLAYERS.map((p) => [p, Array.from(startingPositions[p])])
+      ) as Record<PlayerIndex, string[]>,
+      goalPositions: Object.fromEntries(
+        ALL_PLAYERS.map((p) => [p, Array.from(goalPositions[p])])
+      ) as Record<PlayerIndex, string[]>,
+      createdAt: Date.now(),
+    };
+    const json = JSON.stringify(layout, null, 2);
+    console.log('Exported layout:', json);
+    navigator.clipboard.writeText(json);
+    alert('Layout JSON copied to clipboard!');
+  };
+
+  const handleImport = () => {
+    const json = prompt('Paste layout JSON:');
+    if (json) {
+      try {
+        const layout = JSON.parse(json) as BoardLayout;
+        handleLoad(layout);
+        alert('Layout imported!');
+      } catch (e) {
+        alert('Invalid JSON');
       }
     }
-
-    // Check if cell is active
-    if (activeCells.has(key)) {
-      return '#d1d5db'; // Medium gray for active cells
-    }
-
-    return '#e5e7eb'; // Light gray for inactive (visible but distinct)
-  };
-
-  const getCellOpacity = (key: string): number => {
-    if (activeCells.has(key)) return 1;
-    return 0.6; // Visible inactive cells
   };
 
   // Calculate symmetry lines for visualization
@@ -220,84 +393,6 @@ export default function EditorPage() {
 
     return lines;
   }, [symmetry]);
-
-  const handleSave = () => {
-    const layout: BoardLayout = {
-      id: selectedLayoutId || `layout-${Date.now()}`,
-      name: layoutName,
-      cells: Array.from(activeCells),
-      startingPositions: Object.fromEntries(
-        ALL_PLAYERS.map((p) => [p, Array.from(startingPositions[p])])
-      ) as Record<PlayerIndex, string[]>,
-      createdAt: Date.now(),
-    };
-    saveLayout(layout);
-    setSelectedLayoutId(layout.id);
-    alert('Layout saved!');
-  };
-
-  const handleLoad = (layout: BoardLayout) => {
-    setActiveCells(new Set(layout.cells));
-    setStartingPositions(
-      Object.fromEntries(
-        ALL_PLAYERS.map((p) => [p, new Set(layout.startingPositions[p] || [])])
-      ) as Record<number, Set<string>>
-    );
-    setLayoutName(layout.name);
-    setSelectedLayoutId(layout.id);
-  };
-
-  const handleClear = () => {
-    setActiveCells(new Set());
-    setStartingPositions({
-      0: new Set(),
-      1: new Set(),
-      2: new Set(),
-      3: new Set(),
-      4: new Set(),
-      5: new Set(),
-    });
-    setLayoutName('My Board');
-    setSelectedLayoutId(null);
-  };
-
-  const handleFillAll = () => {
-    setActiveCells(new Set(allPositions));
-  };
-
-  const handleExport = () => {
-    const layout: BoardLayout = {
-      id: selectedLayoutId || `layout-${Date.now()}`,
-      name: layoutName,
-      cells: Array.from(activeCells),
-      startingPositions: Object.fromEntries(
-        ALL_PLAYERS.map((p) => [p, Array.from(startingPositions[p])])
-      ) as Record<PlayerIndex, string[]>,
-      createdAt: Date.now(),
-    };
-    const json = JSON.stringify(layout, null, 2);
-    console.log('Exported layout:', json);
-    navigator.clipboard.writeText(json);
-    alert('Layout JSON copied to clipboard!');
-  };
-
-  const handleImport = () => {
-    const json = prompt('Paste layout JSON:');
-    if (json) {
-      try {
-        const layout = JSON.parse(json) as BoardLayout;
-        handleLoad(layout);
-        alert('Layout imported!');
-      } catch (e) {
-        alert('Invalid JSON');
-      }
-    }
-  };
-
-  // Count pieces per player
-  const pieceCounts = useMemo(() => {
-    return ALL_PLAYERS.map((p) => startingPositions[p].size);
-  }, [startingPositions]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -368,11 +463,21 @@ export default function EditorPage() {
                 >
                   Pieces
                 </button>
+                <button
+                  onClick={() => setMode('goals')}
+                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-all ${
+                    mode === 'goals'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Goals
+                </button>
               </div>
             </div>
 
-            {/* Player selection (for starting positions mode) */}
-            {mode === 'starting' && (
+            {/* Player selection (for starting positions and goals mode) */}
+            {(mode === 'starting' || mode === 'goals') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select Player
@@ -393,7 +498,7 @@ export default function EditorPage() {
                         style={{ backgroundColor: PLAYER_COLORS[player] }}
                       />
                       <div className="text-xs text-center text-gray-600">
-                        {pieceCounts[player]}
+                        {mode === 'starting' ? startingPositions[player].size : goalPositions[player].size}
                       </div>
                     </button>
                   ))}
@@ -464,6 +569,7 @@ export default function EditorPage() {
             <div className="text-sm text-gray-600">
               <p>Active cells: {activeCells.size}</p>
               <p>Total pieces: {pieceCounts.reduce((a, b) => a + b, 0)}</p>
+              <p>Total goals: {ALL_PLAYERS.reduce((acc, p) => acc + goalPositions[p].size, 0)}</p>
             </div>
 
             {/* Actions */}
@@ -486,6 +592,12 @@ export default function EditorPage() {
                   className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
                 >
                   Clear All
+                </button>
+                <button
+                  onClick={handleLoadStandardLayout}
+                  className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Load Standard
                 </button>
               </div>
             </div>
@@ -531,6 +643,7 @@ export default function EditorPage() {
             <div className="text-xs text-gray-500 space-y-1">
               <p><strong>Cells mode:</strong> Click to toggle cells on/off</p>
               <p><strong>Pieces mode:</strong> Select a player color, then click active cells to place/remove pieces</p>
+              <p><strong>Goals mode:</strong> Select a player color, then click active cells to set/unset goal positions for that player</p>
               <p><strong>Symmetry:</strong> When enabled, edits are mirrored automatically</p>
             </div>
           </div>
@@ -560,9 +673,16 @@ export default function EditorPage() {
                 const [q, r] = key.split(',').map(Number);
                 const { x, y } = cubeToPixel(cubeCoord(q, r), HEX_SIZE);
                 const isActive = activeCells.has(key);
-                const hasStartingPiece = ALL_PLAYERS.some((p) =>
-                  startingPositions[p].has(key)
-                );
+
+                let isGoalForAnyPlayer = false;
+                let goalPlayerForThisCell: PlayerIndex | undefined = undefined; // Declare here
+                for (const player of ALL_PLAYERS) {
+                  if (goalPositions[player].has(key)) {
+                    isGoalForAnyPlayer = true;
+                    goalPlayerForThisCell = player; // Assign here
+                    break;
+                  }
+                }
 
                 return (
                   <g
@@ -575,20 +695,31 @@ export default function EditorPage() {
                       cx={x}
                       cy={y}
                       r={HEX_SIZE * 0.45}
-                      fill={getCellColor(key)}
+                      fill={getCellColor(key, mode, selectedPlayer, activeCells, startingPositions, goalPositions)}
                       stroke={isActive ? '#9ca3af' : '#e5e7eb'}
                       strokeWidth={1}
-                      opacity={getCellOpacity(key)}
+                      opacity={getCellOpacity(key, activeCells, goalPositions)}
                     />
+                    {/* Goal indicator (separate circle) */}
+                    {isGoalForAnyPlayer && goalPlayerForThisCell !== undefined && (
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={HEX_SIZE * 0.55} // New larger radius
+                        fill={mode === 'goals' && goalPlayerForThisCell === selectedPlayer ? PLAYER_COLORS[selectedPlayer] : 'none'}
+                        fillOpacity={mode === 'goals' && goalPlayerForThisCell === selectedPlayer ? 0.3 : 0}
+                        stroke={PLAYER_COLORS[goalPlayerForThisCell]} // Player's color for stroke
+                        strokeWidth={2} // Consistent stroke width for goal highlight
+                        className={'pulse-opacity'}
+                      />
+                    )}
                     {/* Piece indicator */}
-                    {hasStartingPiece && (
+                    {(ALL_PLAYERS.some((p) => startingPositions[p].has(key))) && (
                       <circle
                         cx={x}
                         cy={y}
                         r={HEX_SIZE * 0.35}
-                        fill={getCellColor(key)}
-                        stroke="#374151"
-                        strokeWidth={2}
+                        fill={getCellColor(key, mode, selectedPlayer, activeCells, startingPositions, goalPositions)}
                       />
                     )}
                   </g>
@@ -601,3 +732,34 @@ export default function EditorPage() {
     </div>
   );
 }
+
+const getCellColor = (
+  key: string,
+  mode: EditorMode,
+  selectedPlayer: PlayerIndex,
+  activeCells: Set<string>,
+  startingPositions: Record<number, Set<string>>,
+  goalPositions: Record<number, Set<string>>
+): string => {
+  // Check if it's a starting position (takes precedence over general goals if not in goals mode)
+  for (const player of ALL_PLAYERS) {
+    if (startingPositions[player].has(key)) {
+      return PLAYER_COLORS[player];
+    }
+  }
+
+  // Check if cell is active
+  if (activeCells.has(key)) {
+    return '#d1d5db'; // Medium gray for active cells
+  }
+
+  return '#e5e7eb'; // Light gray for inactive (visible but distinct)
+};
+
+const getCellOpacity = (key: string, activeCells: Set<string>, goalPositions: Record<number, Set<string>>): number => {
+  // If it's an active cell, make it fully opaque
+  if (activeCells.has(key)) return 1;
+  // Otherwise, if it's an inactive cell, reduce opacity
+  return 0.6; // Visible inactive cells
+};
+
