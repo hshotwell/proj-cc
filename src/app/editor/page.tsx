@@ -569,7 +569,7 @@ export default function EditorPage() {
             <div className="text-sm text-gray-600">
               <p>Active cells: {activeCells.size}</p>
               <p>Total pieces: {pieceCounts.reduce((a, b) => a + b, 0)}</p>
-              <p>Total goals: {ALL_PLAYERS.reduce((acc, p) => acc + goalPositions[p].size, 0)}</p>
+              <p>Total goals: {ALL_PLAYERS.reduce((acc: number, p) => acc + goalPositions[p].size, 0)}</p>
             </div>
 
             {/* Actions */}

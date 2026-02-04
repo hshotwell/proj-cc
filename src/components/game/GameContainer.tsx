@@ -37,10 +37,7 @@ export function GameContainer() {
           {/* Center - Board */}
           <div className="flex-1 flex items-center justify-center">
             <div className="w-full max-w-2xl aspect-square bg-white rounded-lg shadow-lg p-4">
-              <Board
-                isCustomLayout={gameState?.isCustomLayout}
-                customGoalPositions={gameState?.customGoalPositions}
-              />
+              <Board />
             </div>
           </div>
 

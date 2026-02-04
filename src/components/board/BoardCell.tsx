@@ -25,7 +25,8 @@ export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = fa
 
   if (isCustomLayout && customGoalPositions) {
     // Custom layout: check if this cell is a custom goal for any active player
-    for (const player of activePlayers || ALL_PLAYERS) { // Assuming ALL_PLAYERS is defined or passed down
+    const players: PlayerIndex[] = activePlayers || [0, 1, 2, 3, 4, 5];
+    for (const player of players) {
       if (customGoalPositions[player]?.includes(coordKeyStr)) {
         fillColor = getPlayerColor(player, playerColors);
         fillOpacity = 0.25;
