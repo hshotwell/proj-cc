@@ -1,9 +1,10 @@
 'use client';
 
-import type { PlayerIndex, ColorMapping } from '@/types/game';
+import type { PlayerIndex, ColorMapping, GameState } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
 import { countPiecesInGoal } from '@/game/state';
+import { computePlayerProgress } from '@/game/progress';
 import { useGameStore } from '@/store/gameStore';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
@@ -12,13 +13,14 @@ interface PlayerCardProps {
   player: PlayerIndex;
   isCurrentTurn: boolean;
   piecesInGoal: number;
+  progress: number; // 0-100 based on distance to goal
   customColors?: ColorMapping;
   activePlayers: PlayerIndex[];
   finishRank?: number; // 0-based index in finishedPlayers, undefined if not finished
   aiPlayers?: AIPlayerMap;
 }
 
-function PlayerCard({ player, isCurrentTurn, piecesInGoal, customColors, activePlayers, finishRank, aiPlayers }: PlayerCardProps) {
+function PlayerCard({ player, isCurrentTurn, piecesInGoal, progress, customColors, activePlayers, finishRank, aiPlayers }: PlayerCardProps) {
   const color = getPlayerColor(player, customColors);
   const name = getPlayerDisplayName(player, activePlayers);
   const isFinished = finishRank !== undefined;
@@ -56,15 +58,16 @@ function PlayerCard({ player, isCurrentTurn, piecesInGoal, customColors, activeP
       </div>
       {!isFinished && (
         <>
-          <div className="mt-1 text-xs text-gray-500">
-            {piecesInGoal}/10 in goal
+          <div className="mt-1 text-xs text-gray-500 flex justify-between">
+            <span>{piecesInGoal}/10 in goal</span>
+            <span>{Math.round(progress)}%</span>
           </div>
           {/* Progress bar */}
           <div className="mt-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
               className="h-full transition-all duration-300"
               style={{
-                width: `${(piecesInGoal / 10) * 100}%`,
+                width: `${progress}%`,
                 backgroundColor: color,
               }}
             />
@@ -99,6 +102,7 @@ export function PlayerPanel() {
               player={player}
               isCurrentTurn={player === currentPlayer}
               piecesInGoal={countPiecesInGoal(gameState, player)}
+              progress={computePlayerProgress(gameState, player)}
               customColors={gameState.playerColors}
               activePlayers={gameState.activePlayers}
               finishRank={finishIdx >= 0 ? finishIdx : undefined}

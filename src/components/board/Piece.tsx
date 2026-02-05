@@ -16,6 +16,24 @@ interface PieceProps {
   // Optional: render at this position instead of coord (for animation)
   displayCoord?: CubeCoord;
   isAnimating?: boolean;
+  // Highlight this piece as the last moved piece for its player
+  isLastMoved?: boolean;
+}
+
+// Lighten a hex color by mixing with white
+function lightenColor(hex: string, amount: number): string {
+  // Remove # if present
+  const cleanHex = hex.replace('#', '');
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+
+  // Mix with white
+  const newR = Math.round(r + (255 - r) * amount);
+  const newG = Math.round(g + (255 - g) * amount);
+  const newB = Math.round(b + (255 - b) * amount);
+
+  return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
 }
 
 export function Piece({
@@ -28,11 +46,14 @@ export function Piece({
   customColors,
   displayCoord,
   isAnimating,
+  isLastMoved,
 }: PieceProps) {
   // Use displayCoord for visual position if provided, otherwise use actual coord
   const renderCoord = displayCoord ?? coord;
   const { x, y } = cubeToPixel(renderCoord, size);
-  const color = getPlayerColor(player, customColors);
+  const baseColor = getPlayerColor(player, customColors);
+  // Use a lighter shade for last-moved pieces
+  const color = isLastMoved ? lightenColor(baseColor, 0.3) : baseColor;
 
   // Piece radius is larger than board cell (0.45) so pieces stand out
   const pieceRadius = size * 0.58;

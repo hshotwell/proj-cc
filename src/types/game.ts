@@ -28,6 +28,8 @@ export interface Move {
   jumpPath?: CubeCoord[];
   // Swap move: displaces an opponent piece from goal cell
   isSwap?: boolean;
+  // Player who made this move (set when added to history)
+  player?: PlayerIndex;
 }
 
 // Triangle index (0-5) representing each of the 6 points of the star
@@ -59,6 +61,8 @@ export interface GameState {
   aiPlayers?: import('./ai').AIPlayerMap;
   // Custom goal positions if using a custom layout
   customGoalPositions?: Partial<Record<PlayerIndex, string[]>>;
+  // Starting positions for each player (used for triangle coloring)
+  startingPositions?: Partial<Record<PlayerIndex, string[]>>;
 }
 
 // Player configuration (name, color, etc.)

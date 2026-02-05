@@ -5,7 +5,8 @@ import type { CubeCoord, PlayerIndex } from '@/types/game';
 import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION } from '@/game/constants';
 import { generateBoardPositions } from '@/game/board';
 import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath } from '@/game/coordinates';
-import { getPlayerColorFromState } from '@/game/colors';
+import { getPlayerColorFromState, hexToRgba, blendColorsRgba } from '@/game/colors';
+import { findBoardTriangles, findBorderEdges } from '@/game/triangles';
 import { isGameFullyOver } from '@/game/state';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -40,7 +41,7 @@ export function Board() {
     undoLastMove,
   } = useGameStore();
 
-  const { showAllMoves, animateMoves, rotateBoard } = useSettingsStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves } = useSettingsStore();
 
   // Choose data source based on replay mode
   const gameState = isReplayActive ? replayDisplayState : liveGameState;
@@ -142,6 +143,19 @@ export function Board() {
     return generateBoardPositions();
   }, [gameState?.isCustomLayout, gameState?.board]);
 
+  // Board cell keys as a set (used for triangle detection and border edges)
+  const boardKeys = useMemo(() => {
+    return new Set(boardPositions.map((pos) => coordKey(pos)));
+  }, [boardPositions]);
+
+  // Compute triangles between adjacent cells
+  const boardTriangles = useMemo(() => {
+    return findBoardTriangles(boardKeys, gameState?.startingPositions, gameState?.isCustomLayout);
+  }, [boardKeys, gameState?.startingPositions, gameState?.isCustomLayout]);
+
+  // Compute border edges (outer boundary of the board)
+  const borderEdges = useMemo(() => findBorderEdges(boardTriangles, boardKeys), [boardTriangles, boardKeys]);
+
   // Calculate SVG viewBox dimensions
   const viewBox = useMemo(() => {
     if (boardPositions.length === 0) {
@@ -227,6 +241,47 @@ export function Board() {
     const path = getMovePath(move.from, move.to, move.jumpPath);
     return path.map(c => cubeToPixel(c, HEX_SIZE));
   }, [isReplayActive, longestHopIndex, replayStep, replayMoves]);
+
+  // Compute last move for each player (for showLastMoves setting)
+  const lastMovesPerPlayer = useMemo(() => {
+    if (!showLastMoves || !gameState || isReplayActive) return new Map<PlayerIndex, { from: CubeCoord; to: CubeCoord; path: { x: number; y: number }[]; color: string }>();
+
+    const result = new Map<PlayerIndex, { from: CubeCoord; to: CubeCoord; path: { x: number; y: number }[]; color: string }>();
+    const history = gameState.moveHistory;
+
+    // Find the last move for each active player
+    for (const player of gameState.activePlayers) {
+      // Search backwards for the last move by this player
+      for (let i = history.length - 1; i >= 0; i--) {
+        const move = history[i];
+        if (move.player === player) {
+          const path = getMovePath(move.from, move.to, move.jumpPath);
+          const pixelPath = path.map(c => cubeToPixel(c, HEX_SIZE));
+          const baseColor = getPlayerColorFromState(player, gameState);
+          // Lighten the color for the path
+          const lightColor = hexToRgba(baseColor, 0.4);
+          result.set(player, {
+            from: move.from,
+            to: move.to,
+            path: pixelPath,
+            color: lightColor,
+          });
+          break;
+        }
+      }
+    }
+
+    return result;
+  }, [showLastMoves, gameState, isReplayActive]);
+
+  // Set of piece positions that were the last move destination (for highlighting)
+  const lastMoveDestinations = useMemo(() => {
+    const set = new Set<string>();
+    for (const [, data] of lastMovesPerPlayer) {
+      set.add(coordKey(data.to));
+    }
+    return set;
+  }, [lastMovesPerPlayer]);
 
   const handleCellClick = (coord: CubeCoord) => {
     if (isReplayActive) return;
@@ -335,6 +390,51 @@ export function Board() {
           transition: !isReplayActive && rotateBoard ? `transform ${BOARD_ROTATION_DURATION}ms ease-in-out` : undefined,
         }}
       >
+      {/* Layer 0: Triangle fills between adjacent cells */}
+      <g>
+        {boardTriangles.map((tri) => {
+          const points = tri.vertices.map((key) => {
+            const pos = parseCoordKey(key);
+            const px = cubeToPixel(pos, HEX_SIZE);
+            return `${px.x},${px.y}`;
+          }).join(' ');
+
+          let fill: string;
+          if (tri.playerOwners.length > 0 && gameState) {
+            const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
+            fill = blendColorsRgba(colors, 0.15);
+          } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
+            fill = '#e2e2e2';
+          } else {
+            fill = '#f8f8f8';
+          }
+
+          return (
+            <polygon
+              key={`tri-${tri.vertices.join('-')}`}
+              points={points}
+              fill={fill}
+              stroke={showTriangleLines ? 'black' : 'none'}
+              strokeWidth={0.5}
+            />
+          );
+        })}
+        {/* Border edges: thick lines on outer boundary, always visible */}
+        {borderEdges.map((edge) => {
+          const pa = cubeToPixel(parseCoordKey(edge.a), HEX_SIZE);
+          const pb = cubeToPixel(parseCoordKey(edge.b), HEX_SIZE);
+          return (
+            <line
+              key={`border-${edge.a}-${edge.b}`}
+              x1={pa.x} y1={pa.y}
+              x2={pb.x} y2={pb.y}
+              stroke="black"
+              strokeWidth={1.5}
+            />
+          );
+        })}
+      </g>
+
       {/* Layer 1: Background cells */}
       <g>
         {boardPositions.map((coord) => (
@@ -426,15 +526,58 @@ export function Board() {
         </g>
       )}
 
+      {/* Layer 2d: Last move paths for each player */}
+      {showLastMoves && !isReplayActive && lastMovesPerPlayer.size > 0 && (
+        <g>
+          {Array.from(lastMovesPerPlayer.entries()).map(([player, data]) => (
+            <g key={`last-move-${player}`}>
+              {/* Path line from start to current position */}
+              {data.path.length > 1 && (
+                <polyline
+                  points={data.path.map(p => `${p.x},${p.y}`).join(' ')}
+                  fill="none"
+                  stroke={data.color}
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray="6 4"
+                />
+              )}
+              {/* Faded circle at the starting position */}
+              <circle
+                cx={data.path[0].x}
+                cy={data.path[0].y}
+                r={HEX_SIZE * 0.35}
+                fill={data.color}
+                stroke="none"
+              />
+              {/* Small dots at intermediate positions for jumps */}
+              {data.path.slice(1, -1).map((point, i) => (
+                <circle
+                  key={`intermediate-${i}`}
+                  cx={point.x}
+                  cy={point.y}
+                  r={3}
+                  fill={data.color}
+                />
+              ))}
+            </g>
+          ))}
+        </g>
+      )}
+
       {/* Layer 3: Pieces */}
       <g>
         {pieces.map(({ coord, player }) => {
           const displayCoord = getAnimationDisplayCoord(coord);
           const isThisAnimating = !!displayCoord;
 
+          const pieceKey = coordKey(coord);
+          const isLastMoved = showLastMoves && lastMoveDestinations.has(pieceKey);
+
           return (
             <Piece
-              key={`piece-${coordKey(coord)}`}
+              key={`piece-${pieceKey}`}
               coord={coord}
               player={player}
               isCurrentPlayer={!isReplayActive && !isAITurn && player === displayCurrentPlayer}
@@ -446,6 +589,7 @@ export function Board() {
               customColors={gameState.playerColors}
               displayCoord={displayCoord}
               isAnimating={isThisAnimating}
+              isLastMoved={isLastMoved}
             />
           );
         })}

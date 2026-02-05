@@ -56,6 +56,12 @@ export function createGame(
   const board = createEmptyBoard();
   placePieces(board, activePlayers);
 
+  // Build starting positions map for active players
+  const startingPositions: Partial<Record<PlayerIndex, string[]>> = {};
+  for (const player of activePlayers) {
+    startingPositions[player] = getDefaultStartingPositions(player);
+  }
+
   return {
     board,
     playerCount,
@@ -67,11 +73,16 @@ export function createGame(
     turnNumber: 1,
     playerColors,
     aiPlayers,
+    startingPositions,
   };
 }
 
 // Create a game state from a custom board layout
-export function createGameFromLayout(layout: BoardLayout): GameState {
+export function createGameFromLayout(
+  layout: BoardLayout,
+  playerColors?: ColorMapping,
+  aiPlayers?: AIPlayerMap
+): GameState {
   const board = new Map<string, CellContent>();
 
   // Add all cells from the layout
@@ -108,6 +119,9 @@ export function createGameFromLayout(layout: BoardLayout): GameState {
     turnNumber: 1,
     isCustomLayout: true,
     customGoalPositions: layout.goalPositions,
+    startingPositions: layout.startingPositions,
+    playerColors,
+    aiPlayers,
   };
 }
 
@@ -121,6 +135,10 @@ export function cloneGameState(state: GameState): GameState {
     finishedPlayers: [...state.finishedPlayers],
     playerColors: state.playerColors ? { ...state.playerColors } : undefined,
     aiPlayers: state.aiPlayers ? { ...state.aiPlayers } : undefined,
+    startingPositions: state.startingPositions ? { ...state.startingPositions } : undefined,
+    // Preserve custom layout data for AI evaluation
+    isCustomLayout: state.isCustomLayout,
+    customGoalPositions: state.customGoalPositions ? { ...state.customGoalPositions } : undefined,
   };
 }
 

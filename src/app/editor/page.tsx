@@ -5,7 +5,9 @@ import Link from 'next/link';
 import type { PlayerIndex, BoardLayout } from '@/types/game';
 import { PLAYER_COLORS, HEX_SIZE, BOARD_PADDING, TRIANGLE_ASSIGNMENTS } from '@/game/constants';
 import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
-import { cubeToPixel, cubeCoord, coordKey, rotateCube } from '@/game/coordinates';
+import { cubeToPixel, cubeCoord, coordKey, parseCoordKey, rotateCube } from '@/game/coordinates';
+import { hexToRgba, blendColorsRgba } from '@/game/colors';
+import { findBoardTriangles, findBorderEdges } from '@/game/triangles';
 import { useLayoutStore } from '@/store/layoutStore';
 
 type EditorMode = 'cells' | 'starting' | 'goals';
@@ -116,6 +118,7 @@ export default function EditorPage() {
   const [layoutName, setLayoutName] = useState('My Board');
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
   const [symmetry, setSymmetry] = useState<SymmetryMode>('none');
+  const [mirrorGoals, setMirrorGoals] = useState(false);
 
   // Load layouts on mount
   useEffect(() => {
@@ -182,31 +185,32 @@ export default function EditorPage() {
       // Set starting position mode
       if (!activeCells.has(key)) return; // Can only place on active cells
 
+      // Check if clicked cell already has a piece from any player
+      let hasExistingPiece = false;
+      for (const player of ALL_PLAYERS) {
+        if (startingPositions[player].has(key)) {
+          hasExistingPiece = true;
+          break;
+        }
+      }
+
+      // When mirrorGoals is on: place only the clicked piece + opposite goal
+      // When off: place pieces at all symmetric positions
+      const pieceKeys = mirrorGoals ? [key] : symmetricKeys;
+
       setStartingPositions((prev) => {
         const newPositions = { ...prev };
 
-        // Check if clicked cell already has a piece from any player
-        let hasExistingPiece = false;
-        for (const player of ALL_PLAYERS) {
-          if (newPositions[player].has(key)) {
-            hasExistingPiece = true;
-            break;
-          }
-        }
-
-        for (const symKey of symmetricKeys) {
-          // Skip if cell is not active
+        for (const symKey of pieceKeys) {
           if (!activeCells.has(symKey)) continue;
 
           if (hasExistingPiece) {
-            // Remove pieces at symmetric positions
             for (const player of ALL_PLAYERS) {
               const newSet = new Set(newPositions[player]);
               newSet.delete(symKey);
               newPositions[player] = newSet;
             }
           } else {
-            // Add piece for selected player
             const newSet = new Set(newPositions[selectedPlayer]);
             newSet.add(symKey);
             newPositions[selectedPlayer] = newSet;
@@ -215,6 +219,25 @@ export default function EditorPage() {
 
         return newPositions;
       });
+
+      if (mirrorGoals) {
+        const [cq, cr] = key.split(',').map(Number);
+        const oppositeKey = coordKey(cubeCoord(-cq, -cr));
+
+        if (activeCells.has(oppositeKey)) {
+          setGoalPositions((prev) => {
+            const newGoals = { ...prev };
+            const goalSet = new Set(newGoals[selectedPlayer]);
+            if (hasExistingPiece) {
+              goalSet.delete(oppositeKey);
+            } else {
+              goalSet.add(oppositeKey);
+            }
+            newGoals[selectedPlayer] = goalSet;
+            return newGoals;
+          });
+        }
+      }
     } else if (mode === 'goals') {
       // Set goal position mode
       if (!activeCells.has(key)) return; // Can only place on active cells
@@ -394,6 +417,19 @@ export default function EditorPage() {
     return lines;
   }, [symmetry]);
 
+  // Compute triangles and border edges for the active cells
+  const editorTriangles = useMemo(() => {
+    if (activeCells.size === 0) return [];
+    const sp: Partial<Record<PlayerIndex, string[]>> = {};
+    for (const player of ALL_PLAYERS) {
+      const arr = Array.from(startingPositions[player]);
+      if (arr.length > 0) sp[player as PlayerIndex] = arr;
+    }
+    return findBoardTriangles(activeCells, sp);
+  }, [activeCells, startingPositions]);
+
+  const editorBorderEdges = useMemo(() => findBorderEdges(editorTriangles, activeCells), [editorTriangles, activeCells]);
+
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-7xl mx-auto">
@@ -565,6 +601,30 @@ export default function EditorPage() {
               </div>
             </div>
 
+            {/* Mirror goals option (only when symmetry is active) */}
+            {symmetry !== 'none' && (
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={mirrorGoals}
+                    onChange={() => setMirrorGoals((v) => !v)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-6 bg-gray-200 rounded-full peer-checked:bg-blue-500 transition-colors" />
+                  <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                    Mirror goals
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Place goal at opposite side when placing a piece
+                  </div>
+                </div>
+              </label>
+            )}
+
             {/* Stats */}
             <div className="text-sm text-gray-600">
               <p>Active cells: {activeCells.size}</p>
@@ -598,6 +658,26 @@ export default function EditorPage() {
                   className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
                 >
                   Load Standard
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStartingPositions({
+                    0: new Set(), 1: new Set(), 2: new Set(),
+                    3: new Set(), 4: new Set(), 5: new Set(),
+                  })}
+                  className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Clear Pieces
+                </button>
+                <button
+                  onClick={() => setGoalPositions({
+                    0: new Set(), 1: new Set(), 2: new Set(),
+                    3: new Set(), 4: new Set(), 5: new Set(),
+                  })}
+                  className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Clear Goals
                 </button>
               </div>
             </div>
@@ -669,6 +749,42 @@ export default function EditorPage() {
                   opacity={0.5}
                 />
               ))}
+              {/* Triangle fills */}
+              {editorTriangles.map((tri) => {
+                const points = tri.vertices.map((vkey) => {
+                  const pos = parseCoordKey(vkey);
+                  const px = cubeToPixel(pos, HEX_SIZE);
+                  return `${px.x},${px.y}`;
+                }).join(' ');
+
+                const fill = tri.playerOwners.length > 0
+                  ? blendColorsRgba(tri.playerOwners.map((p) => PLAYER_COLORS[p]), 0.15)
+                  : '#f8f8f8';
+
+                return (
+                  <polygon
+                    key={`tri-${tri.vertices.join('-')}`}
+                    points={points}
+                    fill={fill}
+                    stroke="black"
+                    strokeWidth={0.5}
+                  />
+                );
+              })}
+              {/* Border edges */}
+              {editorBorderEdges.map((edge) => {
+                const pa = cubeToPixel(parseCoordKey(edge.a), HEX_SIZE);
+                const pb = cubeToPixel(parseCoordKey(edge.b), HEX_SIZE);
+                return (
+                  <line
+                    key={`border-${edge.a}-${edge.b}`}
+                    x1={pa.x} y1={pa.y}
+                    x2={pb.x} y2={pb.y}
+                    stroke="black"
+                    strokeWidth={1.5}
+                  />
+                );
+              })}
               {allPositions.map((key) => {
                 const [q, r] = key.split(',').map(Number);
                 const { x, y } = cubeToPixel(cubeCoord(q, r), HEX_SIZE);

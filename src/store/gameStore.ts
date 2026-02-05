@@ -8,6 +8,8 @@ import { getValidMoves } from '@/game/moves';
 import { movePiece, advanceTurn, isGameFullyOver } from '@/game/state';
 import { coordKey, cubeEquals, getMovePath } from '@/game/coordinates';
 import { MOVE_ANIMATION_DURATION } from '@/game/constants';
+import { recordBoardState, clearStateHistory } from '@/game/ai/search';
+import { clearPathfindingCache } from '@/game/pathfinding';
 
 interface GameStore {
   // State
@@ -28,7 +30,7 @@ interface GameStore {
 
   // Actions
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => string;
-  startGameFromLayout: (layout: BoardLayout) => string;
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => string;
   selectPiece: (coord: CubeCoord) => void;
   makeMove: (to: CubeCoord, animate?: boolean) => boolean;
   clearSelection: () => void;
@@ -63,6 +65,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => {
     const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers);
     const gameId = generateGameId();
+    // Clear AI tracking state for new game
+    clearStateHistory();
+    clearPathfindingCache();
+    // Record initial state
+    recordBoardState(gameState);
     set({
       gameState,
       gameId,
@@ -77,9 +84,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   // Start a game from a custom board layout
-  startGameFromLayout: (layout: BoardLayout) => {
-    const gameState = createGameFromLayout(layout);
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => {
+    const gameState = createGameFromLayout(layout, playerColors, aiPlayers);
     const gameId = generateGameId();
+    // Clear AI tracking state for new game
+    clearStateHistory();
+    clearPathfindingCache();
+    // Record initial state
+    recordBoardState(gameState);
     set({
       gameState,
       gameId,
@@ -194,6 +206,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Advance turn to the next player
     const newState = advanceTurn(gameState);
 
+    // Record this state for AI loop detection
+    recordBoardState(newState);
+
     set({
       gameState: newState,
       pendingConfirmation: false,
@@ -245,6 +260,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameState.aiPlayers
     );
     const gameId = generateGameId();
+    // Clear AI tracking state for new game
+    clearStateHistory();
+    clearPathfindingCache();
+    recordBoardState(newGameState);
     set({
       gameState: newGameState,
       gameId,
@@ -262,6 +281,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Load an existing game (for future multiplayer support)
   loadGame: (gameId: string, state: GameState) => {
+    // Clear AI tracking state when loading a game
+    clearStateHistory();
+    clearPathfindingCache();
+    recordBoardState(state);
     set({
       gameId,
       gameState: state,

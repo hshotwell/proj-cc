@@ -1,6 +1,5 @@
 import type { CubeCoord, Move, GameState, PlayerIndex } from '@/types/game';
 import { DIRECTIONS } from './constants';
-import { createBoardPositionSet } from './board';
 import {
   coordKey,
   cubeAdd,
@@ -8,16 +7,6 @@ import {
   getJumpDestination,
 } from './coordinates';
 import { getHomePositions, getGoalPositions } from './state';
-
-// Cached board positions for performance
-let boardPositionsCache: Set<string> | null = null;
-
-function getBoardPositions(): Set<string> {
-  if (!boardPositionsCache) {
-    boardPositionsCache = createBoardPositionSet();
-  }
-  return boardPositionsCache;
-}
 
 // Check if a position is empty on the board
 function isEmpty(state: GameState, coord: CubeCoord): boolean {
@@ -32,8 +21,10 @@ function hasPiece(state: GameState, coord: CubeCoord): boolean {
 }
 
 // Check if a position is valid (on the board)
-function isOnBoard(coord: CubeCoord): boolean {
-  return getBoardPositions().has(coordKey(coord));
+// Uses the game state's board which contains the correct cells for both
+// default and custom layouts.
+function isOnBoard(state: GameState, coord: CubeCoord): boolean {
+  return state.board.has(coordKey(coord));
 }
 
 // Get all valid step moves (moving to an adjacent empty cell)
@@ -44,7 +35,7 @@ function getStepMoves(state: GameState, from: CubeCoord): Move[] {
     const to = cubeAdd(from, dir);
 
     // Must be on board and empty
-    if (isOnBoard(to) && isEmpty(state, to)) {
+    if (isOnBoard(state, to) && isEmpty(state, to)) {
       moves.push({
         from,
         to,
@@ -82,7 +73,7 @@ function getJumpMoves(state: GameState, from: CubeCoord): Move[] {
       // 4. Haven't visited this landing spot yet
       if (
         hasPiece(state, over) &&
-        isOnBoard(landing) &&
+        isOnBoard(state, landing) &&
         isEmpty(state, landing) &&
         !visited.has(coordKey(landing))
       ) {
@@ -106,8 +97,20 @@ function getJumpMoves(state: GameState, from: CubeCoord): Move[] {
   return moves;
 }
 
-// Check if a player has moved ALL their pieces out of their home triangle
+// Check if a player has moved ALL their pieces out of their home/starting positions
 function hasPlayerLeftHome(state: GameState, player: PlayerIndex): boolean {
+  // For custom layouts, use startingPositions from state
+  if (state.isCustomLayout && state.startingPositions?.[player]) {
+    for (const key of state.startingPositions[player]!) {
+      const content = state.board.get(key);
+      if (content?.type === 'piece' && content.player === player) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // For standard layouts, use default home positions
   const homePositions = getHomePositions(player);
   for (const pos of homePositions) {
     const content = state.board.get(coordKey(pos));
@@ -120,11 +123,20 @@ function hasPlayerLeftHome(state: GameState, player: PlayerIndex): boolean {
 
 // Get swap moves: single-step onto adjacent goal cell occupied by opponent
 function getSwapMoves(state: GameState, from: CubeCoord, player: PlayerIndex): Move[] {
-  if (state.isCustomLayout) return [];
   if (!hasPlayerLeftHome(state, player)) return [];
 
-  const goalPositions = getGoalPositions(player);
-  const goalKeys = new Set(goalPositions.map(coordKey));
+  // Get goal positions - use custom goals for custom layouts, default otherwise
+  let goalKeys: Set<string>;
+  if (state.isCustomLayout && state.customGoalPositions?.[player]) {
+    goalKeys = new Set(state.customGoalPositions[player]!);
+  } else if (state.isCustomLayout) {
+    // Custom layout but no goals defined for this player - no swaps possible
+    return [];
+  } else {
+    const goalPositions = getGoalPositions(player);
+    goalKeys = new Set(goalPositions.map(coordKey));
+  }
+
   const moves: Move[] = [];
 
   for (const dir of DIRECTIONS) {

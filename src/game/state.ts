@@ -4,7 +4,7 @@ import { cloneGameState, getPlayerPieces } from './setup';
 import { getDefaultStartingPositions } from './defaultLayout';
 
 // Map each player to their opposite player (whose starting area is this player's goal)
-const OPPOSITE_PLAYER: Record<PlayerIndex, PlayerIndex> = {
+export const OPPOSITE_PLAYER: Record<PlayerIndex, PlayerIndex> = {
   0: 2,  // Red's goal is Blue's home (and vice versa)
   2: 0,
   1: 4,  // Green's goal is Purple's home (and vice versa)
@@ -86,7 +86,8 @@ export function movePiece(state: GameState, move: Move): GameState {
     newState.board.set(fromKey, { type: 'empty' });
   }
   newState.board.set(toKey, piece);
-  newState.moveHistory.push(move);
+  // Store move with player info for history tracking
+  newState.moveHistory.push({ ...move, player: piece.player });
 
   // Check if the current player just finished
   const player = piece.player;
@@ -183,11 +184,12 @@ export function checkWinner(state: GameState): PlayerIndex | null {
 
 // Check if a specific player has won
 export function hasPlayerWon(state: GameState, player: PlayerIndex): boolean {
-  const goalPositions = getGoalPositions(player);
+  const goalPositions = getGoalPositionsForState(state, player);
   const playerPieces = getPlayerPieces(state, player);
 
-  // Player wins if all 10 pieces are in the goal triangle
-  if (playerPieces.length !== 10) {
+  // Player wins if all their pieces are in goal positions
+  // (piece count may vary for custom layouts)
+  if (playerPieces.length === 0 || goalPositions.length === 0) {
     return false;
   }
 
@@ -205,16 +207,34 @@ export function hasPlayerWon(state: GameState, player: PlayerIndex): boolean {
 }
 
 // Get the goal positions for a player (opposite player's starting area)
+// For standard layouts only - use getGoalPositionsForState for custom layout support
 export function getGoalPositions(player: PlayerIndex): CubeCoord[] {
   const oppositePlayer = OPPOSITE_PLAYER[player];
   const positions = getDefaultStartingPositions(oppositePlayer);
   return positions.map(parseCoordKey);
 }
 
+// Get the goal positions for a player, supporting custom layouts
+export function getGoalPositionsForState(state: GameState, player: PlayerIndex): CubeCoord[] {
+  if (state.isCustomLayout && state.customGoalPositions?.[player]) {
+    return state.customGoalPositions[player]!.map(parseCoordKey);
+  }
+  return getGoalPositions(player);
+}
+
 // Get the home/starting positions for a player
+// For standard layouts only - use getHomePositionsForState for custom layout support
 export function getHomePositions(player: PlayerIndex): CubeCoord[] {
   const positions = getDefaultStartingPositions(player);
   return positions.map(parseCoordKey);
+}
+
+// Get the home/starting positions for a player, supporting custom layouts
+export function getHomePositionsForState(state: GameState, player: PlayerIndex): CubeCoord[] {
+  if (state.isCustomLayout && state.startingPositions?.[player]) {
+    return state.startingPositions[player]!.map(parseCoordKey);
+  }
+  return getHomePositions(player);
 }
 
 // Count how many pieces a player has in their goal triangle
@@ -222,7 +242,7 @@ export function countPiecesInGoal(
   state: GameState,
   player: PlayerIndex
 ): number {
-  const goalPositions = getGoalPositions(player);
+  const goalPositions = getGoalPositionsForState(state, player);
   let count = 0;
 
   for (const pos of goalPositions) {

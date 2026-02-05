@@ -23,7 +23,22 @@
       "Bash(export PATH=\"$HOME/.nvm/versions/node/v24.13.0/bin:$PATH\")",
       "Bash(npx next lint)",
       "Bash(npx next lint:*)",
-      "Bash(npx --yes next lint)"
+      "Bash(npx --yes next lint)",
+      "Bash(git -C /home/henry/code/proj-cc log --oneline -10)",
+      "Bash(git -C /home/henry/code/proj-cc status)",
+      "Bash(git -C /home/henry/code/proj-cc diff --stat)",
+      "Bash(git -C /home/henry/code/proj-cc remote:*)",
+      "Bash(git -C /home/henry/code/proj-cc diff)",
+      "Bash(git -C /home/henry/code/proj-cc log --oneline --format=\"%s\" -5)",
+      "Bash(git -C /home/henry/code/proj-cc add src/app/editor/page.tsx src/app/globals.css src/components/board/Board.tsx src/components/board/BoardCell.tsx src/components/game/GameContainer.tsx src/game/constants.ts src/game/setup.ts src/types/game.ts .gitignore CLAUDE.md)",
+      "Bash(git -C /home/henry/code/proj-cc commit:*)",
+      "Bash(git -C /home/henry/code/proj-cc push origin master)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nFix TypeScript build errors preventing Vercel deployment\n\n- Add number type annotation to reduce accumulator in editor page\n- Replace undefined ALL_PLAYERS reference with inline array in BoardCell\n- Remove unsupported props passed to Board component in GameContainer\n- Remove invalid centroid re-export from ai barrel file\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git stash:*)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

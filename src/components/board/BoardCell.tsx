@@ -1,9 +1,9 @@
 'use client';
 
-import type { CubeCoord, TriangleIndex, PlayerIndex, ColorMapping } from '@/types/game';
-import { TRIANGLE_TO_PLAYER, GOAL_TRIANGLE_TO_PLAYER } from '@/game/constants';
+import type { CubeCoord, PlayerIndex, ColorMapping } from '@/types/game';
 import { cubeToPixel } from '@/game/coordinates';
 import { getTriangleForPosition } from '@/game/board';
+import { OPPOSITE_PLAYER } from '@/game/state';
 import { getPlayerColor, hexToRgba } from '@/game/colors';
 
 interface BoardCellProps {
@@ -19,56 +19,48 @@ export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = fa
   const { x, y } = cubeToPixel(coord, size);
   const coordKeyStr = `${coord.q},${coord.r}`;
 
-  let fillColor = '#e5e7eb'; // Default neutral gray
-  let fillOpacity = 1;
-  let isGoalCell = false;
+  let goalColor: string | null = null;
 
   if (isCustomLayout && customGoalPositions) {
-    // Custom layout: check if this cell is a custom goal for any active player
     const players: PlayerIndex[] = activePlayers || [0, 1, 2, 3, 4, 5];
     for (const player of players) {
       if (customGoalPositions[player]?.includes(coordKeyStr)) {
-        fillColor = getPlayerColor(player, playerColors);
-        fillOpacity = 0.25;
-        isGoalCell = true;
+        goalColor = getPlayerColor(player, playerColors);
         break;
       }
     }
   } else if (!isCustomLayout) {
-    // Default layout: use TRIANGLE_TO_PLAYER logic for goal highlighting
-    const triangle = getTriangleForPosition(coord);
-    if (triangle !== null) {
-      const goalPlayer = GOAL_TRIANGLE_TO_PLAYER[triangle as TriangleIndex];
+    const homePlayer = getTriangleForPosition(coord);
+    if (homePlayer !== null) {
+      const goalPlayer = OPPOSITE_PLAYER[homePlayer as PlayerIndex];
       if (!activePlayers || activePlayers.includes(goalPlayer)) {
-        fillColor = getPlayerColor(goalPlayer, playerColors);
-        fillOpacity = 0.25;
-        isGoalCell = true;
+        goalColor = getPlayerColor(goalPlayer, playerColors);
       }
     }
   }
 
-  // Fallback for active cells that are not goals
-  if (!isGoalCell && activePlayers && activePlayers.length > 0) { // Check if it's an active cell not being used as a goal
-    // Determine if this cell is part of the "active" board, not necessarily a start/goal
-    // This part of the logic might need refinement based on how activeCells is actually determined for non-editor mode
-    // For now, assuming if it's not a goal, and we have activePlayers, it's a general active board cell
-    // if (!isCustomLayout) { // Assuming non-custom layouts always have active board cells implicitly
-    //   fillColor = '#d1d5db'; // Medium gray for general active cells
-    //   fillOpacity = 1;
-    // }
-  }
-
-
   return (
-    <circle
-      cx={x}
-      cy={y}
-      r={size * 0.45}
-      fill={fillColor}
-      fillOpacity={fillOpacity}
-      stroke="#9ca3af" // Default stroke
-      strokeWidth={1}
-      className={isGoalCell ? 'pulse-opacity' : ''}
-    />
+    <g>
+      {/* Solid grey background to cover triangle lines */}
+      <circle
+        cx={x}
+        cy={y}
+        r={size * 0.45}
+        fill="#e5e7eb"
+        stroke="#9ca3af"
+        strokeWidth={1}
+      />
+      {/* Subtle goal tint overlay */}
+      {goalColor && (
+        <circle
+          cx={x}
+          cy={y}
+          r={size * 0.45}
+          fill={hexToRgba(goalColor, 0.15)}
+          stroke={hexToRgba(goalColor, 0.35)}
+          strokeWidth={1.5}
+        />
+      )}
+    </g>
   );
 }

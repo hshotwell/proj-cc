@@ -1,7 +1,7 @@
 import type { GameState, PlayerIndex, Move } from '@/types/game';
 import type { Genome } from '@/types/training';
 import { getPlayerPieces } from '../setup';
-import { getGoalPositions, countPiecesInGoal, applyMove } from '../state';
+import { getGoalPositionsForState, countPiecesInGoal, applyMove } from '../state';
 import { cubeDistance, centroid } from '../coordinates';
 import { getAllValidMoves } from '../moves';
 
@@ -33,7 +33,7 @@ export function evaluateWithGenome(
   genome: Genome
 ): number {
   const pieces = getPlayerPieces(state, player);
-  const goalPositions = getGoalPositions(player);
+  const goalPositions = getGoalPositionsForState(state, player);
   const goalCenter = centroid(goalPositions);
 
   // 1. Progress score: pieces already in goal (0-100)
@@ -60,7 +60,7 @@ export function evaluateWithGenome(
   if (genome.blocking > 0) {
     for (const opponent of state.activePlayers) {
       if (opponent === player) continue;
-      const opponentGoal = getGoalPositions(opponent);
+      const opponentGoal = getGoalPositionsForState(state, opponent);
       const opponentInGoal = countPiecesInGoal(state, opponent);
       const leaderWeight = opponentInGoal > 5 ? 2 : 1;
       for (const goalPos of opponentGoal) {
@@ -110,7 +110,7 @@ export function computeRegressionPenaltyWithGenome(
   player: PlayerIndex,
   genome: Genome
 ): number {
-  const goalPositions = getGoalPositions(player);
+  const goalPositions = getGoalPositionsForState(state, player);
   const goalCenter = centroid(goalPositions);
   const distAfter = cubeDistance(move.to, goalCenter);
   const distBefore = cubeDistance(move.from, goalCenter);
