@@ -86,8 +86,8 @@ export function movePiece(state: GameState, move: Move): GameState {
     newState.board.set(fromKey, { type: 'empty' });
   }
   newState.board.set(toKey, piece);
-  // Store move with player info for history tracking
-  newState.moveHistory.push({ ...move, player: piece.player });
+  // Store move with player and turn info for history tracking
+  newState.moveHistory.push({ ...move, player: piece.player, turnNumber: state.turnNumber });
 
   // Check if the current player just finished
   const player = piece.player;

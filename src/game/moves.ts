@@ -20,6 +20,12 @@ function hasPiece(state: GameState, coord: CubeCoord): boolean {
   return content?.type === 'piece';
 }
 
+// Check if a position has something jumpable (piece or wall)
+function hasJumpable(state: GameState, coord: CubeCoord): boolean {
+  const content = state.board.get(coordKey(coord));
+  return content?.type === 'piece' || content?.type === 'wall';
+}
+
 // Check if a position is valid (on the board)
 // Uses the game state's board which contains the correct cells for both
 // default and custom layouts.
@@ -67,12 +73,12 @@ function getJumpMoves(state: GameState, from: CubeCoord): Move[] {
       const landing = getJumpDestination(current, over);
 
       // Jump is valid if:
-      // 1. There's a piece to jump over
+      // 1. There's a piece or wall to jump over
       // 2. Landing spot is on the board
       // 3. Landing spot is empty
       // 4. Haven't visited this landing spot yet
       if (
-        hasPiece(state, over) &&
+        hasJumpable(state, over) &&
         isOnBoard(state, landing) &&
         isEmpty(state, landing) &&
         !visited.has(coordKey(landing))

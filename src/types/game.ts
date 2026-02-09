@@ -14,10 +14,11 @@ export type PlayerCount = 2 | 3 | 4 | 6;
 // Custom color mapping for players (falls back to PLAYER_COLORS if not specified)
 export type ColorMapping = Partial<Record<PlayerIndex, string>>;
 
-// Cell content - either empty or contains a piece
+// Cell content - empty, piece, or wall
 export type CellContent =
   | { type: 'empty' }
-  | { type: 'piece'; player: PlayerIndex };
+  | { type: 'piece'; player: PlayerIndex }
+  | { type: 'wall' };
 
 // A move from one position to another (may be a step or jump)
 export interface Move {
@@ -30,6 +31,8 @@ export interface Move {
   isSwap?: boolean;
   // Player who made this move (set when added to history)
   player?: PlayerIndex;
+  // Turn number when this move was made (for detecting turn boundaries)
+  turnNumber?: number;
 }
 
 // Triangle index (0-5) representing each of the 6 points of the star
@@ -90,6 +93,8 @@ export interface BoardLayout {
   startingPositions: Partial<Record<PlayerIndex, string[]>>;
   // Goal positions for each player (player index -> array of coord keys)
   goalPositions?: Partial<Record<PlayerIndex, string[]>>;
+  // Wall positions (coord keys) - can be jumped over but not landed on
+  walls?: string[];
   createdAt: number;
   isDefault?: boolean;
 }

@@ -1,10 +1,76 @@
 'use client';
 
+import { useEffect } from 'react';
 import { getPlayerColorFromState, getPlayerDisplayName } from '@/game/colors';
 import { useGameStore } from '@/store/gameStore';
+import { useSettingsStore } from '@/store/settingsStore';
 
 export function MoveConfirmation() {
-  const { gameState, pendingConfirmation, validMovesForSelected, confirmMove, undoLastMove } = useGameStore();
+  const { gameState, pendingConfirmation, validMovesForSelected, confirmMove, undoLastMove, undoConfirmedMove, canUndoConfirmedMove } = useGameStore();
+  const { autoConfirm } = useSettingsStore();
+
+  const canUndoConfirmed = canUndoConfirmedMove();
+
+  // Keyboard shortcuts: 'u' for undo, 'c' for confirm
+  useEffect(() => {
+    // Check if we're in last-player undo mode
+    if (canUndoConfirmed && !pendingConfirmation) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        if (e.key === 'u' || e.key === 'U') {
+          e.preventDefault();
+          undoConfirmedMove();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+
+    // Normal pending confirmation keyboard shortcuts
+    if (autoConfirm) return;
+    if (!gameState || !pendingConfirmation) return;
+    if (gameState.aiPlayers?.[gameState.currentPlayer]) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === 'u' || e.key === 'U') {
+        e.preventDefault();
+        undoLastMove();
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        confirmMove();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [autoConfirm, gameState, pendingConfirmation, confirmMove, undoLastMove, canUndoConfirmed, undoConfirmedMove]);
+
+  // Show persistent undo button for last remaining player (bottom-left)
+  if (canUndoConfirmed && !pendingConfirmation && gameState) {
+    const player = gameState.currentPlayer;
+    const color = getPlayerColorFromState(player, gameState);
+
+    return (
+      <div className="flex justify-start mt-4">
+        <button
+          onClick={undoConfirmedMove}
+          className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors border-2"
+          style={{ borderColor: color }}
+          title="Press 'U' to undo"
+        >
+          Undo Move <span className="text-xs text-gray-400">(U)</span>
+        </button>
+      </div>
+    );
+  }
+
+  // Don't show confirmation UI when auto-confirm is enabled
+  if (autoConfirm) return null;
 
   if (!gameState || !pendingConfirmation) return null;
 
@@ -17,9 +83,9 @@ export function MoveConfirmation() {
   const hasMoreMoves = validMovesForSelected.length > 0;
 
   return (
-    <div className="fixed inset-0 flex items-end justify-center pb-8 pointer-events-none z-50">
+    <div className="flex justify-center mt-4">
       <div
-        className="pointer-events-auto bg-white rounded-xl shadow-2xl border-2 p-4 flex flex-col gap-2"
+        className="bg-white rounded-xl shadow-lg border-2 p-4 flex flex-col gap-2"
         style={{ borderColor: color }}
       >
         <div className="flex items-center gap-4">
@@ -35,15 +101,17 @@ export function MoveConfirmation() {
             <button
               onClick={undoLastMove}
               className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+              title="Press 'U' to undo"
             >
-              Undo
+              Undo <span className="text-xs text-gray-400">(U)</span>
             </button>
             <button
               onClick={confirmMove}
               className="px-4 py-2 text-sm font-medium rounded-lg text-white transition-colors"
               style={{ backgroundColor: color }}
+              title="Press 'C' to confirm"
             >
-              Confirm
+              Confirm <span className="text-xs text-white/70">(C)</span>
             </button>
           </div>
         </div>

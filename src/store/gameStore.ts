@@ -5,11 +5,13 @@ import type { CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout,
 import type { AIPlayerMap } from '@/types/ai';
 import { createGame, createGameFromLayout } from '@/game/setup';
 import { getValidMoves } from '@/game/moves';
-import { movePiece, advanceTurn, isGameFullyOver } from '@/game/state';
+import { movePiece, advanceTurn, isGameFullyOver, undoMove } from '@/game/state';
 import { coordKey, cubeEquals, getMovePath } from '@/game/coordinates';
 import { MOVE_ANIMATION_DURATION } from '@/game/constants';
 import { recordBoardState, clearStateHistory } from '@/game/ai/search';
 import { clearPathfindingCache } from '@/game/pathfinding';
+import { extractGamePatterns, createGameSummary, learnFromGame, clearWeightsCache } from '@/game/learning';
+import { useSettingsStore } from './settingsStore';
 
 interface GameStore {
   // State
@@ -20,7 +22,7 @@ interface GameStore {
   // Pending move state - move made but not yet confirmed
   pendingConfirmation: boolean;
   stateBeforeMove: GameState | null;
-  lastMoveDestination: CubeCoord | null;
+  lastMoveInfo: { origin: CubeCoord; destination: CubeCoord; player: PlayerIndex; } | null;
   // Original position of piece at start of turn (for undo by clicking)
   originalPiecePosition: CubeCoord | null;
   // Animation state
@@ -36,6 +38,8 @@ interface GameStore {
   clearSelection: () => void;
   confirmMove: () => void;
   undoLastMove: () => boolean;
+  undoConfirmedMove: () => boolean;
+  canUndoConfirmedMove: () => boolean;
   resetGame: () => void;
   loadGame: (gameId: string, state: GameState) => void;
   advanceAnimation: () => void;
@@ -55,7 +59,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameId: null,
   pendingConfirmation: false,
   stateBeforeMove: null,
-  lastMoveDestination: null,
+  lastMoveInfo: null,
   originalPiecePosition: null,
   animatingPiece: null,
   animationPath: null,
@@ -77,7 +81,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       validMovesForSelected: [],
       pendingConfirmation: false,
       stateBeforeMove: null,
-      lastMoveDestination: null,
+      lastMoveInfo: null,
       originalPiecePosition: null,
     });
     return gameId;
@@ -99,7 +103,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       validMovesForSelected: [],
       pendingConfirmation: false,
       stateBeforeMove: null,
-      lastMoveDestination: null,
+      lastMoveInfo: null,
       originalPiecePosition: null,
     });
     return gameId;
@@ -172,18 +176,61 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Calculate animation path if animation is enabled
     const path = animate ? getMovePath(selectedPiece, to, move.jumpPath) : null;
 
-    set({
-      gameState: newState,
-      selectedPiece: to,
-      validMovesForSelected: newValidMoves,
-      pendingConfirmation: true,
-      stateBeforeMove,
-      lastMoveDestination: to,
-      originalPiecePosition,
-      animatingPiece: animate && path && path.length > 1 ? to : null,
-      animationPath: path,
-      animationStep: 0,
-    });
+    // Check auto-confirm setting BEFORE setting state
+    const { autoConfirm } = useSettingsStore.getState();
+
+    if (autoConfirm) {
+      // In auto-confirm mode, skip the pending state entirely and confirm immediately
+      // Record the move info BEFORE advancing turn
+      const confirmedMoveInfo = { origin: originalPiecePosition, destination: to, player: newState.currentPlayer };
+
+      // Advance turn immediately
+      const finalState = advanceTurn(newState);
+
+      // Record this state for AI loop detection
+      recordBoardState(finalState);
+
+      // Check if game just ended - if so, learn from it
+      const { gameId } = get();
+      if (isGameFullyOver(finalState) && gameId) {
+        try {
+          const patterns = extractGamePatterns(finalState, gameId);
+          const summary = createGameSummary(patterns);
+          learnFromGame(summary);
+          clearWeightsCache();
+          console.log('[Learning] Learned from completed game:', gameId, 'Quality:', summary.qualityScore.toFixed(2));
+        } catch (e) {
+          console.error('[Learning] Failed to learn from game:', e);
+        }
+      }
+
+      set({
+        gameState: finalState,
+        selectedPiece: null,
+        validMovesForSelected: [],
+        pendingConfirmation: false,
+        stateBeforeMove: null,
+        originalPiecePosition: null,
+        lastMoveInfo: confirmedMoveInfo,
+        animatingPiece: animate && path && path.length > 1 ? to : null,
+        animationPath: path,
+        animationStep: 0,
+      });
+    } else {
+      // Normal mode - set pending confirmation state
+      set({
+        gameState: newState,
+        selectedPiece: to,
+        validMovesForSelected: newValidMoves,
+        pendingConfirmation: true,
+        stateBeforeMove,
+        // Don't update lastMoveInfo here - keep showing previous player's last move until this turn is confirmed
+        originalPiecePosition,
+        animatingPiece: animate && path && path.length > 1 ? to : null,
+        animationPath: path,
+        animationStep: 0,
+      });
+    }
 
     return true;
   },
@@ -200,8 +247,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Confirm the pending move - advances the turn
   confirmMove: () => {
-    const { gameState } = get();
+    const { gameState, selectedPiece, originalPiecePosition, gameId } = get();
     if (!gameState) return;
+
+    // Record the just-confirmed move info BEFORE advancing turn
+    const confirmedMoveInfo = selectedPiece && originalPiecePosition
+      ? { origin: originalPiecePosition, destination: selectedPiece, player: gameState.currentPlayer }
+      : null;
 
     // Advance turn to the next player
     const newState = advanceTurn(gameState);
@@ -209,13 +261,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Record this state for AI loop detection
     recordBoardState(newState);
 
+    // Check if game just ended - if so, learn from it
+    if (isGameFullyOver(newState) && gameId) {
+      try {
+        const patterns = extractGamePatterns(newState, gameId);
+        const summary = createGameSummary(patterns);
+        learnFromGame(summary);
+        clearWeightsCache(); // Refresh cached weights
+        console.log('[Learning] Learned from completed game:', gameId, 'Quality:', summary.qualityScore.toFixed(2));
+      } catch (e) {
+        console.error('[Learning] Failed to learn from game:', e);
+      }
+    }
+
     set({
       gameState: newState,
       pendingConfirmation: false,
       stateBeforeMove: null,
       selectedPiece: null,
       validMovesForSelected: [],
-      lastMoveDestination: null,
+      lastMoveInfo: confirmedMoveInfo, // Record the just-confirmed move
       originalPiecePosition: null,
       animatingPiece: null,
       animationPath: null,
@@ -239,8 +304,53 @@ export const useGameStore = create<GameStore>((set, get) => ({
       validMovesForSelected: [],
       pendingConfirmation: false,
       stateBeforeMove: null,
-      lastMoveDestination: null,
+      lastMoveInfo: null,
       originalPiecePosition: null,
+      animatingPiece: null,
+      animationPath: null,
+      animationStep: 0,
+    });
+    return true;
+  },
+
+  // Check if we can undo a confirmed move (only when one player remains)
+  canUndoConfirmedMove: () => {
+    const { gameState, pendingConfirmation } = get();
+    if (!gameState || pendingConfirmation) return false;
+
+    // Only allow when exactly one player hasn't finished
+    const remainingPlayers = gameState.activePlayers.filter(
+      (p) => !gameState.finishedPlayers.some((fp) => fp.player === p)
+    );
+    if (remainingPlayers.length !== 1) return false;
+
+    // Check we have moves to undo
+    if (gameState.moveHistory.length === 0) return false;
+
+    // Find the move count when second-to-last player finished
+    // (we can't undo past that point)
+    const sortedFinished = [...gameState.finishedPlayers].sort(
+      (a, b) => b.moveCount - a.moveCount
+    );
+    const lastFinishedMoveCount = sortedFinished[0]?.moveCount ?? 0;
+
+    // Can only undo if we have moves after the last player finished
+    return gameState.moveHistory.length > lastFinishedMoveCount;
+  },
+
+  // Undo a confirmed move (for last remaining player)
+  undoConfirmedMove: () => {
+    const { gameState } = get();
+    if (!get().canUndoConfirmedMove() || !gameState) return false;
+
+    const newState = undoMove(gameState);
+    if (!newState) return false;
+
+    set({
+      gameState: newState,
+      selectedPiece: null,
+      validMovesForSelected: [],
+      lastMoveInfo: null,
       animatingPiece: null,
       animationPath: null,
       animationStep: 0,
@@ -271,7 +381,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       validMovesForSelected: [],
       pendingConfirmation: false,
       stateBeforeMove: null,
-      lastMoveDestination: null,
+      lastMoveInfo: null,
       originalPiecePosition: null,
       animatingPiece: null,
       animationPath: null,
@@ -292,7 +402,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       validMovesForSelected: [],
       pendingConfirmation: false,
       stateBeforeMove: null,
-      lastMoveDestination: null,
+      lastMoveInfo: null,
       originalPiecePosition: null,
       animatingPiece: null,
       animationPath: null,

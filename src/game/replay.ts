@@ -1,13 +1,16 @@
-import type { Move, GameState, PlayerIndex } from '@/types/game';
+import type { Move, GameState, PlayerIndex, BoardLayout } from '@/types/game';
 import type { SavedGameData } from '@/types/replay';
 import { cubeEquals } from './coordinates';
-import { createGame } from './setup';
+import { createGame, createGameFromLayout } from './setup';
 import { applyMove } from './state';
 
 /**
  * Merge consecutive chain-jump hops into single moves.
- * Detection: move[i+1] continues move[i]'s chain if
- * moves[i].to equals moves[i+1].from and moves[i+1].isJump === true.
+ * Detection: move[i+1] continues move[i]'s chain if:
+ * - Both moves are jumps (steps end the turn, can't be chained)
+ * - Both moves are by the same player
+ * - Both moves are from the same turn (same turnNumber)
+ * - moves[i].to equals moves[i+1].from
  * Merged move: from = first hop's from, to = last hop's to,
  * jumpPath = concatenated jumpPaths, isJump = true.
  */
@@ -16,13 +19,16 @@ export function normalizeMoveHistory(rawMoves: Move[], activePlayers: PlayerInde
 
   const normalized: Move[] = [];
   let current: Move = { ...rawMoves[0] };
-  // Track whose turn each raw move belongs to based on turn cycling
-  let rawTurnPlayer = 0; // index into activePlayers for the first raw move
 
   for (let i = 1; i < rawMoves.length; i++) {
     const next = rawMoves[i];
-    // Chain continuation: same player's turn, next starts where current ends, and it's a jump
-    if (next.isJump && cubeEquals(current.to, next.from)) {
+    // Chain continuation: both are jumps, same player, same turn, and next starts where current ends
+    // Steps (isJump: false) always end the turn, so can never be part of a chain
+    const samePlayer = current.player === next.player;
+    const sameTurn = current.turnNumber !== undefined && current.turnNumber === next.turnNumber;
+    const isContinuation = current.isJump && next.isJump && samePlayer && sameTurn && cubeEquals(current.to, next.from);
+
+    if (isContinuation) {
       // Merge: extend current move
       current = {
         from: current.from,
@@ -33,6 +39,8 @@ export function normalizeMoveHistory(rawMoves: Move[], activePlayers: PlayerInde
           ...(next.jumpPath || []),
         ],
         isSwap: current.isSwap || next.isSwap,
+        player: current.player,
+        turnNumber: current.turnNumber,
       };
     } else {
       // Current move is complete, push it
@@ -54,15 +62,31 @@ export function normalizeMoveHistory(rawMoves: Move[], activePlayers: PlayerInde
 export function reconstructGameStates(savedGame: SavedGameData): GameState[] {
   const { initialConfig, moves } = savedGame;
 
-  const initialState = createGame(
-    initialConfig.playerCount,
-    initialConfig.activePlayers,
-    initialConfig.playerColors,
-    initialConfig.aiPlayers,
-  );
+  let initialState: GameState;
 
-  if (initialConfig.isCustomLayout) {
-    initialState.isCustomLayout = true;
+  if (initialConfig.isCustomLayout && initialConfig.customCells) {
+    // Reconstruct custom board layout
+    const layout: BoardLayout = {
+      id: 'replay-layout',
+      name: 'Replay Layout',
+      cells: initialConfig.customCells,
+      startingPositions: initialConfig.customStartingPositions || {},
+      goalPositions: initialConfig.customGoalPositions,
+      walls: initialConfig.customWalls,
+      createdAt: 0,
+    };
+    initialState = createGameFromLayout(
+      layout,
+      initialConfig.playerColors,
+      initialConfig.aiPlayers,
+    );
+  } else {
+    initialState = createGame(
+      initialConfig.playerCount,
+      initialConfig.activePlayers,
+      initialConfig.playerColors,
+      initialConfig.aiPlayers,
+    );
   }
 
   const states: GameState[] = [initialState];

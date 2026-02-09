@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import type { PlayerIndex, BoardLayout } from '@/types/game';
 import { PLAYER_COLORS, HEX_SIZE, BOARD_PADDING, TRIANGLE_ASSIGNMENTS } from '@/game/constants';
@@ -9,8 +9,10 @@ import { cubeToPixel, cubeCoord, coordKey, parseCoordKey, rotateCube } from '@/g
 import { hexToRgba, blendColorsRgba } from '@/game/colors';
 import { findBoardTriangles, findBorderEdges } from '@/game/triangles';
 import { useLayoutStore } from '@/store/layoutStore';
+import { SettingsPopup } from '@/components/SettingsPopup';
+import { SettingsButton } from '@/components/SettingsButton';
 
-type EditorMode = 'cells' | 'starting' | 'goals';
+type EditorMode = 'cells' | 'starting' | 'goals' | 'walls';
 type SymmetryMode = 'none' | 'x' | 'y' | 'xy' | '6way';
 
 // Generate all possible hex positions within a radius
@@ -115,6 +117,7 @@ export default function EditorPage() {
     4: new Set(),
     5: new Set(),
   });
+  const [walls, setWalls] = useState<Set<string>>(new Set());
   const [layoutName, setLayoutName] = useState('My Board');
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
   const [symmetry, setSymmetry] = useState<SymmetryMode>('none');
@@ -184,6 +187,7 @@ export default function EditorPage() {
     } else if (mode === 'starting') {
       // Set starting position mode
       if (!activeCells.has(key)) return; // Can only place on active cells
+      if (walls.has(key)) return; // Can't place pieces on walls
 
       // Check if clicked cell already has a piece from any player
       let hasExistingPiece = false;
@@ -203,6 +207,7 @@ export default function EditorPage() {
 
         for (const symKey of pieceKeys) {
           if (!activeCells.has(symKey)) continue;
+          if (walls.has(symKey)) continue; // Skip walls
 
           if (hasExistingPiece) {
             for (const player of ALL_PLAYERS) {
@@ -241,6 +246,7 @@ export default function EditorPage() {
     } else if (mode === 'goals') {
       // Set goal position mode
       if (!activeCells.has(key)) return; // Can only place on active cells
+      if (walls.has(key)) return; // Can't place goals on walls
 
       setGoalPositions((prev) => {
         const newPositions = { ...prev };
@@ -255,8 +261,9 @@ export default function EditorPage() {
         }
 
         for (const symKey of symmetricKeys) {
-          // Skip if cell is not active
+          // Skip if cell is not active or is a wall
           if (!activeCells.has(symKey)) continue;
+          if (walls.has(symKey)) continue;
 
           if (hasExistingGoal) {
             // Remove goals at symmetric positions
@@ -275,6 +282,46 @@ export default function EditorPage() {
 
         return newPositions;
       });
+    } else if (mode === 'walls') {
+      // Set wall position mode
+      if (!activeCells.has(key)) return; // Can only place on active cells
+
+      // Check if there's a piece or goal here - walls can't be placed on those
+      let hasExistingPieceOrGoal = false;
+      for (const player of ALL_PLAYERS) {
+        if (startingPositions[player].has(key) || goalPositions[player].has(key)) {
+          hasExistingPieceOrGoal = true;
+          break;
+        }
+      }
+      if (hasExistingPieceOrGoal) return;
+
+      setWalls((prev) => {
+        const newWalls = new Set(prev);
+        const hasExistingWall = newWalls.has(key);
+
+        for (const symKey of symmetricKeys) {
+          if (!activeCells.has(symKey)) continue;
+
+          // Check if symmetric position has piece or goal
+          let symHasPieceOrGoal = false;
+          for (const player of ALL_PLAYERS) {
+            if (startingPositions[player].has(symKey) || goalPositions[player].has(symKey)) {
+              symHasPieceOrGoal = true;
+              break;
+            }
+          }
+          if (symHasPieceOrGoal) continue;
+
+          if (hasExistingWall) {
+            newWalls.delete(symKey);
+          } else {
+            newWalls.add(symKey);
+          }
+        }
+
+        return newWalls;
+      });
     }
   };
 
@@ -284,8 +331,14 @@ export default function EditorPage() {
   }, [startingPositions]);
 
   const handleSave = () => {
+    // Check if a layout with the same name already exists
+    const existingLayout = layouts.find((l) => l.name === layoutName);
+
+    // Use existing layout's ID if name matches, otherwise generate new ID
+    const layoutId = existingLayout ? existingLayout.id : `layout-${Date.now()}`;
+
     const layout: BoardLayout = {
-      id: selectedLayoutId || `layout-${Date.now()}`,
+      id: layoutId,
       name: layoutName,
       cells: Array.from(activeCells),
       startingPositions: Object.fromEntries(
@@ -294,11 +347,12 @@ export default function EditorPage() {
       goalPositions: Object.fromEntries(
         ALL_PLAYERS.map((p) => [p, Array.from(goalPositions[p])])
       ) as Record<PlayerIndex, string[]>,
+      walls: Array.from(walls),
       createdAt: Date.now(),
     };
     saveLayout(layout);
     setSelectedLayoutId(layout.id);
-    alert('Layout saved!');
+    alert(existingLayout ? 'Layout updated!' : 'Layout saved!');
   };
 
   const handleLoad = (layout: BoardLayout) => {
@@ -313,6 +367,7 @@ export default function EditorPage() {
         ALL_PLAYERS.map((p) => [p, new Set(layout.goalPositions?.[p] || [])])
       ) as Record<number, Set<string>>
     );
+    setWalls(new Set(layout.walls || []));
     setLayoutName(layout.name);
     setSelectedLayoutId(layout.id);
   };
@@ -335,9 +390,34 @@ export default function EditorPage() {
       4: new Set(),
       5: new Set(),
     });
+    setWalls(new Set());
     setLayoutName('My Board');
     setSelectedLayoutId(null);
   };
+
+  // Restart handler for settings popup - reload saved layout if name matches, otherwise clear
+  const handleEditorRestart = useCallback(() => {
+    const matchingLayout = layouts.find((l) => l.name === layoutName);
+    if (matchingLayout) {
+      // Reload the saved layout
+      setActiveCells(new Set(matchingLayout.cells));
+      setStartingPositions(
+        Object.fromEntries(
+          ALL_PLAYERS.map((p) => [p, new Set(matchingLayout.startingPositions[p] || [])])
+        ) as Record<number, Set<string>>
+      );
+      setGoalPositions(
+        Object.fromEntries(
+          ALL_PLAYERS.map((p) => [p, new Set(matchingLayout.goalPositions?.[p] || [])])
+        ) as Record<number, Set<string>>
+      );
+      setWalls(new Set(matchingLayout.walls || []));
+      setSelectedLayoutId(matchingLayout.id);
+    } else {
+      // Clear the board
+      handleClear();
+    }
+  }, [layouts, layoutName]);
 
   const handleFillAll = () => {
     setActiveCells(new Set(allPositions));
@@ -349,12 +429,14 @@ export default function EditorPage() {
       0: new Set(), 1: new Set(), 2: new Set(),
       3: new Set(), 4: new Set(), 5: new Set(),
     });
-    setGoalPositions({ // Clear goal positions
+    setGoalPositions({
       0: new Set(), 1: new Set(), 2: new Set(),
       3: new Set(), 4: new Set(), 5: new Set(),
     });
-    setLayoutName(DEFAULT_BOARD_LAYOUT.name);
-    setSelectedLayoutId(DEFAULT_BOARD_LAYOUT.id);
+    setWalls(new Set());
+    setLayoutName('My Custom Board');
+    // Don't set selectedLayoutId - this is a template, not a saved layout
+    setSelectedLayoutId(null);
   };
 
   const handleExport = () => {
@@ -368,6 +450,7 @@ export default function EditorPage() {
       goalPositions: Object.fromEntries(
         ALL_PLAYERS.map((p) => [p, Array.from(goalPositions[p])])
       ) as Record<PlayerIndex, string[]>,
+      walls: Array.from(walls),
       createdAt: Date.now(),
     };
     const json = JSON.stringify(layout, null, 2);
@@ -431,8 +514,8 @@ export default function EditorPage() {
   const editorBorderEdges = useMemo(() => findBorderEdges(editorTriangles, activeCells), [editorTriangles, activeCells]);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-100 overflow-x-hidden">
+      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -457,9 +540,9 @@ export default function EditorPage() {
           </div>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col lg:flex-row gap-2 sm:gap-4">
           {/* Left panel - Tools */}
-          <div className="w-64 bg-white rounded-lg shadow p-4 space-y-4">
+          <div className="w-full lg:w-64 bg-white rounded-lg shadow p-2 sm:p-4 space-y-4 order-2 lg:order-1">
             {/* Layout name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -478,10 +561,10 @@ export default function EditorPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Edit Mode
               </label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setMode('cells')}
-                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-all ${
+                  className={`px-3 py-2 text-sm rounded-lg transition-all ${
                     mode === 'cells'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -491,7 +574,7 @@ export default function EditorPage() {
                 </button>
                 <button
                   onClick={() => setMode('starting')}
-                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-all ${
+                  className={`px-3 py-2 text-sm rounded-lg transition-all ${
                     mode === 'starting'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -501,13 +584,23 @@ export default function EditorPage() {
                 </button>
                 <button
                   onClick={() => setMode('goals')}
-                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-all ${
+                  className={`px-3 py-2 text-sm rounded-lg transition-all ${
                     mode === 'goals'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
                   Goals
+                </button>
+                <button
+                  onClick={() => setMode('walls')}
+                  className={`px-3 py-2 text-sm rounded-lg transition-all ${
+                    mode === 'walls'
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Walls
                 </button>
               </div>
             </div>
@@ -630,6 +723,7 @@ export default function EditorPage() {
               <p>Active cells: {activeCells.size}</p>
               <p>Total pieces: {pieceCounts.reduce((a, b) => a + b, 0)}</p>
               <p>Total goals: {ALL_PLAYERS.reduce((acc: number, p) => acc + goalPositions[p].size, 0)}</p>
+              <p>Walls: {walls.size}</p>
             </div>
 
             {/* Actions */}
@@ -679,6 +773,12 @@ export default function EditorPage() {
                 >
                   Clear Goals
                 </button>
+                <button
+                  onClick={() => setWalls(new Set())}
+                  className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Clear Walls
+                </button>
               </div>
             </div>
 
@@ -724,12 +824,14 @@ export default function EditorPage() {
               <p><strong>Cells mode:</strong> Click to toggle cells on/off</p>
               <p><strong>Pieces mode:</strong> Select a player color, then click active cells to place/remove pieces</p>
               <p><strong>Goals mode:</strong> Select a player color, then click active cells to set/unset goal positions for that player</p>
+              <p><strong>Walls mode:</strong> Click to place/remove walls (can be jumped over but not landed on)</p>
               <p><strong>Symmetry:</strong> When enabled, edits are mirrored automatically</p>
             </div>
           </div>
 
-          {/* Right panel - Board */}
-          <div className="flex-1 bg-white rounded-lg shadow p-4">
+          {/* Right panel - Board (shows first on mobile) */}
+          <div className="flex-1 bg-white rounded-lg shadow p-2 sm:p-4 relative order-1 lg:order-2">
+            <SettingsButton />
             <svg
               viewBox={viewBox}
               className="w-full h-[70vh]"
@@ -782,6 +884,56 @@ export default function EditorPage() {
                     x2={pb.x} y2={pb.y}
                     stroke="black"
                     strokeWidth={1.5}
+                  />
+                );
+              })}
+              {/* Wall connecting lines */}
+              {(() => {
+                const directions = [
+                  { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
+                  { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
+                ];
+                const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+                for (const wallKey of walls) {
+                  const [wq, wr] = wallKey.split(',').map(Number);
+                  for (const dir of directions) {
+                    const neighborKey = `${wq + dir.q},${wr + dir.r}`;
+                    if (walls.has(neighborKey) && neighborKey > wallKey) {
+                      const { x: x1, y: y1 } = cubeToPixel(cubeCoord(wq, wr), HEX_SIZE);
+                      const { x: x2, y: y2 } = cubeToPixel(cubeCoord(wq + dir.q, wr + dir.r), HEX_SIZE);
+                      lines.push({ x1, y1, x2, y2 });
+                    }
+                  }
+                }
+                return lines.map((line, i) => (
+                  <line
+                    key={`wall-line-${i}`}
+                    x1={line.x1} y1={line.y1}
+                    x2={line.x2} y2={line.y2}
+                    stroke="#4b5563"
+                    strokeWidth={HEX_SIZE * 0.4}
+                    strokeLinecap="round"
+                  />
+                ));
+              })()}
+              {/* Wall hexagons */}
+              {Array.from(walls).map((wallKey) => {
+                const [wq, wr] = wallKey.split(',').map(Number);
+                const { x, y } = cubeToPixel(cubeCoord(wq, wr), HEX_SIZE);
+                const hexSize = HEX_SIZE * 0.7;
+                const hexPoints = Array.from({ length: 6 }, (_, i) => {
+                  const angle = (Math.PI / 3) * i;
+                  const px = x + hexSize * Math.cos(angle);
+                  const py = y + hexSize * Math.sin(angle);
+                  return `${px},${py}`;
+                }).join(' ');
+                return (
+                  <polygon
+                    key={`wall-hex-${wallKey}`}
+                    points={hexPoints}
+                    fill="#6b7280"
+                    stroke="#374151"
+                    strokeWidth={2}
                   />
                 );
               })}
@@ -845,6 +997,9 @@ export default function EditorPage() {
           </div>
         </div>
       </div>
+
+      {/* Settings Popup (Esc to toggle) */}
+      <SettingsPopup mode="editor" onRestart={handleEditorRestart} />
     </div>
   );
 }

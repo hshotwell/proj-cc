@@ -103,6 +103,13 @@ export function createGameFromLayout(
     }
   }
 
+  // Place walls (if any)
+  if (layout.walls) {
+    for (const key of layout.walls) {
+      board.set(key, { type: 'wall' });
+    }
+  }
+
   // Determine player count based on active players
   const playerCount = (activePlayers.length <= 2 ? 2 :
     activePlayers.length === 3 ? 3 :

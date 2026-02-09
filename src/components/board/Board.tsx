@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import type { CubeCoord, PlayerIndex } from '@/types/game';
+import type { CubeCoord, PlayerIndex, Move } from '@/types/game';
 import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION } from '@/game/constants';
 import { generateBoardPositions } from '@/game/board';
 import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath } from '@/game/coordinates';
@@ -25,23 +25,27 @@ export function Board() {
     longestHopIndex,
   } = useReplayStore();
 
-  const {
-    gameState: liveGameState,
-    selectedPiece: liveSelectedPiece,
-    validMovesForSelected: liveValidMoves,
-    pendingConfirmation,
-    originalPiecePosition,
-    animatingPiece,
-    animationPath,
-    animationStep,
-    selectPiece,
-    makeMove,
-    clearSelection,
-    confirmMove,
-    undoLastMove,
-  } = useGameStore();
+      const {
+      gameState: liveGameState,
+      selectedPiece: liveSelectedPiece,
+      validMovesForSelected: liveValidMoves,
+      pendingConfirmation,
+      stateBeforeMove,
+      originalPiecePosition,
+      animatingPiece,
+      animationPath,
+      animationStep,
+      lastMoveInfo,
+      selectPiece,
+      makeMove,
+      clearSelection,
+      confirmMove,
+      undoLastMove,
+    } = useGameStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates } = useSettingsStore();
 
-  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves } = useSettingsStore();
+  // Track hovered cell for coordinate display
+  const [hoveredCell, setHoveredCell] = useState<CubeCoord | null>(null);
 
   // Choose data source based on replay mode
   const gameState = isReplayActive ? replayDisplayState : liveGameState;
@@ -187,6 +191,19 @@ export function Board() {
     return result;
   }, [gameState]);
 
+  // Get walls from board state
+  const wallPositions = useMemo(() => {
+    if (!gameState) return [];
+    const result: CubeCoord[] = [];
+    for (const [key, content] of gameState.board) {
+      if (content.type === 'wall') {
+        const [q, r] = key.split(',').map(Number);
+        result.push({ q, r, s: -q - r });
+      }
+    }
+    return result;
+  }, [gameState]);
+
   // Displayed moves - filtered by omniscience setting (for rendering indicators)
   const displayedMoves = useMemo(() => {
     if (isReplayActive) return [];
@@ -242,46 +259,88 @@ export function Board() {
     return path.map(c => cubeToPixel(c, HEX_SIZE));
   }, [isReplayActive, longestHopIndex, replayStep, replayMoves]);
 
-  // Compute last move for each player (for showLastMoves setting)
-  const lastMovesPerPlayer = useMemo(() => {
-    if (!showLastMoves || !gameState || isReplayActive) return new Map<PlayerIndex, { from: CubeCoord; to: CubeCoord; path: { x: number; y: number }[]; color: string }>();
+  // Compute the actual path of the last move to pass to the Piece component
+  // Shows the previous player's confirmed move (visible even during current player's pending moves)
+  const lastMoveActualPath = useMemo(() => {
+    if (!showLastMoves || isReplayActive || !gameState) return null;
 
-    const result = new Map<PlayerIndex, { from: CubeCoord; to: CubeCoord; path: { x: number; y: number }[]; color: string }>();
+    // For confirmed moves: use lastMoveInfo and find that turn's moves
+    if (!lastMoveInfo) return null;
+
     const history = gameState.moveHistory;
 
-    // Find the last move for each active player
-    for (const player of gameState.activePlayers) {
-      // Search backwards for the last move by this player
-      for (let i = history.length - 1; i >= 0; i--) {
-        const move = history[i];
-        if (move.player === player) {
-          const path = getMovePath(move.from, move.to, move.jumpPath);
-          const pixelPath = path.map(c => cubeToPixel(c, HEX_SIZE));
-          const baseColor = getPlayerColorFromState(player, gameState);
-          // Lighten the color for the path
-          const lightColor = hexToRgba(baseColor, 0.4);
-          result.set(player, {
-            from: move.from,
-            to: move.to,
-            path: pixelPath,
-            color: lightColor,
-          });
-          break;
-        }
+    const lastMoveOrigin = lastMoveInfo.origin;
+    const lastMoveDestCoord = lastMoveInfo.destination;
+    const lastMovePlayer = lastMoveInfo.player;
+
+    // Find the end of this player's turn (last move to destination)
+    let turnEndIndex = -1;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const move = history[i];
+      if (move.player === lastMovePlayer && cubeEquals(move.to, lastMoveDestCoord)) {
+        turnEndIndex = i;
+        break;
       }
     }
 
-    return result;
-  }, [showLastMoves, gameState, isReplayActive]);
+    if (turnEndIndex === -1) return null;
 
-  // Set of piece positions that were the last move destination (for highlighting)
-  const lastMoveDestinations = useMemo(() => {
-    const set = new Set<string>();
-    for (const [, data] of lastMovesPerPlayer) {
-      set.add(coordKey(data.to));
+    // Find the start of this player's turn
+    // We know the origin (where the piece started), so trace back until we find it
+    let turnStartIndex = turnEndIndex;
+    for (let i = turnEndIndex; i >= 0; i--) {
+      const move = history[i];
+      // Stop if different player
+      if (move.player !== lastMovePlayer) {
+        break;
+      }
+      // This is part of the turn
+      turnStartIndex = i;
+      // Stop if we found the origin (where the piece started this turn)
+      if (cubeEquals(move.from, lastMoveOrigin)) {
+        break;
+      }
     }
-    return set;
-  }, [lastMovesPerPlayer]);
+
+    // Get all moves from this turn
+    const turnMoves = history.slice(turnStartIndex, turnEndIndex + 1);
+
+    if (turnMoves.length === 0) return null;
+
+    // Build the complete path from all moves this turn
+    const fullPath: CubeCoord[] = [];
+    for (const move of turnMoves) {
+      const segmentPath = getMovePath(move.from, move.to, move.jumpPath);
+      if (fullPath.length === 0) {
+        fullPath.push(...segmentPath);
+      } else {
+        fullPath.push(...segmentPath.slice(1));
+      }
+    }
+
+    // Remove loops/backtracking: if a position appears twice, keep only from the last occurrence
+    // This gives the "shortest" path without unnecessary detours
+    const simplifiedPath: CubeCoord[] = [];
+    const positionLastIndex = new Map<string, number>();
+
+    // First pass: find the last occurrence of each position
+    for (let i = 0; i < fullPath.length; i++) {
+      const key = coordKey(fullPath[i]);
+      positionLastIndex.set(key, i);
+    }
+
+    // Second pass: build path skipping to last occurrence when we hit a repeated position
+    let i = 0;
+    while (i < fullPath.length) {
+      const key = coordKey(fullPath[i]);
+      const lastIndex = positionLastIndex.get(key)!;
+      simplifiedPath.push(fullPath[i]);
+      // Jump to after the last occurrence of this position (skip the loop)
+      i = lastIndex + 1;
+    }
+
+    return simplifiedPath.map(c => cubeToPixel(c, HEX_SIZE));
+  }, [showLastMoves, lastMoveInfo, gameState, isReplayActive]);
 
   const handleCellClick = (coord: CubeCoord) => {
     if (isReplayActive) return;
@@ -377,10 +436,15 @@ export function Board() {
     );
   }
 
+  // Parse viewBox to calculate aspect ratio
+  const [vbMinX, vbMinY, vbWidth, vbHeight] = viewBox.split(' ').map(Number);
+  const aspectRatio = vbWidth && vbHeight ? vbWidth / vbHeight : 1;
+
   return (
     <svg
       viewBox={viewBox}
-      className="w-full h-full max-h-[80vh]"
+      className="w-full h-auto max-h-[70vh] sm:max-h-[75vh]"
+      style={{ aspectRatio: aspectRatio }}
       preserveAspectRatio="xMidYMid meet"
     >
       <g
@@ -441,6 +505,8 @@ export function Board() {
           <g
             key={coordKey(coord)}
             onClick={() => handleCellClick(coord)}
+            onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
+            onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
             style={{ cursor: isReplayActive ? 'default' : 'pointer' }}
           >
             <BoardCell
@@ -526,45 +592,84 @@ export function Board() {
         </g>
       )}
 
-      {/* Layer 2d: Last move paths for each player */}
-      {showLastMoves && !isReplayActive && lastMovesPerPlayer.size > 0 && (
-        <g>
-          {Array.from(lastMovesPerPlayer.entries()).map(([player, data]) => (
-            <g key={`last-move-${player}`}>
-              {/* Path line from start to current position */}
-              {data.path.length > 1 && (
-                <polyline
-                  points={data.path.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke={data.color}
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray="6 4"
-                />
-              )}
-              {/* Faded circle at the starting position */}
-              <circle
-                cx={data.path[0].x}
-                cy={data.path[0].y}
-                r={HEX_SIZE * 0.35}
-                fill={data.color}
-                stroke="none"
-              />
-              {/* Small dots at intermediate positions for jumps */}
-              {data.path.slice(1, -1).map((point, i) => (
-                <circle
-                  key={`intermediate-${i}`}
-                  cx={point.x}
-                  cy={point.y}
-                  r={3}
-                  fill={data.color}
-                />
-              ))}
-            </g>
-          ))}
+
+
+      {/* Layer 2e: Last Move Path (purely visual, doesn't block clicks) */}
+      {showLastMoves && !isReplayActive && lastMoveActualPath && lastMoveInfo && (
+        <g style={{ pointerEvents: 'none' }}>
+          <polyline
+            points={lastMoveActualPath.map(p => `${p.x},${p.y}`).join(' ')}
+            fill="none"
+            stroke={getPlayerColorFromState(lastMoveInfo.player, gameState)}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.8}
+          />
         </g>
       )}
+
+      {/* Layer 2f: Walls */}
+      <g>
+        {/* First draw connecting lines between adjacent walls */}
+        {(() => {
+          const wallKeySet = new Set(wallPositions.map(c => coordKey(c)));
+          const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+          const directions = [
+            { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
+            { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
+          ];
+
+          for (const wall of wallPositions) {
+            const wallKey = coordKey(wall);
+            for (const dir of directions) {
+              const neighborKey = `${wall.q + dir.q},${wall.r + dir.r}`;
+              // Only draw if neighbor exists and has a "greater" key to avoid duplicates
+              if (wallKeySet.has(neighborKey) && neighborKey > wallKey) {
+                const { x: x1, y: y1 } = cubeToPixel(wall, HEX_SIZE);
+                const neighbor = { q: wall.q + dir.q, r: wall.r + dir.r, s: -(wall.q + dir.q) - (wall.r + dir.r) };
+                const { x: x2, y: y2 } = cubeToPixel(neighbor, HEX_SIZE);
+                lines.push({ x1, y1, x2, y2 });
+              }
+            }
+          }
+
+          return lines.map((line, i) => (
+            <line
+              key={`wall-line-${i}`}
+              x1={line.x1}
+              y1={line.y1}
+              x2={line.x2}
+              y2={line.y2}
+              stroke="#4b5563"
+              strokeWidth={HEX_SIZE * 0.4}
+              strokeLinecap="round"
+            />
+          ));
+        })()}
+
+        {/* Then draw the wall hexagons on top */}
+        {wallPositions.map((coord) => {
+          const { x, y } = cubeToPixel(coord, HEX_SIZE);
+          // Generate hexagon points (flat-top hexagon) - bigger than pieces
+          const hexSize = HEX_SIZE * 0.7;
+          const hexPoints = Array.from({ length: 6 }, (_, i) => {
+            const angle = (Math.PI / 3) * i;
+            const px = x + hexSize * Math.cos(angle);
+            const py = y + hexSize * Math.sin(angle);
+            return `${px},${py}`;
+          }).join(' ');
+          return (
+            <polygon
+              key={`wall-${coordKey(coord)}`}
+              points={hexPoints}
+              fill="#6b7280"
+              stroke="#374151"
+              strokeWidth={2}
+            />
+          );
+        })}
+      </g>
 
       {/* Layer 3: Pieces */}
       <g>
@@ -573,28 +678,64 @@ export function Board() {
           const isThisAnimating = !!displayCoord;
 
           const pieceKey = coordKey(coord);
-          const isLastMoved = showLastMoves && lastMoveDestinations.has(pieceKey);
+          const isLastMoved = showLastMoves && lastMoveInfo?.destination && cubeEquals(lastMoveInfo.destination, coord);
 
           return (
-            <Piece
+            <g
               key={`piece-${pieceKey}`}
-              coord={coord}
-              player={player}
-              isCurrentPlayer={!isReplayActive && !isAITurn && player === displayCurrentPlayer}
-              isSelected={
-                !isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)
-              }
-              onClick={() => handlePieceClick(coord)}
-              size={HEX_SIZE}
-              customColors={gameState.playerColors}
-              displayCoord={displayCoord}
-              isAnimating={isThisAnimating}
-              isLastMoved={isLastMoved}
-            />
+              onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
+              onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
+            >
+              <Piece
+                coord={coord}
+                player={player}
+                isCurrentPlayer={!isReplayActive && !isAITurn && player === displayCurrentPlayer}
+                isSelected={
+                  !isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)
+                }
+                onClick={() => handlePieceClick(coord)}
+                size={HEX_SIZE}
+                customColors={gameState.playerColors}
+                displayCoord={displayCoord}
+                isAnimating={isThisAnimating}
+                isLastMoved={isLastMoved}
+              />
+            </g>
           );
         })}
       </g>
       </g>
+
+      {/* Coordinate tooltip - outside rotation group so text stays upright */}
+      {showCoordinates && hoveredCell && (() => {
+        const pixel = cubeToPixel(hoveredCell, HEX_SIZE);
+        // Apply the same rotation to position but not to the text
+        const radians = (cumulativeRotation * Math.PI) / 180;
+        const rotatedX = pixel.x * Math.cos(radians) - pixel.y * Math.sin(radians);
+        const rotatedY = pixel.x * Math.sin(radians) + pixel.y * Math.cos(radians);
+        return (
+          <g>
+            <rect
+              x={rotatedX - 28}
+              y={rotatedY - HEX_SIZE - 20}
+              width={56}
+              height={16}
+              rx={3}
+              fill="rgba(0,0,0,0.8)"
+            />
+            <text
+              x={rotatedX}
+              y={rotatedY - HEX_SIZE - 8}
+              textAnchor="middle"
+              fill="white"
+              fontSize={10}
+              fontFamily="monospace"
+            >
+              {hoveredCell.q},{hoveredCell.r},{hoveredCell.s}
+            </text>
+          </g>
+        );
+      })()}
     </svg>
   );
 }

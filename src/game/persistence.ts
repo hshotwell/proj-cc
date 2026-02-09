@@ -16,6 +16,8 @@ function serializeMove(move: Move): Move {
       jumpPath: move.jumpPath.map(c => ({ q: c.q, r: c.r, s: c.s })),
     } : {}),
     ...(move.isSwap ? { isSwap: true } : {}),
+    ...(move.player !== undefined ? { player: move.player } : {}),
+    ...(move.turnNumber !== undefined ? { turnNumber: move.turnNumber } : {}),
   };
 }
 
@@ -31,11 +33,23 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
     activePlayers: [...finalState.activePlayers],
     winner: finalState.winner ?? finalState.finishedPlayers[0]?.player ?? (0 as PlayerIndex),
     totalMoves: normalizedMoves.length,
-    totalTurns: finalState.turnNumber,
+    // turnNumber is incremented after the final move, so subtract 1 for actual turns played
+    totalTurns: Math.max(1, finalState.turnNumber - 1),
     longestHop: longestHopResult?.jumpLength ?? 0,
     ...(finalState.playerColors ? { playerColors: { ...finalState.playerColors } } : {}),
     ...(finalState.aiPlayers ? { aiPlayers: { ...finalState.aiPlayers } } : {}),
   };
+
+  // Build custom layout data if this is a custom board
+  const customLayoutData = finalState.isCustomLayout ? {
+    isCustomLayout: true,
+    customCells: Array.from(finalState.board.keys()),
+    customStartingPositions: finalState.startingPositions ? { ...finalState.startingPositions } : undefined,
+    customGoalPositions: finalState.customGoalPositions ? { ...finalState.customGoalPositions } : undefined,
+    customWalls: Array.from(finalState.board.entries())
+      .filter(([_, content]) => content.type === 'wall')
+      .map(([key]) => key),
+  } : {};
 
   const gameData: SavedGameData = {
     id: gameId,
@@ -44,7 +58,7 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
       activePlayers: [...finalState.activePlayers],
       ...(finalState.playerColors ? { playerColors: { ...finalState.playerColors } } : {}),
       ...(finalState.aiPlayers ? { aiPlayers: { ...finalState.aiPlayers } } : {}),
-      ...(finalState.isCustomLayout ? { isCustomLayout: true } : {}),
+      ...customLayoutData,
     },
     moves: normalizedMoves.map(serializeMove),
     finishedPlayers: finalState.finishedPlayers.map(fp => ({ ...fp })),

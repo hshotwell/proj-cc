@@ -46,6 +46,8 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
     const moves = savedGame.moves;
     const hop = findLongestHop(moves);
 
+    // turnNumber from final state is incremented after the last move, so subtract 1
+    const finalTurnNumber = states[states.length - 1]?.turnNumber ?? 1;
     const summary: SavedGameSummary = {
       id: savedGame.id,
       dateSaved: savedGame.dateSaved,
@@ -53,7 +55,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       activePlayers: savedGame.initialConfig.activePlayers,
       winner: savedGame.finishedPlayers[0]?.player ?? savedGame.initialConfig.activePlayers[0],
       totalMoves: moves.length,
-      totalTurns: states[states.length - 1]?.turnNumber ?? 1,
+      totalTurns: Math.max(1, finalTurnNumber - 1),
       longestHop: hop?.jumpLength ?? 0,
       playerColors: savedGame.initialConfig.playerColors,
       aiPlayers: savedGame.initialConfig.aiPlayers,
@@ -77,6 +79,17 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
     const normalizedMoves = normalizeMoveHistory(finalState.moveHistory, finalState.activePlayers);
     const hop = findLongestHop(normalizedMoves);
 
+    // Build custom layout data if this is a custom board
+    const customLayoutData = finalState.isCustomLayout ? {
+      isCustomLayout: true,
+      customCells: Array.from(finalState.board.keys()),
+      customStartingPositions: finalState.startingPositions,
+      customGoalPositions: finalState.customGoalPositions,
+      customWalls: Array.from(finalState.board.entries())
+        .filter(([_, content]) => content.type === 'wall')
+        .map(([key]) => key),
+    } : {};
+
     // Build a SavedGameData-like structure for reconstruction
     const savedGame = {
       id: gameId,
@@ -85,7 +98,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
         activePlayers: finalState.activePlayers,
         playerColors: finalState.playerColors,
         aiPlayers: finalState.aiPlayers,
-        isCustomLayout: finalState.isCustomLayout,
+        ...customLayoutData,
       },
       moves: normalizedMoves,
       finishedPlayers: finalState.finishedPlayers,
@@ -101,7 +114,8 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       activePlayers: [...finalState.activePlayers],
       winner: finalState.winner ?? finalState.finishedPlayers[0]?.player ?? finalState.activePlayers[0],
       totalMoves: normalizedMoves.length,
-      totalTurns: finalState.turnNumber,
+      // turnNumber is incremented after the final move, so subtract 1 for actual turns played
+      totalTurns: Math.max(1, finalState.turnNumber - 1),
       longestHop: hop?.jumpLength ?? 0,
       playerColors: finalState.playerColors,
       aiPlayers: finalState.aiPlayers,

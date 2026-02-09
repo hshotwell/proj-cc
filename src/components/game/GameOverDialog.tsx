@@ -69,7 +69,7 @@ export function GameOverDialog() {
 
           <p className="text-sm text-gray-500 mb-6">
             Completed in {gameState.moveHistory.length} moves over{' '}
-            {gameState.turnNumber} turns
+            {Math.max(1, gameState.turnNumber - 1)} turns
           </p>
           <div className="flex flex-col gap-3">
             <button

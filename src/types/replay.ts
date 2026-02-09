@@ -22,6 +22,11 @@ export interface SavedGameData {
     playerColors?: ColorMapping;
     aiPlayers?: AIPlayerMap;
     isCustomLayout?: boolean;
+    // Custom layout data (only present when isCustomLayout is true)
+    customCells?: string[];
+    customStartingPositions?: Partial<Record<PlayerIndex, string[]>>;
+    customGoalPositions?: Partial<Record<PlayerIndex, string[]>>;
+    customWalls?: string[];
   };
   moves: Move[];
   finishedPlayers: Array<{ player: PlayerIndex; moveCount: number }>;
