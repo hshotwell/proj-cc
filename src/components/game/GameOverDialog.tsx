@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getPlayerColorFromState, getPlayerDisplayName } from '@/game/colors';
+import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { isGameFullyOver } from '@/game/state';
 import { saveCompletedGame } from '@/game/persistence';
 import { useGameStore } from '@/store/gameStore';
@@ -47,7 +47,7 @@ export function GameOverDialog() {
           <div className="space-y-2 mb-6 text-left">
             {finishedPlayers.map((fp, i) => {
               const color = getPlayerColorFromState(fp.player, gameState);
-              const name = getPlayerDisplayName(fp.player, activePlayers);
+              const name = getPlayerDisplayNameFromState(fp.player, gameState);
               const extra = fp.moveCount - firstMoveCount;
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">

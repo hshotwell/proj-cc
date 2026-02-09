@@ -6,6 +6,7 @@ import type {
   PlayerIndex,
   BoardLayout,
   ColorMapping,
+  PlayerNameMapping,
 } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { ACTIVE_PLAYERS } from './constants';
@@ -49,7 +50,8 @@ export function createGame(
   playerCount: PlayerCount,
   selectedPlayers?: PlayerIndex[],
   playerColors?: ColorMapping,
-  aiPlayers?: AIPlayerMap
+  aiPlayers?: AIPlayerMap,
+  playerNames?: PlayerNameMapping
 ): GameState {
   // Use selectedPlayers if provided, otherwise fall back to defaults
   const activePlayers = selectedPlayers ?? (ACTIVE_PLAYERS[playerCount] as PlayerIndex[]);
@@ -72,6 +74,7 @@ export function createGame(
     finishedPlayers: [],
     turnNumber: 1,
     playerColors,
+    playerNames,
     aiPlayers,
     startingPositions,
   };
@@ -81,7 +84,8 @@ export function createGame(
 export function createGameFromLayout(
   layout: BoardLayout,
   playerColors?: ColorMapping,
-  aiPlayers?: AIPlayerMap
+  aiPlayers?: AIPlayerMap,
+  playerNames?: PlayerNameMapping
 ): GameState {
   const board = new Map<string, CellContent>();
 
@@ -128,6 +132,7 @@ export function createGameFromLayout(
     customGoalPositions: layout.goalPositions,
     startingPositions: layout.startingPositions,
     playerColors,
+    playerNames,
     aiPlayers,
   };
 }
@@ -141,6 +146,7 @@ export function cloneGameState(state: GameState): GameState {
     moveHistory: [...state.moveHistory],
     finishedPlayers: [...state.finishedPlayers],
     playerColors: state.playerColors ? { ...state.playerColors } : undefined,
+    playerNames: state.playerNames ? { ...state.playerNames } : undefined,
     aiPlayers: state.aiPlayers ? { ...state.aiPlayers } : undefined,
     startingPositions: state.startingPositions ? { ...state.startingPositions } : undefined,
     // Preserve custom layout data for AI evaluation

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { getPlayerColorFromState, getPlayerDisplayName } from '@/game/colors';
+import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 
@@ -79,7 +79,7 @@ export function MoveConfirmation() {
 
   const player = gameState.currentPlayer;
   const color = getPlayerColorFromState(player, gameState);
-  const name = getPlayerDisplayName(player, gameState.activePlayers);
+  const name = getPlayerDisplayNameFromState(player, gameState);
   const hasMoreMoves = validMovesForSelected.length > 0;
 
   return (

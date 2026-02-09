@@ -1,5 +1,5 @@
 import { PLAYER_COLORS } from './constants';
-import type { GameState, PlayerIndex, ColorMapping } from '@/types/game';
+import type { GameState, PlayerIndex, ColorMapping, PlayerNameMapping } from '@/types/game';
 
 /**
  * Convert a hex color string to rgba with given alpha
@@ -43,13 +43,29 @@ export function blendColorsRgba(hexColors: string[], alpha: number): string {
 
 /**
  * Get a display name for a player based on their 1-based position in the active players list
+ * or a custom name if provided
  */
 export function getPlayerDisplayName(
   player: PlayerIndex,
-  activePlayers: PlayerIndex[]
+  activePlayers: PlayerIndex[],
+  customNames?: PlayerNameMapping
 ): string {
+  if (customNames?.[player]) {
+    return customNames[player]!;
+  }
   const index = activePlayers.indexOf(player);
   return `Player ${index + 1}`;
+}
+
+/**
+ * Get player display name from game state (convenience function for components)
+ */
+export function getPlayerDisplayNameFromState(
+  player: PlayerIndex,
+  state?: GameState | null
+): string {
+  if (!state) return `Player ${player + 1}`;
+  return getPlayerDisplayName(player, state.activePlayers, state.playerNames);
 }
 
 /**

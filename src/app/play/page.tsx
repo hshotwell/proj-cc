@@ -3,10 +3,9 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping } from '@/types/game';
+import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping } from '@/types/game';
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
 import { PLAYER_COLORS, ACTIVE_PLAYERS } from '@/game/constants';
-import { getPlayerDisplayName } from '@/game/colors';
 import { useGameStore } from '@/store/gameStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { ColorPicker } from '@/components/ui/ColorPicker';
@@ -31,8 +30,10 @@ export default function PlayPage() {
   const [useCustomLayout, setUseCustomLayout] = useState(false);
   const [selectedLayout, setSelectedLayout] = useState<BoardLayout | null>(null);
   const [customColors, setCustomColors] = useState<ColorMapping>({});
+  const [playerNames, setPlayerNames] = useState<PlayerNameMapping>({});
   const [aiConfig, setAiConfig] = useState<AIPlayerMap>({});
   const [evolvedAvailable, setEvolvedAvailable] = useState(false);
+  const [editingName, setEditingName] = useState<PlayerIndex | null>(null);
 
   // Check for evolved genome on mount
   useEffect(() => {
@@ -52,9 +53,10 @@ export default function PlayPage() {
     }
   }, [layouts, getDefaultLayout]);
 
-  // Reset custom colors and AI config when player count or layout changes
+  // Reset custom colors, names, and AI config when player count or layout changes
   useEffect(() => {
     setCustomColors({});
+    setPlayerNames({});
     setAiConfig({});
   }, [selectedCount, selectedLayout?.id]);
 
@@ -69,26 +71,38 @@ export default function PlayPage() {
     setCustomColors({});
   };
 
+  const handleNameChange = (player: PlayerIndex, name: string) => {
+    setPlayerNames((prev) => {
+      if (name.trim() === '') {
+        const next = { ...prev };
+        delete next[player];
+        return next;
+      }
+      return { ...prev, [player]: name.trim() };
+    });
+  };
+
   const handleStartGame = () => {
     let gameId: string;
 
+    const hasCustomColors = Object.keys(customColors).length > 0;
+    const hasCustomNames = Object.keys(playerNames).length > 0;
+    const hasAI = Object.keys(aiConfig).length > 0;
+
     if (useCustomLayout && selectedLayout) {
-      const hasCustomColors = Object.keys(customColors).length > 0;
-      const hasAI = Object.keys(aiConfig).length > 0;
       gameId = startGameFromLayout(
         selectedLayout,
         hasCustomColors ? customColors : undefined,
-        hasAI ? aiConfig : undefined
+        hasAI ? aiConfig : undefined,
+        hasCustomNames ? playerNames : undefined
       );
     } else {
-      // Only pass customColors/aiPlayers if any were set
-      const hasCustomColors = Object.keys(customColors).length > 0;
-      const hasAI = Object.keys(aiConfig).length > 0;
       gameId = startGame(
         selectedCount,
         undefined,
         hasCustomColors ? customColors : undefined,
-        hasAI ? aiConfig : undefined
+        hasAI ? aiConfig : undefined,
+        hasCustomNames ? playerNames : undefined
       );
     }
 
@@ -100,12 +114,17 @@ export default function PlayPage() {
     return customColors[player] ?? PLAYER_COLORS[player];
   };
 
+  // Get default player name
+  const getDefaultName = (player: PlayerIndex, players: PlayerIndex[]): string => {
+    const index = players.indexOf(player);
+    return `Player ${index + 1}`;
+  };
+
   // Check if a color is already used by another player
   const isColorUsedByOther = (color: string, currentPlayer: PlayerIndex): boolean => {
     for (const player of configPlayers) {
       if (player !== currentPlayer) {
         const playerColor = getEffectiveColor(player);
-        // Compare colors case-insensitively
         if (playerColor.toLowerCase() === color.toLowerCase()) {
           return true;
         }
@@ -133,6 +152,151 @@ export default function PlayPage() {
   // The players to use for color/AI config (differs based on mode)
   const configPlayers = useCustomLayout ? layoutPlayers : activePlayers;
 
+  // Render a player row with name, color, and AI toggle
+  const renderPlayerRow = (playerIndex: PlayerIndex, players: PlayerIndex[]) => {
+    const currentColor = getEffectiveColor(playerIndex);
+    const isAI = aiConfig[playerIndex] != null;
+    const currentName = playerNames[playerIndex] || getDefaultName(playerIndex, players);
+    const isEditing = editingName === playerIndex;
+
+    return (
+      <div
+        key={playerIndex}
+        className="flex flex-col gap-3 p-4 rounded-lg bg-gray-50"
+      >
+        {/* Top row: Color, Name, Human/AI toggle */}
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-full shadow flex-shrink-0 border-2 border-white"
+            style={{ backgroundColor: currentColor }}
+          />
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <input
+                type="text"
+                autoFocus
+                defaultValue={currentName}
+                placeholder={getDefaultName(playerIndex, players)}
+                onBlur={(e) => {
+                  handleNameChange(playerIndex, e.target.value);
+                  setEditingName(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNameChange(playerIndex, e.currentTarget.value);
+                    setEditingName(null);
+                  } else if (e.key === 'Escape') {
+                    setEditingName(null);
+                  }
+                }}
+                className="w-full px-2 py-1 text-sm font-medium border border-blue-400 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            ) : (
+              <button
+                onClick={() => setEditingName(playerIndex)}
+                className="text-left font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                title="Click to edit name"
+              >
+                {currentName}
+                {isAI && <span className="ml-1 text-xs text-purple-600">(AI)</span>}
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              setAiConfig((prev) => {
+                if (prev[playerIndex]) {
+                  const next = { ...prev };
+                  delete next[playerIndex];
+                  return next;
+                }
+                return { ...prev, [playerIndex]: { difficulty: 'medium' as AIDifficulty, personality: 'generalist' as AIPersonality } };
+              });
+            }}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex-shrink-0 ${
+              isAI
+                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+            }`}
+          >
+            {isAI ? 'AI' : 'Human'}
+          </button>
+        </div>
+
+        {/* AI settings row */}
+        {isAI && (
+          <div className="flex items-center gap-2 pl-13">
+            <select
+              value={aiConfig[playerIndex]!.difficulty}
+              onChange={(e) => {
+                const difficulty = e.target.value as AIDifficulty;
+                setAiConfig((prev) => ({
+                  ...prev,
+                  [playerIndex]: { ...prev[playerIndex]!, difficulty },
+                }));
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
+            >
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+              <option value="evolved" disabled={!evolvedAvailable}>
+                Evolved{!evolvedAvailable ? ' (train first)' : ''}
+              </option>
+            </select>
+            <select
+              value={aiConfig[playerIndex]!.personality}
+              onChange={(e) => {
+                const personality = e.target.value as AIPersonality;
+                setAiConfig((prev) => ({
+                  ...prev,
+                  [playerIndex]: { ...prev[playerIndex]!, personality },
+                }));
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
+            >
+              <option value="generalist">Generalist</option>
+              <option value="defensive">Defensive</option>
+              <option value="aggressive">Aggressive</option>
+            </select>
+          </div>
+        )}
+
+        {/* Color selection row */}
+        <div className="flex gap-2 flex-wrap items-center">
+          {AVAILABLE_COLORS.map((color) => {
+            const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
+            const isTaken = isColorUsedByOther(color, playerIndex);
+            return (
+              <button
+                key={color}
+                onClick={() => handleColorSelectSafe(playerIndex, color)}
+                disabled={isTaken}
+                className={`w-7 h-7 rounded-full border-2 transition-all ${
+                  isCurrentColor
+                    ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                    : isTaken
+                    ? 'border-gray-300 opacity-40 cursor-not-allowed'
+                    : 'border-white shadow hover:scale-110'
+                }`}
+                style={{ backgroundColor: color }}
+                title={isTaken ? 'Color already in use' : `Select ${color}`}
+              />
+            );
+          })}
+          <ColorPicker
+            value={currentColor}
+            onChange={(newColor) => {
+              if (!isColorUsedByOther(newColor, playerIndex)) {
+                handleColorSelect(playerIndex, newColor);
+              }
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-2xl mx-auto">
@@ -142,7 +306,7 @@ export default function PlayPage() {
             href="/"
             className="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-block"
           >
-            ← Back to Home
+            &larr; Back to Home
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">New Game</h1>
           <p className="text-gray-600">Choose your game setup</p>
@@ -192,157 +356,24 @@ export default function PlayPage() {
               ))}
             </div>
 
-            {/* Player color customization */}
+            {/* Players section (combined colors, names, and AI) */}
             <div className="bg-white rounded-xl shadow p-6 mb-8">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Customize Colors</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Players</h2>
                 {Object.keys(customColors).length > 0 && (
                   <button
                     onClick={handleResetColors}
                     className="text-sm text-blue-600 hover:text-blue-500"
                   >
-                    Use Defaults
+                    Reset Colors
                   </button>
                 )}
               </div>
-              <div className="space-y-4">
-                {activePlayers.map((playerIndex) => {
-                  const currentColor = getEffectiveColor(playerIndex);
-                  return (
-                    <div
-                      key={playerIndex}
-                      className="flex items-center gap-4 p-3 rounded-lg bg-gray-50"
-                    >
-                      <div
-                        className="w-8 h-8 rounded-full shadow flex-shrink-0"
-                        style={{ backgroundColor: currentColor }}
-                      />
-                      <div className="flex-shrink-0 min-w-[80px]">
-                        <div className="font-medium text-gray-900">
-                          {getPlayerDisplayName(playerIndex, activePlayers)}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 flex-wrap items-center">
-                        {AVAILABLE_COLORS.map((color) => {
-                          const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
-                          const isTaken = isColorUsedByOther(color, playerIndex);
-                          return (
-                            <button
-                              key={color}
-                              onClick={() => handleColorSelectSafe(playerIndex, color)}
-                              disabled={isTaken}
-                              className={`w-7 h-7 rounded-full border-2 transition-all ${
-                                isCurrentColor
-                                  ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
-                                  : isTaken
-                                  ? 'border-gray-300 opacity-40 cursor-not-allowed'
-                                  : 'border-white shadow hover:scale-110'
-                              }`}
-                              style={{ backgroundColor: color }}
-                              title={isTaken ? 'Color already in use' : `Select ${color}`}
-                            />
-                          );
-                        })}
-                        {/* Color wheel picker */}
-                        <ColorPicker
-                          value={currentColor}
-                          onChange={(newColor) => {
-                            if (!isColorUsedByOther(newColor, playerIndex)) {
-                              handleColorSelect(playerIndex, newColor);
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="mt-3 text-xs text-gray-500">
-                Click a preset color or use the color wheel (+) for custom colors. Each player must have a unique color.
-              </p>
-            </div>
-
-            {/* AI Opponent Configuration */}
-            <div className="bg-white rounded-xl shadow p-6 mb-8">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">AI Opponents</h2>
               <div className="space-y-3">
-                {activePlayers.map((playerIndex) => {
-                  const isAI = aiConfig[playerIndex] != null;
-                  const currentColor = getEffectiveColor(playerIndex);
-                  return (
-                    <div
-                      key={playerIndex}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-gray-50"
-                    >
-                      <div
-                        className="w-6 h-6 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: currentColor }}
-                      />
-                      <span className="font-medium text-gray-900 min-w-[60px]">
-                        {getPlayerDisplayName(playerIndex, activePlayers)}
-                      </span>
-                      <button
-                        onClick={() => {
-                          setAiConfig((prev) => {
-                            if (prev[playerIndex]) {
-                              const next = { ...prev };
-                              delete next[playerIndex];
-                              return next;
-                            }
-                            return { ...prev, [playerIndex]: { difficulty: 'medium' as AIDifficulty, personality: 'generalist' as AIPersonality } };
-                          });
-                        }}
-                        className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
-                          isAI
-                            ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                            : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                        }`}
-                      >
-                        {isAI ? 'AI' : 'Human'}
-                      </button>
-                      {isAI && (
-                        <>
-                          <select
-                            value={aiConfig[playerIndex]!.difficulty}
-                            onChange={(e) => {
-                              const difficulty = e.target.value as AIDifficulty;
-                              setAiConfig((prev) => ({
-                                ...prev,
-                                [playerIndex]: { ...prev[playerIndex]!, difficulty },
-                              }));
-                            }}
-                            className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
-                          >
-                            <option value="easy">Easy</option>
-                            <option value="medium">Medium</option>
-                            <option value="hard">Hard</option>
-                            <option value="evolved" disabled={!evolvedAvailable}>
-                              Evolved{!evolvedAvailable ? ' (train first)' : ''}
-                            </option>
-                          </select>
-                          <select
-                            value={aiConfig[playerIndex]!.personality}
-                            onChange={(e) => {
-                              const personality = e.target.value as AIPersonality;
-                              setAiConfig((prev) => ({
-                                ...prev,
-                                [playerIndex]: { ...prev[playerIndex]!, personality },
-                              }));
-                            }}
-                            className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
-                          >
-                            <option value="generalist">Generalist</option>
-                            <option value="defensive">Defensive</option>
-                            <option value="aggressive">Aggressive</option>
-                          </select>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                {activePlayers.map((playerIndex) => renderPlayerRow(playerIndex, activePlayers))}
               </div>
-              <p className="mt-3 text-xs text-gray-500">
-                Toggle players between Human and AI. AI players move automatically.
+              <p className="mt-4 text-xs text-gray-500">
+                Click a name to edit it. Toggle Human/AI and choose colors for each player.
               </p>
             </div>
           </>
@@ -359,7 +390,7 @@ export default function PlayPage() {
                     href="/editor"
                     className="text-blue-600 hover:text-blue-500"
                   >
-                    Create one in the Board Editor →
+                    Create one in the Board Editor &rarr;
                   </Link>
                 </div>
               ) : (
@@ -402,162 +433,27 @@ export default function PlayPage() {
                   ))}
                 </div>
               )}
-
             </div>
 
-            {/* Player color customization for custom layouts */}
+            {/* Players section for custom layouts */}
             {selectedLayout && layoutPlayers.length > 0 && (
               <div className="bg-white rounded-xl shadow p-6 mb-8">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Customize Colors</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Players</h2>
                   {Object.keys(customColors).length > 0 && (
                     <button
                       onClick={handleResetColors}
                       className="text-sm text-blue-600 hover:text-blue-500"
                     >
-                      Use Defaults
+                      Reset Colors
                     </button>
                   )}
                 </div>
-                <div className="space-y-4">
-                  {layoutPlayers.map((playerIndex) => {
-                    const currentColor = getEffectiveColor(playerIndex);
-                    return (
-                      <div
-                        key={playerIndex}
-                        className="flex items-center gap-4 p-3 rounded-lg bg-gray-50"
-                      >
-                        <div
-                          className="w-8 h-8 rounded-full shadow flex-shrink-0"
-                          style={{ backgroundColor: currentColor }}
-                        />
-                        <div className="flex-shrink-0 min-w-[80px]">
-                          <div className="font-medium text-gray-900">
-                            {getPlayerDisplayName(playerIndex, layoutPlayers)}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 flex-wrap items-center">
-                          {AVAILABLE_COLORS.map((color) => {
-                            const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
-                            const isTaken = isColorUsedByOther(color, playerIndex);
-                            return (
-                              <button
-                                key={color}
-                                onClick={() => handleColorSelectSafe(playerIndex, color)}
-                                disabled={isTaken}
-                                className={`w-7 h-7 rounded-full border-2 transition-all ${
-                                  isCurrentColor
-                                    ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
-                                    : isTaken
-                                    ? 'border-gray-300 opacity-40 cursor-not-allowed'
-                                    : 'border-white shadow hover:scale-110'
-                                }`}
-                                style={{ backgroundColor: color }}
-                                title={isTaken ? 'Color already in use' : `Select ${color}`}
-                              />
-                            );
-                          })}
-                          <ColorPicker
-                            value={currentColor}
-                            onChange={(newColor) => {
-                              if (!isColorUsedByOther(newColor, playerIndex)) {
-                                handleColorSelect(playerIndex, newColor);
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-3 text-xs text-gray-500">
-                  Click a preset color or use the color wheel (+) for custom colors. Each player must have a unique color.
-                </p>
-              </div>
-            )}
-
-            {/* AI Opponent Configuration for custom layouts */}
-            {selectedLayout && layoutPlayers.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-6 mb-8">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">AI Opponents</h2>
                 <div className="space-y-3">
-                  {layoutPlayers.map((playerIndex) => {
-                    const isAI = aiConfig[playerIndex] != null;
-                    const currentColor = getEffectiveColor(playerIndex);
-                    return (
-                      <div
-                        key={playerIndex}
-                        className="flex items-center gap-3 p-3 rounded-lg bg-gray-50"
-                      >
-                        <div
-                          className="w-6 h-6 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: currentColor }}
-                        />
-                        <span className="font-medium text-gray-900 min-w-[60px]">
-                          {getPlayerDisplayName(playerIndex, layoutPlayers)}
-                        </span>
-                        <button
-                          onClick={() => {
-                            setAiConfig((prev) => {
-                              if (prev[playerIndex]) {
-                                const next = { ...prev };
-                                delete next[playerIndex];
-                                return next;
-                              }
-                              return { ...prev, [playerIndex]: { difficulty: 'medium' as AIDifficulty, personality: 'generalist' as AIPersonality } };
-                            });
-                          }}
-                          className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
-                            isAI
-                              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                              : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                          }`}
-                        >
-                          {isAI ? 'AI' : 'Human'}
-                        </button>
-                        {isAI && (
-                          <>
-                            <select
-                              value={aiConfig[playerIndex]!.difficulty}
-                              onChange={(e) => {
-                                const difficulty = e.target.value as AIDifficulty;
-                                setAiConfig((prev) => ({
-                                  ...prev,
-                                  [playerIndex]: { ...prev[playerIndex]!, difficulty },
-                                }));
-                              }}
-                              className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
-                            >
-                              <option value="easy">Easy</option>
-                              <option value="medium">Medium</option>
-                              <option value="hard">Hard</option>
-                              <option value="evolved" disabled={!evolvedAvailable}>
-                                Evolved{!evolvedAvailable ? ' (train first)' : ''}
-                              </option>
-                            </select>
-                            <select
-                              value={aiConfig[playerIndex]!.personality}
-                              onChange={(e) => {
-                                const personality = e.target.value as AIPersonality;
-                                setAiConfig((prev) => ({
-                                  ...prev,
-                                  [playerIndex]: { ...prev[playerIndex]!, personality },
-                                }));
-                              }}
-                              className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
-                            >
-                              <option value="generalist">Generalist</option>
-                              <option value="defensive">Defensive</option>
-                              <option value="aggressive">Aggressive</option>
-                            </select>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {layoutPlayers.map((playerIndex) => renderPlayerRow(playerIndex, layoutPlayers))}
                 </div>
-                <p className="mt-3 text-xs text-gray-500">
-                  Toggle players between Human and AI. AI players move automatically.
+                <p className="mt-4 text-xs text-gray-500">
+                  Click a name to edit it. Toggle Human/AI and choose colors for each player.
                 </p>
               </div>
             )}
@@ -566,7 +462,7 @@ export default function PlayPage() {
               href="/editor"
               className="block text-center text-sm text-blue-600 hover:text-blue-500 mb-4"
             >
-              Create or edit layouts in the Board Editor →
+              Create or edit layouts in the Board Editor &rarr;
             </Link>
           </>
         )}

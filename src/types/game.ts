@@ -14,6 +14,9 @@ export type PlayerCount = 2 | 3 | 4 | 6;
 // Custom color mapping for players (falls back to PLAYER_COLORS if not specified)
 export type ColorMapping = Partial<Record<PlayerIndex, string>>;
 
+// Custom name mapping for players (falls back to "Player N" if not specified)
+export type PlayerNameMapping = Partial<Record<PlayerIndex, string>>;
+
 // Cell content - empty, piece, or wall
 export type CellContent =
   | { type: 'empty' }
@@ -60,6 +63,8 @@ export interface GameState {
   isCustomLayout?: boolean;
   // Custom colors for players (falls back to PLAYER_COLORS)
   playerColors?: ColorMapping;
+  // Custom names for players (falls back to "Player N")
+  playerNames?: PlayerNameMapping;
   // AI player configurations
   aiPlayers?: import('./ai').AIPlayerMap;
   // Custom goal positions if using a custom layout

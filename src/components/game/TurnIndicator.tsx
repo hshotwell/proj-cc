@@ -1,6 +1,6 @@
 'use client';
 
-import { getPlayerColorFromState, getPlayerDisplayName } from '@/game/colors';
+import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { countPiecesInGoal } from '@/game/state';
 import { computePlayerProgress } from '@/game/progress';
 import { useGameStore } from '@/store/gameStore';
@@ -14,7 +14,7 @@ export function TurnIndicator() {
 
   const displayPlayer = gameState.currentPlayer;
   const color = getPlayerColorFromState(displayPlayer, gameState);
-  const name = getPlayerDisplayName(displayPlayer, gameState.activePlayers);
+  const name = getPlayerDisplayNameFromState(displayPlayer, gameState);
   const turnNumber = gameState.turnNumber;
   const isAI = gameState.aiPlayers?.[displayPlayer] != null;
   const isFinished = gameState.finishedPlayers.some((fp) => fp.player === displayPlayer);

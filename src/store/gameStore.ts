@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout, ColorMapping } from '@/types/game';
+import type { CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { createGame, createGameFromLayout } from '@/game/setup';
 import { getValidMoves } from '@/game/moves';
@@ -31,8 +31,8 @@ interface GameStore {
   animationStep: number; // Current step in the animation (0 = at start)
 
   // Actions
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => string;
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => string;
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => string;
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => string;
   selectPiece: (coord: CubeCoord) => void;
   makeMove: (to: CubeCoord, animate?: boolean) => boolean;
   clearSelection: () => void;
@@ -66,8 +66,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   animationStep: 0,
 
   // Start a new game with the specified number of players
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => {
-    const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers);
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => {
+    const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers, playerNames);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
     clearStateHistory();
@@ -88,8 +88,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   // Start a game from a custom board layout
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap) => {
-    const gameState = createGameFromLayout(layout, playerColors, aiPlayers);
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => {
+    const gameState = createGameFromLayout(layout, playerColors, aiPlayers, playerNames);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
     clearStateHistory();
@@ -367,7 +367,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameState.playerCount,
       undefined,
       gameState.playerColors,
-      gameState.aiPlayers
+      gameState.aiPlayers,
+      gameState.playerNames
     );
     const gameId = generateGameId();
     // Clear AI tracking state for new game
