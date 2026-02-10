@@ -21,35 +21,20 @@ export default function Home() {
             className="w-48 h-48 mx-auto"
             aria-hidden="true"
           >
-            {/* 6-pointed star (Star of David shape) - two overlapping triangles */}
+            {/* 6-pointed star - two overlapping triangles */}
             <polygon
-              points="0,-85 73.6,42.5 -73.6,42.5"
-              fill="none"
-              stroke="#3b82f6"
-              strokeWidth="3"
-              opacity="0.6"
-            />
-            <polygon
-              points="0,85 73.6,-42.5 -73.6,-42.5"
-              fill="none"
-              stroke="#3b82f6"
-              strokeWidth="3"
-              opacity="0.6"
-            />
-            {/* Inner 6-pointed star */}
-            <polygon
-              points="0,-50 43.3,25 -43.3,25"
+              points="0,-70 60.6,35 -60.6,35"
               fill="#3b82f6"
               opacity="0.2"
             />
             <polygon
-              points="0,50 43.3,-25 -43.3,-25"
+              points="0,70 60.6,-35 -60.6,-35"
               fill="#3b82f6"
               opacity="0.2"
             />
             {/* Center hexagon */}
             <polygon
-              points="0,-25 21.6,-12.5 21.6,12.5 0,25 -21.6,12.5 -21.6,-12.5"
+              points="0,-35 30.3,-17.5 30.3,17.5 0,35 -30.3,17.5 -30.3,-17.5"
               fill="#3b82f6"
               opacity="0.4"
             />
