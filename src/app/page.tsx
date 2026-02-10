@@ -49,7 +49,7 @@ export default function Home() {
         <div className="mb-12">
           <svg
             viewBox="-100 -100 200 200"
-            className="w-48 h-48 mx-auto"
+            className="w-72 h-72 mx-auto"
             aria-hidden="true"
           >
             {/* 6 triangle points with cycling colors */}
