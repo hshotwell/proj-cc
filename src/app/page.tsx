@@ -1,8 +1,39 @@
 import Link from 'next/link';
 
+// Player colors for the animated star points
+const STAR_COLORS = [
+  '#ef4444', // red
+  '#22c55e', // green
+  '#3b82f6', // blue
+  '#eab308', // yellow
+  '#a855f7', // purple
+  '#f97316', // orange
+];
+
+// 6 triangle points of the star, each defined by 3 vertices
+// Triangles radiate outward from a central hexagon
+const STAR_TRIANGLES = [
+  { points: '-17.5,-30.3 17.5,-30.3 0,-70', index: 0 },    // top
+  { points: '17.5,-30.3 35,0 60.6,-35', index: 1 },        // upper-right
+  { points: '35,0 17.5,30.3 60.6,35', index: 2 },          // lower-right
+  { points: '17.5,30.3 -17.5,30.3 0,70', index: 3 },       // bottom
+  { points: '-17.5,30.3 -35,0 -60.6,35', index: 4 },       // lower-left
+  { points: '-35,0 -17.5,-30.3 -60.6,-35', index: 5 },     // upper-left
+];
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">
+      <style>{`
+        @keyframes colorCycle {
+          0%, 100% { fill: ${STAR_COLORS[0]}; }
+          16.67% { fill: ${STAR_COLORS[1]}; }
+          33.33% { fill: ${STAR_COLORS[2]}; }
+          50% { fill: ${STAR_COLORS[3]}; }
+          66.67% { fill: ${STAR_COLORS[4]}; }
+          83.33% { fill: ${STAR_COLORS[5]}; }
+        }
+      `}</style>
       <main className="text-center px-4">
         {/* Logo / Title */}
         <div className="mb-8">
@@ -14,29 +45,29 @@ export default function Home() {
           </p>
         </div>
 
-        {/* 6-pointed star decoration */}
+        {/* 6-pointed star decoration with animated colors */}
         <div className="mb-12">
           <svg
             viewBox="-100 -100 200 200"
             className="w-48 h-48 mx-auto"
             aria-hidden="true"
           >
-            {/* 6-pointed star - two overlapping triangles */}
+            {/* 6 triangle points with cycling colors */}
+            {STAR_TRIANGLES.map((triangle) => (
+              <polygon
+                key={triangle.index}
+                points={triangle.points}
+                style={{
+                  fill: STAR_COLORS[triangle.index],
+                  animation: 'colorCycle 12s ease-in-out infinite',
+                  animationDelay: `${triangle.index * 2}s`,
+                }}
+              />
+            ))}
+            {/* Center hexagon - grey */}
             <polygon
-              points="0,-70 60.6,35 -60.6,35"
-              fill="#3b82f6"
-              opacity="0.2"
-            />
-            <polygon
-              points="0,70 60.6,-35 -60.6,-35"
-              fill="#3b82f6"
-              opacity="0.2"
-            />
-            {/* Center hexagon */}
-            <polygon
-              points="0,-35 30.3,-17.5 30.3,17.5 0,35 -30.3,17.5 -30.3,-17.5"
-              fill="#3b82f6"
-              opacity="0.4"
+              points="-17.5,-30.3 17.5,-30.3 35,0 17.5,30.3 -17.5,30.3 -35,0"
+              fill="#9ca3af"
             />
           </svg>
         </div>
