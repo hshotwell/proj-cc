@@ -36,7 +36,7 @@ export default function Home() {
       `}</style>
       <main className="text-center px-4">
         {/* Logo / Title */}
-        <div className="mb-8">
+        <div className="mb-4">
           <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-2">
             STERNHALMA
           </h1>
@@ -46,10 +46,10 @@ export default function Home() {
         </div>
 
         {/* 6-pointed star decoration with animated colors */}
-        <div className="mb-12">
+        <div className="mb-6">
           <svg
             viewBox="-100 -100 200 200"
-            className="w-72 h-72 mx-auto"
+            className="w-56 h-56 mx-auto"
             aria-hidden="true"
           >
             {/* 6 triangle points with cycling colors */}
