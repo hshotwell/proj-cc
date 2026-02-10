@@ -7,7 +7,7 @@ export default function Home() {
         {/* Logo / Title */}
         <div className="mb-8">
           <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-2">
-            STERHALMA
+            STERNHALMA
           </h1>
           <p className="text-xl md:text-2xl italic text-gray-600">
             Chinese Checkers
@@ -57,7 +57,7 @@ export default function Home() {
         </div>
 
         {/* Action buttons - stacked vertically */}
-        <div className="flex flex-col gap-4 justify-center items-center max-w-xs mx-auto">
+        <div className="flex flex-col gap-4 justify-center items-center max-w-xs mx-auto mb-16">
           <Link
             href="/play"
             className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-500 transition-colors shadow-lg hover:shadow-xl"
@@ -82,22 +82,6 @@ export default function Home() {
           >
             AI Training
           </Link>
-        </div>
-
-        {/* Features */}
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto text-gray-600">
-          <div>
-            <div className="text-3xl mb-2 text-gray-900">2-6</div>
-            <div className="text-sm">Players</div>
-          </div>
-          <div>
-            <div className="text-3xl mb-2 text-gray-900">Local</div>
-            <div className="text-sm">Hotseat Multiplayer</div>
-          </div>
-          <div>
-            <div className="text-3xl mb-2 text-gray-900">Free</div>
-            <div className="text-sm">No Sign-up Required</div>
-          </div>
         </div>
       </main>
     </div>

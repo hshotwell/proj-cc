@@ -13,8 +13,9 @@ export function MoveConfirmation() {
 
   // Keyboard shortcuts: 'u' for undo, 'c' for confirm
   useEffect(() => {
-    // Check if we're in last-player undo mode
-    if (canUndoConfirmed && !pendingConfirmation) {
+    // Check if we're in last-player undo mode (only for human players)
+    const isLastPlayerAI = gameState?.aiPlayers?.[gameState.currentPlayer] != null;
+    if (canUndoConfirmed && !pendingConfirmation && !isLastPlayerAI) {
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         if (e.key === 'u' || e.key === 'U') {
@@ -51,8 +52,14 @@ export function MoveConfirmation() {
   }, [autoConfirm, gameState, pendingConfirmation, confirmMove, undoLastMove, canUndoConfirmed, undoConfirmedMove]);
 
   // Show persistent undo button for last remaining player (bottom-left)
+  // But only if the last player is human, not AI
   if (canUndoConfirmed && !pendingConfirmation && gameState) {
     const player = gameState.currentPlayer;
+    const isAI = gameState.aiPlayers?.[player] != null;
+
+    // Don't show undo button for AI players
+    if (isAI) return null;
+
     const color = getPlayerColorFromState(player, gameState);
 
     return (
