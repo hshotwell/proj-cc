@@ -123,10 +123,21 @@ export default function EditorPage() {
   const [symmetry, setSymmetry] = useState<SymmetryMode>('none');
   const [mirrorGoals, setMirrorGoals] = useState(false);
 
+  // Paint mode state for click-and-drag
+  const [isPainting, setIsPainting] = useState(false);
+  const [paintAction, setPaintAction] = useState<'add' | 'remove'>('add');
+
   // Load layouts on mount
   useEffect(() => {
     loadLayouts();
   }, [loadLayouts]);
+
+  // Global mouseup listener to stop painting
+  useEffect(() => {
+    const handleMouseUp = () => setIsPainting(false);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, []);
 
   // All possible positions
   const allPositions = useMemo(() => generateAllPositions(GRID_RADIUS), []);
@@ -146,18 +157,35 @@ export default function EditorPage() {
     return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
   }, [allPositions]);
 
-  const handleCellClick = (key: string) => {
-    // Get all symmetric coordinates
+  // Determine if a cell should be "added" or "removed" based on current state
+  const getCellState = (key: string): boolean => {
+    if (mode === 'cells') {
+      return activeCells.has(key);
+    } else if (mode === 'starting') {
+      for (const player of ALL_PLAYERS) {
+        if (startingPositions[player].has(key)) return true;
+      }
+      return false;
+    } else if (mode === 'goals') {
+      for (const player of ALL_PLAYERS) {
+        if (goalPositions[player].has(key)) return true;
+      }
+      return false;
+    } else if (mode === 'walls') {
+      return walls.has(key);
+    }
+    return false;
+  };
+
+  // Apply an action (add or remove) to a cell
+  const applyActionToCell = (key: string, action: 'add' | 'remove') => {
     const symmetricKeys = getSymmetricCoords(key, symmetry);
 
     if (mode === 'cells') {
-      // Toggle cell active state
       setActiveCells((prev) => {
         const newSet = new Set(prev);
-        const isCurrentlyActive = newSet.has(key);
-
         for (const symKey of symmetricKeys) {
-          if (isCurrentlyActive) {
+          if (action === 'remove') {
             newSet.delete(symKey);
             // Also remove any starting positions on this cell
             setStartingPositions((sp) => {
@@ -185,31 +213,18 @@ export default function EditorPage() {
         return newSet;
       });
     } else if (mode === 'starting') {
-      // Set starting position mode
-      if (!activeCells.has(key)) return; // Can only place on active cells
-      if (walls.has(key)) return; // Can't place pieces on walls
+      if (!activeCells.has(key)) return;
+      if (walls.has(key)) return;
 
-      // Check if clicked cell already has a piece from any player
-      let hasExistingPiece = false;
-      for (const player of ALL_PLAYERS) {
-        if (startingPositions[player].has(key)) {
-          hasExistingPiece = true;
-          break;
-        }
-      }
-
-      // When mirrorGoals is on: place only the clicked piece + opposite goal
-      // When off: place pieces at all symmetric positions
       const pieceKeys = mirrorGoals ? [key] : symmetricKeys;
 
       setStartingPositions((prev) => {
         const newPositions = { ...prev };
-
         for (const symKey of pieceKeys) {
           if (!activeCells.has(symKey)) continue;
-          if (walls.has(symKey)) continue; // Skip walls
+          if (walls.has(symKey)) continue;
 
-          if (hasExistingPiece) {
+          if (action === 'remove') {
             for (const player of ALL_PLAYERS) {
               const newSet = new Set(newPositions[player]);
               newSet.delete(symKey);
@@ -221,7 +236,6 @@ export default function EditorPage() {
             newPositions[selectedPlayer] = newSet;
           }
         }
-
         return newPositions;
       });
 
@@ -233,7 +247,7 @@ export default function EditorPage() {
           setGoalPositions((prev) => {
             const newGoals = { ...prev };
             const goalSet = new Set(newGoals[selectedPlayer]);
-            if (hasExistingPiece) {
+            if (action === 'remove') {
               goalSet.delete(oppositeKey);
             } else {
               goalSet.add(oppositeKey);
@@ -244,49 +258,33 @@ export default function EditorPage() {
         }
       }
     } else if (mode === 'goals') {
-      // Set goal position mode
-      if (!activeCells.has(key)) return; // Can only place on active cells
-      if (walls.has(key)) return; // Can't place goals on walls
+      if (!activeCells.has(key)) return;
+      if (walls.has(key)) return;
 
       setGoalPositions((prev) => {
         const newPositions = { ...prev };
-
-        // Check if clicked cell already has a goal from any player
-        let hasExistingGoal = false;
-        for (const player of ALL_PLAYERS) {
-          if (newPositions[player].has(key)) {
-            hasExistingGoal = true;
-            break;
-          }
-        }
-
         for (const symKey of symmetricKeys) {
-          // Skip if cell is not active or is a wall
           if (!activeCells.has(symKey)) continue;
           if (walls.has(symKey)) continue;
 
-          if (hasExistingGoal) {
-            // Remove goals at symmetric positions
+          if (action === 'remove') {
             for (const player of ALL_PLAYERS) {
               const newSet = new Set(newPositions[player]);
               newSet.delete(symKey);
               newPositions[player] = newSet;
             }
           } else {
-            // Add goal for selected player
             const newSet = new Set(newPositions[selectedPlayer]);
             newSet.add(symKey);
             newPositions[selectedPlayer] = newSet;
           }
         }
-
         return newPositions;
       });
     } else if (mode === 'walls') {
-      // Set wall position mode
-      if (!activeCells.has(key)) return; // Can only place on active cells
+      if (!activeCells.has(key)) return;
 
-      // Check if there's a piece or goal here - walls can't be placed on those
+      // Check if there's a piece or goal here
       let hasExistingPieceOrGoal = false;
       for (const player of ALL_PLAYERS) {
         if (startingPositions[player].has(key) || goalPositions[player].has(key)) {
@@ -298,12 +296,9 @@ export default function EditorPage() {
 
       setWalls((prev) => {
         const newWalls = new Set(prev);
-        const hasExistingWall = newWalls.has(key);
-
         for (const symKey of symmetricKeys) {
           if (!activeCells.has(symKey)) continue;
 
-          // Check if symmetric position has piece or goal
           let symHasPieceOrGoal = false;
           for (const player of ALL_PLAYERS) {
             if (startingPositions[player].has(symKey) || goalPositions[player].has(symKey)) {
@@ -313,16 +308,38 @@ export default function EditorPage() {
           }
           if (symHasPieceOrGoal) continue;
 
-          if (hasExistingWall) {
+          if (action === 'remove') {
             newWalls.delete(symKey);
           } else {
             newWalls.add(symKey);
           }
         }
-
         return newWalls;
       });
     }
+  };
+
+  // Start painting on mouse down
+  const handleCellMouseDown = (key: string) => {
+    const currentState = getCellState(key);
+    const action = currentState ? 'remove' : 'add';
+    setPaintAction(action);
+    setIsPainting(true);
+    applyActionToCell(key, action);
+  };
+
+  // Continue painting on mouse enter while button is held
+  const handleCellMouseEnter = (key: string) => {
+    if (!isPainting) return;
+    applyActionToCell(key, paintAction);
+  };
+
+  // Legacy click handler (for accessibility/touch)
+  const handleCellClick = (key: string) => {
+    if (isPainting) return; // Already handled by mousedown
+    const currentState = getCellState(key);
+    const action = currentState ? 'remove' : 'add';
+    applyActionToCell(key, action);
   };
 
   // Stats calculation memo
@@ -834,8 +851,9 @@ export default function EditorPage() {
             <SettingsButton />
             <svg
               viewBox={viewBox}
-              className="w-full h-[70vh]"
+              className="w-full h-[70vh] select-none"
               preserveAspectRatio="xMidYMid meet"
+              onMouseLeave={() => setIsPainting(false)}
             >
               {/* Symmetry lines */}
               {symmetryLines.map((line, index) => (
@@ -955,8 +973,10 @@ export default function EditorPage() {
                 return (
                   <g
                     key={key}
+                    onMouseDown={() => handleCellMouseDown(key)}
+                    onMouseEnter={() => handleCellMouseEnter(key)}
                     onClick={() => handleCellClick(key)}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', userSelect: 'none' }}
                   >
                     {/* Cell background */}
                     <circle
