@@ -8,6 +8,7 @@ import { computePlayerProgress } from '../progress';
 import { getWorstAssignmentCost } from '../pathfinding';
 import { loadEvolvedGenome } from '../training/persistence';
 import { evaluateWithGenome } from '../training/evaluate';
+import { getCachedLearnedWeights } from '../learning';
 
 const PERSONALITY_WEIGHTS: Record<AIPersonality, {
   progress: number;
@@ -167,6 +168,19 @@ export function evaluatePosition(
     wCenter * centerControlScore +
     wBlocking * blockingScore +
     wJumpPotential * jumpPotentialScore;
+
+  // Apply learned weights if available (for medium+ difficulty)
+  if (difficulty !== 'easy') {
+    const learnedWeights = getCachedLearnedWeights();
+    if (learnedWeights.gamesAnalyzed > 0) {
+      // Adjust score based on learned preferences
+      // These are subtle modifiers, not complete overrides
+      const learnedModifier =
+        (distanceProgressScore * (learnedWeights.distanceWeight - 1) * 0.5) +
+        (jumpPotentialScore * (learnedWeights.jumpPreference - 1) * 0.3);
+      score += learnedModifier;
+    }
+  }
 
   // Easy difficulty adds random noise
   if (difficulty === 'easy') {

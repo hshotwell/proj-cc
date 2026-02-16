@@ -3,6 +3,7 @@ import type { AIDifficulty, AIPersonality } from '@/types/ai';
 import { AI_DEPTH, AI_MOVE_LIMIT } from '@/types/ai';
 import { getAllValidMoves } from '../moves';
 import { applyMove, getGoalPositionsForState } from '../state';
+import { getPlayerPieces } from '../setup';
 import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
@@ -12,6 +13,8 @@ import {
   computeRegressionPenaltyWithGenome,
   computeRepetitionPenaltyWithGenome,
 } from '../training/evaluate';
+import { computeStrategicScore, isEndgame } from './strategy';
+import { findEndgameMove, isLateEndgame, scoreEndgameMove } from './endgame';
 
 // Track recent board states to detect loops at the game state level
 const recentBoardStates = new Map<string, number>(); // hash -> count
@@ -187,6 +190,21 @@ export function computeRegressionPenalty(
   player: PlayerIndex,
   difficulty?: AIDifficulty
 ): number {
+  // For custom layouts, penalties are handled in findBestMoveForCustomLayout
+  // This function is only used for standard layouts now
+  if (state.isCustomLayout) {
+    // Simple progress-based penalty as fallback (shouldn't be called normally)
+    const progressBefore = computePlayerProgress(state, player);
+    const nextState = applyMove(state, move);
+    const progressAfter = computePlayerProgress(nextState, player);
+    const progressDelta = progressAfter - progressBefore;
+
+    if (progressDelta < -0.01) {
+      return Infinity;
+    }
+    return progressDelta < 0.01 ? 100 : -progressDelta * 50;
+  }
+
   if (difficulty === 'evolved') {
     const genome = loadEvolvedGenome();
     if (genome) {
@@ -210,33 +228,25 @@ export function computeRegressionPenalty(
   // Check for IMMEDIATE stepping stone (enables a jump right now)
   const enablesJump = isImmediateSteppingStone(state, move, player, goalCenter);
 
-  if (progressDelta < 0) {
-    // Move LOSES progress - this is almost always bad
-    const progressLoss = -progressDelta;
-
-    if (progressLoss > 2) {
-      // Significant progress loss - near veto
-      penalty = 500 + progressLoss * 50;
-    } else if (progressLoss > 0.5) {
-      // Small progress loss - heavy penalty
-      // Stepping stone only reduces penalty slightly since it still loses progress
-      penalty = enablesJump ? 100 : 200;
+  // Standard layout penalty logic
+  {
+    // STANDARD LAYOUT: More nuanced penalties
+    if (progressDelta < 0) {
+      const progressLoss = -progressDelta;
+      if (progressLoss > 2) {
+        penalty = 500 + progressLoss * 50;
+      } else if (progressLoss > 0.5) {
+        penalty = enablesJump ? 150 : 300;
+      } else {
+        penalty = enablesJump ? 50 : 100;
+      }
+    } else if (progressDelta === 0) {
+      penalty = enablesJump ? 40 : 80;
     } else {
-      // Tiny loss (rounding) - moderate penalty
-      penalty = enablesJump ? 30 : 60;
-    }
-  } else if (progressDelta === 0) {
-    // Move makes NO progress - penalize
-    // Only small reduction if it enables an immediate jump
-    penalty = enablesJump ? 40 : 100;
-  } else {
-    // Move GAINS progress - good!
-    // Bonus proportional to gain
-    penalty = -progressDelta * 20;
-
-    // Small extra bonus if it ALSO enables an immediate jump
-    if (enablesJump) {
-      penalty -= 10;
+      penalty = -progressDelta * 30;
+      if (enablesJump) {
+        penalty -= 15;
+      }
     }
   }
 
@@ -353,6 +363,10 @@ function getTopMoves(
   const moves = viableMoves.length > 0 ? viableMoves : allMoves;
   if (moves.length <= limit) return moves;
 
+  // Check if we're in endgame (strategic scoring matters more)
+  const inEndgame = isEndgame(state, player);
+  const inLateEndgame = isLateEndgame(state, player);
+
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
     const next = applyMove(state, move);
@@ -363,6 +377,21 @@ function getTopMoves(
       ? 1000000
       : regPenalty + repPenalty;
     score -= totalPenalty;
+
+    // Add strategic scoring (more important in endgame and for medium+ difficulty)
+    if (difficulty !== 'easy') {
+      const strategic = computeStrategicScore(state, move, player, personality);
+      // Strategic score weight increases in endgame
+      const strategicWeight = inEndgame ? 2.0 : 1.0;
+      score += strategic.total * strategicWeight;
+    }
+
+    // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
+    if (inLateEndgame) {
+      const endgameScore = scoreEndgameMove(state, move, player);
+      score += endgameScore; // Can add up to 1000+ for direct goal entries
+    }
+
     return { move, score };
   });
 
@@ -458,12 +487,176 @@ function maxn(
   }
 }
 
+/**
+ * Check if a piece would return to a position it recently occupied.
+ * This catches the case where AI jumps forward then back, even when
+ * the overall board state is different due to other players moving.
+ */
+function wouldReturnToPreviousPosition(
+  state: GameState,
+  move: Move
+): { returns: boolean; turnsAgo: number } {
+  const history = state.moveHistory;
+
+  // Trace this piece's position history backward
+  // Start from the piece's current position (move.from) and work backwards
+  let tracePos = move.from;
+  let turnsAgo = 0;
+
+  for (let i = history.length - 1; i >= 0 && turnsAgo < 10; i--) {
+    const pastMove = history[i];
+
+    // Check if this past move ended at our current trace position
+    // (meaning this is a move by the same piece we're tracing)
+    if (pastMove.to.q === tracePos.q && pastMove.to.r === tracePos.r) {
+      turnsAgo++;
+
+      // Check if the piece came FROM the position we're trying to move TO
+      if (pastMove.from.q === move.to.q && pastMove.from.r === move.to.r) {
+        return { returns: true, turnsAgo };
+      }
+
+      // Continue tracing backwards
+      tracePos = pastMove.from;
+    }
+  }
+
+  return { returns: false, turnsAgo: 0 };
+}
+
+/**
+ * Compute total distance of all pieces to the goal center.
+ * Lower is better (pieces closer to goal).
+ */
+function computeTotalDistanceToGoal(
+  state: GameState,
+  player: PlayerIndex,
+  goalCenter: CubeCoord
+): number {
+  const pieces = getPlayerPieces(state, player);
+  return pieces.reduce((sum, piece) => sum + cubeDistance(piece, goalCenter), 0);
+}
+
+/**
+ * For custom layouts: directly select the move that minimizes total distance to goal.
+ * This is a simpler, more direct approach than using progress percentages.
+ *
+ * Priority (in order):
+ * 1. Endgame finishing moves (direct goal entry or enabling entry)
+ * 2. Total distance reduction - lower total distance to goal wins
+ * 3. Among equal: this piece's distance reduction
+ * 4. Among equal: avoid returning to previous positions
+ * 5. Among equal: prefer jumps (cover more ground)
+ */
+function findBestMoveForCustomLayout(
+  state: GameState,
+  player: PlayerIndex
+): Move | null {
+  const allMoves = getAllValidMoves(state, player);
+  if (allMoves.length === 0) return null;
+
+  // Check for endgame finishing move first
+  if (isLateEndgame(state, player)) {
+    const endgameMove = findEndgameMove(state, player);
+    if (endgameMove) {
+      return endgameMove;
+    }
+  }
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return allMoves[0]; // Fallback if no goals defined
+
+  const goalCenter = centroid(goalPositions);
+  const currentTotalDist = computeTotalDistanceToGoal(state, player, goalCenter);
+
+  // Score each move by how much it reduces total distance to goal
+  const scoredMoves = allMoves.map((move) => {
+    const nextState = applyMove(state, move);
+    const nextTotalDist = computeTotalDistanceToGoal(nextState, player, goalCenter);
+
+    // Positive = good (moved closer to goal overall)
+    const totalDistReduction = currentTotalDist - nextTotalDist;
+
+    // Calculate how much closer THIS PIECE gets to the goal center
+    const pieceDirBefore = cubeDistance(move.from, goalCenter);
+    const pieceDistAfter = cubeDistance(move.to, goalCenter);
+    const pieceDistReduction = pieceDirBefore - pieceDistAfter; // Positive = moving toward goal
+
+    // Check if this piece would return to a previous position (piece-level loop detection)
+    const { returns: pieceReturns } = wouldReturnToPreviousPosition(state, move);
+
+    // Check if this would repeat a board state (global loop detection)
+    const { repeats: stateRepeats } = wouldRepeatState(state, move);
+
+    return {
+      move,
+      totalDistReduction,
+      pieceDistReduction,
+      pieceReturns,
+      stateRepeats,
+      isJump: move.isJump,
+    };
+  });
+
+  // Sort: highest total distance reduction wins
+  scoredMoves.sort((a, b) => {
+    // 1. TOTAL DISTANCE REDUCTION IS PRIMARY - higher reduction (closer to goal) wins
+    if (Math.abs(a.totalDistReduction - b.totalDistReduction) > 0.01) {
+      return b.totalDistReduction - a.totalDistReduction;
+    }
+
+    // 2. For equal total: prefer moves that move THIS piece toward goal
+    if (Math.abs(a.pieceDistReduction - b.pieceDistReduction) > 0.01) {
+      return b.pieceDistReduction - a.pieceDistReduction;
+    }
+
+    // 3. Avoid moves that return to previous position
+    if (a.pieceReturns !== b.pieceReturns) {
+      return a.pieceReturns ? 1 : -1;
+    }
+
+    // 4. Avoid state repeats
+    if (a.stateRepeats !== b.stateRepeats) {
+      return a.stateRepeats ? 1 : -1;
+    }
+
+    // 5. Prefer jumps (cover more ground efficiently)
+    if (a.isJump !== b.isJump) {
+      return a.isJump ? -1 : 1;
+    }
+
+    return 0;
+  });
+
+  // Pick the best move
+  return scoredMoves[0]?.move ?? null;
+}
+
 export function findBestMove(
   state: GameState,
   difficulty: AIDifficulty,
   personality: AIPersonality
 ): Move | null {
   const player = state.currentPlayer;
+
+  // PRIORITY: Late endgame finishing logic for ALL difficulty levels
+  // When 7+ pieces are in goal, finishing quickly is fundamental
+  if (isLateEndgame(state, player)) {
+    const endgameMove = findEndgameMove(state, player);
+    if (endgameMove) {
+      return endgameMove;
+    }
+    // If no clear finishing move found, continue with normal logic
+    // but endgame scoring will still apply
+  }
+
+  // For custom layouts, use the simple progress-maximizing approach
+  // This is more reliable than layered penalties for arbitrary board shapes
+  if (state.isCustomLayout) {
+    return findBestMoveForCustomLayout(state, player);
+  }
+
+  // Standard layouts use the full search with penalties
   const depth = AI_DEPTH[difficulty];
   const limit = AI_MOVE_LIMIT[difficulty];
   const allMoves = getAllValidMoves(state, player);
@@ -477,9 +670,23 @@ export function findBestMove(
     return regPenalty < Infinity && repPenalty < Infinity;
   });
 
-  // If ALL moves are vetoed, we're stuck - pick the one with smallest finite penalty
-  // This shouldn't happen often but handles edge cases
-  const movesToConsider = viableMoves.length > 0 ? viableMoves : allMoves;
+  // If ALL moves are vetoed, pick the one with smallest penalty
+  let movesToConsider: Move[];
+  if (viableMoves.length > 0) {
+    movesToConsider = viableMoves;
+  } else {
+    // All moves vetoed - find the least bad option
+    const scoredByPenalty = allMoves.map((m) => {
+      const regPenalty = computeRegressionPenalty(state, m, player, difficulty);
+      const repPenalty = computeRepetitionPenalty(state, m, player, difficulty);
+      // Convert Infinity to a large but finite number for comparison
+      const totalPenalty = (regPenalty === Infinity ? 1000000 : regPenalty) +
+                           (repPenalty === Infinity ? 1000000 : repPenalty);
+      return { move: m, penalty: totalPenalty };
+    });
+    scoredByPenalty.sort((a, b) => a.penalty - b.penalty);
+    movesToConsider = scoredByPenalty.slice(0, limit).map((s) => s.move);
+  }
 
   // Get top moves for deeper search
   const moves = getTopMovesFromList(state, movesToConsider, player, personality, difficulty, limit);
@@ -498,12 +705,12 @@ export function findBestMove(
   let bestScore = -Infinity;
 
   for (const move of moves) {
-    const penalty =
-      computeRegressionPenalty(state, move, player, difficulty) +
-      computeRepetitionPenalty(state, move, player, difficulty);
+    const regPenalty = computeRegressionPenalty(state, move, player, difficulty);
+    const repPenalty = computeRepetitionPenalty(state, move, player, difficulty);
 
-    // Skip infinite penalties (shouldn't happen after pre-filter, but safety check)
-    if (penalty === Infinity) continue;
+    // If penalty is Infinity, use a large finite number so we can still compare
+    const penalty = (regPenalty === Infinity ? 1000000 : regPenalty) +
+                    (repPenalty === Infinity ? 1000000 : repPenalty);
 
     const next = applyMove(state, move);
     let score: number;
@@ -538,6 +745,10 @@ function getTopMovesFromList(
 ): Move[] {
   if (moves.length <= limit) return moves;
 
+  // Check if we're in endgame
+  const inEndgame = isEndgame(state, player);
+  const inLateEndgame = isLateEndgame(state, player);
+
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
     const next = applyMove(state, move);
@@ -551,6 +762,20 @@ function getTopMovesFromList(
       : regPenalty + repPenalty;
 
     score -= totalPenalty;
+
+    // Add strategic scoring
+    if (difficulty !== 'easy') {
+      const strategic = computeStrategicScore(state, move, player, personality);
+      const strategicWeight = inEndgame ? 2.0 : 1.0;
+      score += strategic.total * strategicWeight;
+    }
+
+    // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
+    if (inLateEndgame) {
+      const endgameScore = scoreEndgameMove(state, move, player);
+      score += endgameScore;
+    }
+
     return { move, score };
   });
 

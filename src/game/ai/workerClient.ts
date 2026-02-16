@@ -16,6 +16,8 @@ export interface SerializedGameState {
   isCustomLayout?: GameState['isCustomLayout'];
   playerColors?: GameState['playerColors'];
   aiPlayers?: GameState['aiPlayers'];
+  customGoalPositions?: GameState['customGoalPositions'];
+  startingPositions?: GameState['startingPositions'];
 }
 
 export interface WorkerRequest {
@@ -41,6 +43,8 @@ export function serializeGameState(state: GameState): SerializedGameState {
     isCustomLayout: state.isCustomLayout,
     playerColors: state.playerColors,
     aiPlayers: state.aiPlayers,
+    customGoalPositions: state.customGoalPositions,
+    startingPositions: state.startingPositions,
   };
 }
 
@@ -57,5 +61,7 @@ export function deserializeGameState(serialized: SerializedGameState): GameState
     isCustomLayout: serialized.isCustomLayout,
     playerColors: serialized.playerColors,
     aiPlayers: serialized.aiPlayers,
+    customGoalPositions: serialized.customGoalPositions,
+    startingPositions: serialized.startingPositions,
   };
 }

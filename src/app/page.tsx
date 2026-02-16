@@ -1,105 +1,47 @@
-import Link from 'next/link';
+'use client';
 
-// Player colors for the animated star points
-const STAR_COLORS = [
-  '#ef4444', // red
-  '#22c55e', // green
-  '#3b82f6', // blue
-  '#eab308', // yellow
-  '#a855f7', // purple
-  '#f97316', // orange
-];
+import { useEffect, useState } from 'react';
+import { useConvexAuth } from 'convex/react';
+import { useRouter } from 'next/navigation';
 
-// 6 triangle points of the star, each defined by 3 vertices
-// Triangles radiate outward from a central hexagon
-const STAR_TRIANGLES = [
-  { points: '-17.5,-30.3 17.5,-30.3 0,-70', index: 0 },    // top
-  { points: '17.5,-30.3 35,0 60.6,-35', index: 1 },        // upper-right
-  { points: '35,0 17.5,30.3 60.6,35', index: 2 },          // lower-right
-  { points: '17.5,30.3 -17.5,30.3 0,70', index: 3 },       // bottom
-  { points: '-17.5,30.3 -35,0 -60.6,35', index: 4 },       // lower-left
-  { points: '-35,0 -17.5,-30.3 -60.6,-35', index: 5 },     // upper-left
-];
+export default function LandingPage() {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const router = useRouter();
+  const [isChecking, setIsChecking] = useState(true);
 
-export default function Home() {
-  return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <style>{`
-        @keyframes colorCycle {
-          0%, 100% { fill: ${STAR_COLORS[0]}; }
-          16.67% { fill: ${STAR_COLORS[1]}; }
-          33.33% { fill: ${STAR_COLORS[2]}; }
-          50% { fill: ${STAR_COLORS[3]}; }
-          66.67% { fill: ${STAR_COLORS[4]}; }
-          83.33% { fill: ${STAR_COLORS[5]}; }
-        }
-      `}</style>
-      <main className="text-center px-4">
-        {/* Logo / Title */}
-        <div className="mb-4">
-          <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-2">
-            STERNHALMA
-          </h1>
-          <p className="text-xl md:text-2xl italic text-gray-600">
-            Chinese Checkers
-          </p>
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (isAuthenticated) {
+      router.replace('/home');
+      return;
+    }
+
+    // Check if user is playing as guest
+    if (typeof window !== 'undefined') {
+      const isGuest = localStorage.getItem('sternhalma-guest') === 'true';
+      if (isGuest) {
+        router.replace('/home');
+        return;
+      }
+    }
+
+    // Not authenticated and not a guest - redirect to sign in
+    router.replace('/auth/signin');
+    setIsChecking(false);
+  }, [isAuthenticated, isLoading, router]);
+
+  // Show loading state while checking auth
+  if (isChecking || isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-white mb-4">STERNHALMA</h1>
+          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
         </div>
+      </div>
+    );
+  }
 
-        {/* 6-pointed star decoration with animated colors */}
-        <div className="mb-6">
-          <svg
-            viewBox="-100 -100 200 200"
-            className="w-56 h-56 mx-auto"
-            aria-hidden="true"
-          >
-            {/* 6 triangle points with cycling colors */}
-            {STAR_TRIANGLES.map((triangle) => (
-              <polygon
-                key={triangle.index}
-                points={triangle.points}
-                style={{
-                  fill: STAR_COLORS[triangle.index],
-                  animation: 'colorCycle 12s ease-in-out infinite',
-                  animationDelay: `${triangle.index * 2}s`,
-                }}
-              />
-            ))}
-            {/* Center hexagon - grey */}
-            <polygon
-              points="-17.5,-30.3 17.5,-30.3 35,0 17.5,30.3 -17.5,30.3 -35,0"
-              fill="#9ca3af"
-            />
-          </svg>
-        </div>
-
-        {/* Action buttons - stacked vertically */}
-        <div className="flex flex-col gap-4 justify-center items-center max-w-xs mx-auto mb-16">
-          <Link
-            href="/play"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-500 transition-colors shadow-lg hover:shadow-xl"
-          >
-            Play Now
-          </Link>
-          <Link
-            href="/editor"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-purple-600 rounded-full hover:bg-purple-500 transition-colors shadow-lg hover:shadow-xl"
-          >
-            Board Editor
-          </Link>
-          <Link
-            href="/replays"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-amber-500 rounded-full hover:bg-amber-400 transition-colors shadow-lg hover:shadow-xl"
-          >
-            Past Games
-          </Link>
-          <Link
-            href="/training"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-green-600 rounded-full hover:bg-green-500 transition-colors shadow-lg hover:shadow-xl"
-          >
-            AI Training
-          </Link>
-        </div>
-      </main>
-    </div>
-  );
+  return null;
 }

@@ -334,9 +334,8 @@ export default function EditorPage() {
     applyActionToCell(key, paintAction);
   };
 
-  // Legacy click handler (for accessibility/touch)
-  const handleCellClick = (key: string) => {
-    if (isPainting) return; // Already handled by mousedown
+  // Touch handler - treat touch as a single toggle (no drag painting)
+  const handleCellTouchStart = (key: string) => {
     const currentState = getCellState(key);
     const action = currentState ? 'remove' : 'add';
     applyActionToCell(key, action);
@@ -975,7 +974,7 @@ export default function EditorPage() {
                     key={key}
                     onMouseDown={() => handleCellMouseDown(key)}
                     onMouseEnter={() => handleCellMouseEnter(key)}
-                    onClick={() => handleCellClick(key)}
+                    onTouchStart={() => handleCellTouchStart(key)}
                     style={{ cursor: 'pointer', userSelect: 'none' }}
                   >
                     {/* Cell background */}

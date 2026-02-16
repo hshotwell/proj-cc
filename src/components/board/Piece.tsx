@@ -36,6 +36,20 @@ function lightenColor(hex: string, amount: number): string {
   return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
 }
 
+// Darken a hex color by mixing with black
+function darkenColor(hex: string, amount: number): string {
+  const cleanHex = hex.replace('#', '');
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+
+  const newR = Math.round(r * (1 - amount));
+  const newG = Math.round(g * (1 - amount));
+  const newB = Math.round(b * (1 - amount));
+
+  return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+}
+
 export function Piece({
   coord,
   player,
@@ -52,8 +66,7 @@ export function Piece({
   const renderCoord = displayCoord ?? coord;
   const { x, y } = cubeToPixel(renderCoord, size);
   const baseColor = getPlayerColor(player, customColors);
-  // Use a lighter shade for last-moved pieces
-  const color = isLastMoved ? lightenColor(baseColor, 0.3) : baseColor;
+  const pieceColor = isLastMoved ? darkenColor(baseColor, 0.2) : baseColor; // Apply darker shade
 
   // Piece radius is larger than board cell (0.45) so pieces stand out
   const pieceRadius = size * 0.58;
@@ -81,7 +94,7 @@ export function Piece({
         cx={0}
         cy={0}
         r={pieceRadius}
-        fill={color}
+        fill={pieceColor} // Use the potentially darkened color
         stroke={isSelected ? '#000' : '#fff'}
         strokeWidth={isSelected ? 3 : 2}
       />
@@ -92,7 +105,7 @@ export function Piece({
           cy={0}
           r={pieceRadius + size * 0.1}
           fill="none"
-          stroke={color}
+          stroke={pieceColor}
           strokeWidth={2}
           strokeDasharray="6 4"
           opacity={0.7}

@@ -12,12 +12,20 @@ import { coordKey, cubeAdd, getJumpDestination } from './coordinates';
 const distanceFromGoalsCache = new Map<string, Map<string, number>>();
 
 /**
- * Generate a simple hash for the board topology (just the cell keys).
+ * Generate a hash for the board topology.
+ * Uses sorted cell keys to ensure different board shapes get different hashes.
  */
 function getBoardHash(state: GameState): string {
-  // For custom layouts, use the board size as a quick hash
-  // (Full hashing would be expensive and boards don't change mid-game)
-  return `${state.board.size}`;
+  // For proper cache isolation, include actual cell positions
+  // Sort for consistency, then hash
+  const cellKeys = Array.from(state.board.keys()).sort();
+  // Use a simple hash: first 5 cells + last 5 cells + size
+  const sample = [
+    ...cellKeys.slice(0, 5),
+    ...cellKeys.slice(-5),
+    `size:${cellKeys.length}`
+  ].join('|');
+  return sample;
 }
 
 /**

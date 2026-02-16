@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npx convex dev & next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest"
   },
   "dependencies": {
+    "@auth/core": "^0.37.4",
+    "@convex-dev/auth": "^0.0.90",
+    "convex": "^1.31.7",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",

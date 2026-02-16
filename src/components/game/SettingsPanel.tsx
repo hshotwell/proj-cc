@@ -3,7 +3,7 @@
 import { useSettingsStore } from '@/store/settingsStore';
 
 export function SettingsPanel() {
-  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, toggleShowAllMoves, toggleAnimateMoves, toggleRotateBoard, toggleTriangleLines, toggleShowLastMoves } = useSettingsStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, autoConfirm, darkMode, toggleShowAllMoves, toggleAnimateMoves, toggleRotateBoard, toggleTriangleLines, toggleShowLastMoves, toggleShowCoordinates, toggleAutoConfirm, toggleDarkMode } = useSettingsStore();
 
   return (
     <div className="space-y-3">
@@ -12,6 +12,28 @@ export function SettingsPanel() {
       </h3>
 
       <div className="space-y-2">
+        {/* Dark Mode Toggle */}
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div className="relative">
+            <input
+              type="checkbox"
+              checked={darkMode}
+              onChange={toggleDarkMode}
+              className="sr-only peer"
+            />
+            <div className="w-10 h-6 bg-gray-200 rounded-full peer-checked:bg-blue-500 transition-colors" />
+            <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+              Dark mode
+            </div>
+            <div className="text-xs text-gray-500">
+              {darkMode ? 'Dark background' : 'Light background'}
+            </div>
+          </div>
+        </label>
+
         {/* Omniscience Toggle */}
         <label className="flex items-center gap-3 cursor-pointer group">
           <div className="relative">
@@ -117,6 +139,50 @@ export function SettingsPanel() {
             </div>
             <div className="text-xs text-gray-500">
               {showLastMoves ? 'Showing each player\'s last move' : 'Last moves hidden'}
+            </div>
+          </div>
+        </label>
+
+        {/* Auto-Confirm Toggle */}
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div className="relative">
+            <input
+              type="checkbox"
+              checked={autoConfirm}
+              onChange={toggleAutoConfirm}
+              className="sr-only peer"
+            />
+            <div className="w-10 h-6 bg-gray-200 rounded-full peer-checked:bg-blue-500 transition-colors" />
+            <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+              Auto-confirm moves
+            </div>
+            <div className="text-xs text-gray-500">
+              {autoConfirm ? 'Moves confirmed instantly' : 'Confirm each move manually'}
+            </div>
+          </div>
+        </label>
+
+        {/* Show Coordinates Toggle (Debug) */}
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div className="relative">
+            <input
+              type="checkbox"
+              checked={showCoordinates}
+              onChange={toggleShowCoordinates}
+              className="sr-only peer"
+            />
+            <div className="w-10 h-6 bg-gray-200 rounded-full peer-checked:bg-blue-500 transition-colors" />
+            <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+              Show coordinates
+            </div>
+            <div className="text-xs text-gray-500">
+              {showCoordinates ? 'Hover cells to see coords' : 'Coordinates hidden'}
             </div>
           </div>
         </label>

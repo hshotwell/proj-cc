@@ -1,6 +1,10 @@
 import type { GameState, PlayerIndex, Move, CubeCoord } from '@/types/game';
 import type { SavedGameSummary, SavedGameData } from '@/types/replay';
 import { normalizeMoveHistory, findLongestHop } from './replay';
+import {
+  localGameStorage,
+  cloudGameStorage,
+} from '@/services/storage';
 
 const GAMES_INDEX_KEY = 'chinese-checkers-saved-games';
 const GAME_DATA_PREFIX = 'chinese-checkers-game-';
@@ -65,7 +69,7 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
     dateSaved,
   };
 
-  // Save game data
+  // Save to localStorage
   try {
     localStorage.setItem(GAME_DATA_PREFIX + gameId, JSON.stringify(gameData));
   } catch {
@@ -93,6 +97,11 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
   } catch {
     // ignore
   }
+
+  // Sync to cloud in background (fire and forget)
+  cloudGameStorage.saveGame(gameId, gameData, summary).catch((e) => {
+    console.error('Failed to sync game to cloud:', e);
+  });
 
   return summary;
 }
@@ -141,4 +150,56 @@ export function deleteSavedGame(id: string): void {
   } catch {
     // ignore
   }
+
+  // Delete from cloud in background
+  cloudGameStorage.deleteGame(id).catch((e) => {
+    console.error('Failed to delete game from cloud:', e);
+  });
+}
+
+// Cloud sync functions for use when authenticated
+export async function getSavedGamesListFromCloud(): Promise<SavedGameSummary[]> {
+  return cloudGameStorage.loadList();
+}
+
+export async function loadSavedGameFromCloud(id: string): Promise<SavedGameData | null> {
+  return cloudGameStorage.loadGame(id);
+}
+
+// Merge local and cloud game lists
+export async function syncGamesFromCloud(): Promise<SavedGameSummary[]> {
+  const localGames = getSavedGamesList();
+  const cloudGames = await getSavedGamesListFromCloud();
+
+  // Merge: cloud takes precedence, add local-only games
+  const merged = new Map<string, SavedGameSummary>();
+
+  for (const game of cloudGames) {
+    merged.set(game.id, game);
+  }
+
+  for (const game of localGames) {
+    if (!merged.has(game.id)) {
+      merged.set(game.id, game);
+      // Also sync local-only games to cloud
+      const gameData = loadSavedGame(game.id);
+      if (gameData) {
+        cloudGameStorage.saveGame(game.id, gameData, game).catch((e) => {
+          console.error('Failed to sync local game to cloud:', e);
+        });
+      }
+    }
+  }
+
+  // Sort by date saved (newest first)
+  const result = Array.from(merged.values()).sort((a, b) => b.dateSaved - a.dateSaved);
+
+  // Update local storage with merged list
+  try {
+    localStorage.setItem(GAMES_INDEX_KEY, JSON.stringify(result.slice(0, MAX_SAVED_GAMES)));
+  } catch {
+    // ignore
+  }
+
+  return result;
 }
