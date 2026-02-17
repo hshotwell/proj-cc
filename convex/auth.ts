@@ -1,4 +1,5 @@
 import { Password } from "@convex-dev/auth/providers/Password";
+import { Email } from "@convex-dev/auth/providers/Email";
 import { convexAuth } from "@convex-dev/auth/server";
 import { sendEmail } from "./lib/email";
 
@@ -56,10 +57,8 @@ const CustomPassword = Password({
     if (!/[0-9]/.test(password))
       throw new Error("Password must contain at least one number");
   },
-  verify: {
+  verify: Email({
     id: "verification-code",
-    type: "email" as const,
-    name: "Verification Code",
     maxAge: 60 * 15, // 15 minutes
     async generateVerificationToken() {
       return Array.from({ length: 6 }, () =>
@@ -78,7 +77,7 @@ const CustomPassword = Password({
         throw new Error("Failed to send verification email");
       }
     },
-  },
+  }),
 });
 
 export const { auth, signIn, signOut, store } = convexAuth({
