@@ -38,7 +38,7 @@ export function AuthSync() {
         email: profile.email,
         name: profile.name,
         image: profile.image,
-        username: profile.username,
+        username: profile.username ?? undefined,
         isEmailVerified: profile.isEmailVerified,
       });
 
