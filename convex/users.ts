@@ -17,7 +17,7 @@ export const getProfile = query({
       email: user.email || "",
       name: user.displayName || user.name || null,
       image: user.image || null,
-      username: user.username || undefined,
+      username: user.username ?? null,
       isEmailVerified: user.emailVerificationTime != null,
     };
   },
