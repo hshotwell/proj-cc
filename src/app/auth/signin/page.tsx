@@ -85,14 +85,25 @@ function AuthContent() {
     setFormError(null);
 
     try {
-      await signIn('password', {
-        email: signInEmail,
-        password: signInPassword,
-        flow: 'signIn',
-      });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Sign in timed out. Please try again.')), 15000)
+      );
+
+      console.log('Starting signIn...');
+
+      await Promise.race([
+        signIn('password', {
+          email: signInEmail,
+          password: signInPassword,
+          flow: 'signIn',
+        }),
+        timeoutPromise,
+      ]);
+
       router.push(callbackUrl);
-    } catch {
-      setFormError('Invalid email or password');
+    } catch (err) {
+      console.error('Sign in error:', err);
+      setFormError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setIsLoading(false);
     }
@@ -123,13 +134,24 @@ function AuthContent() {
     }
 
     try {
-      // Register via Convex auth Password provider
-      await signIn('password', {
-        email: registerEmail,
-        password: registerPassword,
-        name: registerUsername,
-        flow: 'signUp',
-      });
+      // Register via Convex auth Password provider with timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Registration timed out. Please try again.')), 15000)
+      );
+
+      console.log('Starting signUp...', { email: registerEmail, name: registerUsername });
+
+      const result = await Promise.race([
+        signIn('password', {
+          email: registerEmail,
+          password: registerPassword,
+          name: registerUsername,
+          flow: 'signUp',
+        }),
+        timeoutPromise,
+      ]);
+
+      console.log('signUp result:', result);
 
       setSuccessMessage(
         'Account created! You can now sign in.'
@@ -137,6 +159,7 @@ function AuthContent() {
       setActiveTab('signin');
       setSignInEmail(registerEmail);
     } catch (err) {
+      console.error('Registration error:', err);
       setFormError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setIsLoading(false);
