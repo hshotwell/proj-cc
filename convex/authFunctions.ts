@@ -19,6 +19,21 @@ function generateToken(length: number = 32): string {
   return result;
 }
 
+// Look up email by username (for sign-in with username)
+export const getEmailByUsername = query({
+  args: { username: v.string() },
+  handler: async (ctx, { username }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_username", (q) => q.eq("username", username.toLowerCase()))
+      .first();
+    if (!user || !user.email) {
+      return { email: null };
+    }
+    return { email: user.email };
+  },
+});
+
 // Check username availability
 export const checkUsername = query({
   args: { username: v.string() },
