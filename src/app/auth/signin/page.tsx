@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useConvex } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
+import { getConvexClient } from '@/lib/convex';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { validateUsernameFormat } from '@/services/auth/usernameValidation';
@@ -14,7 +14,6 @@ function AuthContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { signIn } = useAuthActions();
-  const convex = useConvex();
   const callbackUrl = searchParams.get('callbackUrl') || '/home';
   const error = searchParams.get('error');
   const initialTab = (searchParams.get('tab') as AuthTab) || 'signin';
@@ -56,7 +55,7 @@ function AuthContent() {
     setUsernameStatus({ checking: true, valid: null });
 
     try {
-      const result = await convex.query(api.authFunctions.checkUsername, { username });
+      const result = await getConvexClient().query(api.authFunctions.checkUsername, { username });
       setUsernameStatus({
         checking: false,
         valid: result.valid,
@@ -67,7 +66,7 @@ function AuthContent() {
       // Don't block registration on a failed check — just mark as valid
       setUsernameStatus({ checking: false, valid: true });
     }
-  }, [convex]);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
