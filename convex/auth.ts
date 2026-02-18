@@ -66,15 +66,25 @@ const CustomPassword = Password({
       ).join("");
     },
     async sendVerificationRequest({ identifier: email, token }) {
-      const html = getVerificationCodeEmailHtml(token);
-      const sent = await sendEmail({
-        to: email,
-        subject: "Your Sternhalma verification code",
-        html,
-        text: `Your Sternhalma verification code is: ${token}`,
-      });
-      if (!sent) {
-        throw new Error("Failed to send verification email");
+      console.log("[Auth] sendVerificationRequest called for:", email);
+      console.log("[Auth] EMAIL_PROVIDER:", process.env.EMAIL_PROVIDER);
+      console.log("[Auth] SITE_URL set:", !!process.env.SITE_URL);
+      try {
+        const html = getVerificationCodeEmailHtml(token);
+        const sent = await sendEmail({
+          to: email,
+          subject: "Your Sternhalma verification code",
+          html,
+          text: `Your Sternhalma verification code is: ${token}`,
+        });
+        if (!sent) {
+          console.error("[Auth] sendEmail returned false");
+          throw new Error("Failed to send verification email");
+        }
+        console.log("[Auth] Verification email sent successfully");
+      } catch (error) {
+        console.error("[Auth] Error in sendVerificationRequest:", error);
+        throw error;
       }
     },
   }),
@@ -82,4 +92,15 @@ const CustomPassword = Password({
 
 export const { auth, signIn, signOut, store } = convexAuth({
   providers: [CustomPassword],
+  callbacks: {
+    async afterUserCreatedOrUpdated(ctx, { userId, existingUserId, profile }) {
+      // On new user creation, store the name also as username
+      if (existingUserId === null && profile?.name) {
+        await ctx.db.patch(userId, {
+          username: (profile.name as string).toLowerCase(),
+          displayName: profile.name as string,
+        });
+      }
+    },
+  },
 });

@@ -33,7 +33,7 @@ function AccountContent() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <Link href="/" className="text-blue-600 hover:underline text-sm">
+          <Link href="/home" className="text-blue-600 hover:underline text-sm">
             &larr; Back to Home
           </Link>
         </div>

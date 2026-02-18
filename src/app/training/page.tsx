@@ -59,7 +59,7 @@ export default function TrainingPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <Link
-            href="/"
+            href="/home"
             className="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-block"
           >
             &larr; Back to Home

@@ -26,7 +26,7 @@ const STAR_TRIANGLES = [
 ];
 
 export default function HomePage() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isLoading } = useAuthStore();
   const { signOut } = useAuthActions();
 
   // Check if guest
@@ -36,7 +36,9 @@ export default function HomePage() {
     <div className="min-h-screen bg-white flex items-center justify-center relative">
       {/* User header */}
       <div className="absolute top-4 right-4 flex items-center gap-3">
-        {isAuthenticated && user ? (
+        {isLoading ? (
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+        ) : isAuthenticated && user ? (
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-600">
               {user.username || user.name || user.email}

@@ -73,7 +73,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
 
   const handleReturnToMenu = () => {
     closeSettingsMenu();
-    router.push('/');
+    router.push('/home');
   };
 
   const handleRestart = () => {
