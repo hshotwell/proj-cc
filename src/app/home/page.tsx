@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { useConvexAuth } from 'convex/react';
 import { useAuthStore } from '@/store/authStore';
 
 // Player colors for the animated star points
@@ -28,6 +29,13 @@ const STAR_TRIANGLES = [
 export default function HomePage() {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const { signOut } = useAuthActions();
+  const convexAuth = useConvexAuth();
+
+  // Debug: log auth state on every render
+  console.log('[HomePage]', {
+    zustand: { isAuthenticated, isLoading, user: user?.username ?? user?.email ?? null },
+    convex: { isAuthenticated: convexAuth.isAuthenticated, isLoading: convexAuth.isLoading },
+  });
 
   // Check if guest
   const isGuest = typeof window !== 'undefined' && localStorage.getItem('sternhalma-guest') === 'true';

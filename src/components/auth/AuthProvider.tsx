@@ -26,6 +26,8 @@ export function AuthSync() {
   }, [syncSettings, syncLayouts]);
 
   useEffect(() => {
+    console.log('[AuthSync]', { isConvexLoading, isConvexAuthed, profile, isAuthenticated });
+
     if (isConvexLoading) {
       setLoading(true);
       return;
@@ -53,6 +55,10 @@ export function AuthSync() {
           });
         }
       }
+    } else if (isConvexAuthed && profile === null) {
+      // Authenticated but profile query returned null — clear loading
+      console.warn('[AuthSync] Authenticated but getProfile returned null');
+      setLoading(false);
     } else if (!isConvexAuthed && !isConvexLoading) {
       clearAuth();
       hasSynced.current = false;
