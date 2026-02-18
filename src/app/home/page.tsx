@@ -39,20 +39,13 @@ export default function HomePage() {
         {isLoading ? (
           <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
         ) : isAuthenticated && user ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-sm font-medium text-gray-700">
               {user.username || user.name || user.email}
             </span>
-            {user.image ? (
-              <img src={user.image} alt="" className="w-8 h-8 rounded-full" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
-                {(user.username || user.name || user.email)?.[0]?.toUpperCase()}
-              </div>
-            )}
             <button
               onClick={() => void signOut()}
-              className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
             >
               Sign Out
             </button>
