@@ -1,8 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuthActions } from '@convex-dev/auth/react';
-import { useConvexAuth } from 'convex/react';
 import { useAuthStore } from '@/store/authStore';
 
 // Player colors for the animated star points
@@ -28,14 +26,6 @@ const STAR_TRIANGLES = [
 
 export default function HomePage() {
   const { user, isAuthenticated, isLoading } = useAuthStore();
-  const { signOut } = useAuthActions();
-  const convexAuth = useConvexAuth();
-
-  // Debug: log auth state on every render
-  console.log('[HomePage]', {
-    zustand: { isAuthenticated, isLoading, user: user?.username ?? user?.email ?? null },
-    convex: { isAuthenticated: convexAuth.isAuthenticated, isLoading: convexAuth.isLoading },
-  });
 
   // Check if guest
   const isGuest = typeof window !== 'undefined' && localStorage.getItem('sternhalma-guest') === 'true';
@@ -47,17 +37,12 @@ export default function HomePage() {
         {isLoading ? (
           <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
         ) : isAuthenticated && user ? (
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-sm font-medium text-gray-700">
-              {user.username || user.name || user.email}
-            </span>
-            <button
-              onClick={() => void signOut()}
-              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-            >
-              Sign Out
-            </button>
-          </div>
+          <Link
+            href="/profile"
+            className="text-sm font-medium text-gray-700 hover:underline"
+          >
+            {user.username || user.name || user.email}
+          </Link>
         ) : isGuest ? (
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500">Playing as Guest</span>
@@ -155,15 +140,6 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* Account link for authenticated users */}
-        {isAuthenticated && (
-          <Link
-            href="/account"
-            className="text-sm text-gray-500 hover:text-gray-700 hover:underline"
-          >
-            Account Settings
-          </Link>
-        )}
       </main>
     </div>
   );

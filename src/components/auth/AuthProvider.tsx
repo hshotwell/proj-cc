@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { MigrationDialog } from './MigrationDialog';
 import { hasMigrated } from '@/services/migration';
+import { usePresence } from '@/hooks/usePresence';
 
 export function AuthSync() {
   const { isAuthenticated: isConvexAuthed, isLoading: isConvexLoading } = useConvexAuth();
@@ -18,6 +19,8 @@ export function AuthSync() {
   const hasSynced = useRef(false);
   const [showMigration, setShowMigration] = useState(false);
 
+  usePresence();
+
   const handleMigrationComplete = useCallback(() => {
     setShowMigration(false);
     Promise.all([syncSettings(), syncLayouts()]).catch((e) => {
@@ -26,8 +29,6 @@ export function AuthSync() {
   }, [syncSettings, syncLayouts]);
 
   useEffect(() => {
-    console.log('[AuthSync]', { isConvexLoading, isConvexAuthed, profile, isAuthenticated });
-
     if (isConvexLoading) {
       setLoading(true);
       return;
@@ -56,8 +57,6 @@ export function AuthSync() {
         }
       }
     } else if (isConvexAuthed && profile === null) {
-      // Authenticated but profile query returned null — clear loading
-      console.warn('[AuthSync] Authenticated but getProfile returned null');
       setLoading(false);
     } else if (!isConvexAuthed && !isConvexLoading) {
       clearAuth();

@@ -9,9 +9,7 @@ import { ReactNode } from "react";
 const CONVEX_URL =
   process.env.NEXT_PUBLIC_CONVEX_URL || "https://placeholder.convex.cloud";
 
-console.log('[ConvexClient] URL:', CONVEX_URL);
-
-const convex = new ConvexReactClient(CONVEX_URL, { verbose: true });
+const convex = new ConvexReactClient(CONVEX_URL);
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
   return <ConvexAuthProvider client={convex}>{children}</ConvexAuthProvider>;

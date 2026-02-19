@@ -30,7 +30,6 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     showCoordinates,
     autoConfirm,
     showPlayerProgress,
-    darkMode,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -39,7 +38,6 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleShowCoordinates,
     toggleAutoConfirm,
     toggleShowPlayerProgress,
-    toggleDarkMode,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
@@ -185,12 +183,6 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
 
           {activeTab === 'visuals' && (
             <div className="space-y-4">
-              <ToggleOption
-                label="Dark mode"
-                description={darkMode ? 'Dark background' : 'Light background'}
-                checked={darkMode}
-                onChange={toggleDarkMode}
-              />
               <ToggleOption
                 label="Animate moves"
                 description={animateMoves ? 'Pieces slide along path' : 'Pieces teleport instantly'}

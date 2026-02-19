@@ -63,4 +63,20 @@ export default defineSchema({
   })
     .index("by_token", ["token"])
     .index("by_userId", ["userId"]),
+
+  friendships: defineTable({
+    senderId: v.id("users"),
+    receiverId: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("accepted")),
+  })
+    .index("by_senderId", ["senderId"])
+    .index("by_receiverId", ["receiverId"])
+    .index("by_senderId_status", ["senderId", "status"])
+    .index("by_receiverId_status", ["receiverId", "status"])
+    .index("by_pair", ["senderId", "receiverId"]),
+
+  presence: defineTable({
+    userId: v.id("users"),
+    lastSeen: v.number(),
+  }).index("by_userId", ["userId"]),
 });
