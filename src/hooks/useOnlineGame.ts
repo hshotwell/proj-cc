@@ -16,7 +16,8 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
   const { user } = useAuthStore();
 
   // Track the number of turns we've already synced to avoid re-processing
-  const lastSyncedTurnCount = useRef(0);
+  // Initialize to -1 so the first sync (with 0 turns) always fires
+  const lastSyncedTurnCount = useRef(-1);
   // Track the moveHistory length at the point of last server sync
   const moveHistoryBaseLength = useRef(0);
 
@@ -25,7 +26,12 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
     if (!onlineGame || (onlineGame.status !== 'playing' && onlineGame.status !== 'finished')) {
       return null;
     }
-    return reconstructGameState(onlineGame as unknown as OnlineGameData);
+    try {
+      return reconstructGameState(onlineGame as unknown as OnlineGameData);
+    } catch (e) {
+      console.error('[OnlineGame] Failed to reconstruct state:', e);
+      return null;
+    }
   }, [onlineGame]);
 
   // Sync reconstructed state into gameStore when server data changes
@@ -34,7 +40,7 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
 
     const turnCount = (onlineGame.turns as any[])?.length ?? 0;
 
-    // Only reload if server turn count changed (new turn arrived)
+    // Reload on initial load (lastSyncedTurnCount = -1) or when turn count changes
     if (turnCount !== lastSyncedTurnCount.current) {
       lastSyncedTurnCount.current = turnCount;
       moveHistoryBaseLength.current = gameState.moveHistory.length;

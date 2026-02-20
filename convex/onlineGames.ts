@@ -242,7 +242,23 @@ export const toggleReady = mutation({
     const updated = [...players];
     updated[playerIdx] = { ...updated[playerIdx], isReady: !updated[playerIdx].isReady };
 
-    await ctx.db.patch(gameId, { players: updated });
+    // Check if all slots are filled and all humans are ready → auto-start
+    const hasEmpty = updated.some((p: any) => p.type === "empty");
+    const allHumansReady = updated
+      .filter((p: any) => p.type === "human")
+      .every((p: any) => p.isReady);
+
+    if (!hasEmpty && allHumansReady) {
+      await ctx.db.patch(gameId, {
+        players: updated,
+        status: "playing",
+        turns: [],
+        currentPlayerIndex: 0,
+        finishedPlayers: [],
+      });
+    } else {
+      await ctx.db.patch(gameId, { players: updated });
+    }
   },
 });
 

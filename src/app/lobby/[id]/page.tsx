@@ -9,6 +9,7 @@ import type { Id } from '../../../../convex/_generated/dataModel';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
 import { PLAYER_COLORS } from '@/game/constants';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 
 const AVAILABLE_COLORS = Object.values(PLAYER_COLORS);
 
@@ -31,7 +32,6 @@ function LobbyContent() {
   const configureAI = useMutation(api.onlineGames.configureAI);
   const removeAIMutation = useMutation(api.onlineGames.removeAI);
   const toggleReady = useMutation(api.onlineGames.toggleReady);
-  const startGame = useMutation(api.onlineGames.startGame);
   const leaveLobby = useMutation(api.onlineGames.leaveLobby);
 
   const [aiDifficulty, setAiDifficulty] = useState<string>('medium');
@@ -65,11 +65,7 @@ function LobbyContent() {
   const isHost = game.hostId === user?.id;
   const players = game.players as any[];
   const mySlot = players.find((p: any) => p.userId === user?.id);
-  const allHumansReady = players
-    .filter((p: any) => p.type === 'human')
-    .every((p: any) => p.isReady);
   const hasEmptySlots = players.some((p: any) => p.type === 'empty');
-  const canStart = allHumansReady && !hasEmptySlots;
 
   // Colors already taken by other players
   const takenColors = players
@@ -121,14 +117,6 @@ function LobbyContent() {
       await toggleReady({ gameId });
     } catch (e) {
       console.error('Failed to toggle ready:', e);
-    }
-  };
-
-  const handleStartGame = async () => {
-    try {
-      await startGame({ gameId });
-    } catch (e) {
-      console.error('Failed to start game:', e);
     }
   };
 
@@ -283,7 +271,7 @@ function LobbyContent() {
         {mySlot && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Color</h2>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {AVAILABLE_COLORS.map((color) => {
                 const isTaken = takenColors.includes(color);
                 const isSelected = mySlot.color === color;
@@ -292,17 +280,21 @@ function LobbyContent() {
                     key={color}
                     disabled={isTaken}
                     onClick={() => void handleColorSelect(color)}
-                    className={`w-10 h-10 rounded-full border-2 transition-all ${
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
                       isSelected
-                        ? 'border-gray-900 scale-110'
+                        ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                         : isTaken
-                          ? 'border-gray-200 opacity-30 cursor-not-allowed'
-                          : 'border-gray-200 hover:scale-105'
+                          ? 'border-gray-300 opacity-40 cursor-not-allowed'
+                          : 'border-white shadow hover:scale-110'
                     }`}
                     style={{ backgroundColor: color }}
                   />
                 );
               })}
+              <ColorPicker
+                value={mySlot.color}
+                onChange={(color) => void handleColorSelect(color)}
+              />
             </div>
           </div>
         )}
@@ -319,20 +311,6 @@ function LobbyContent() {
               }`}
             >
               {mySlot.isReady ? 'Ready!' : 'Click to Ready Up'}
-            </button>
-          )}
-
-          {isHost && (
-            <button
-              onClick={() => void handleStartGame()}
-              disabled={!canStart}
-              className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                canStart
-                  ? 'bg-blue-600 text-white hover:bg-blue-500'
-                  : 'bg-blue-200 text-blue-400 cursor-not-allowed'
-              }`}
-            >
-              Start Game
             </button>
           )}
 
