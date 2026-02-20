@@ -9,35 +9,20 @@ import { api } from '../../../convex/_generated/api';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { getSavedGamesList, deleteSavedGame } from '@/game/persistence';
+import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
+import type { SavedGameSummary } from '@/types/replay';
 import type { Id } from '../../../convex/_generated/dataModel';
 
-type Tab = 'profile' | 'friends';
+type Tab = 'profile' | 'friends' | 'match-history';
 
 function ProfileContent() {
   const { user } = useAuthStore();
   const { signOut } = useAuthActions();
   const router = useRouter();
-  const updateProfile = useMutation(api.users.updateProfile);
   const { darkMode, toggleDarkMode } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('profile');
-  const [displayName, setDisplayName] = useState(user?.name || '');
-  const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setMessage(null);
-    try {
-      await updateProfile({ displayName });
-      setMessage({ type: 'success', text: 'Profile updated!' });
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to update profile.' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -57,7 +42,7 @@ function ProfileContent() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg">
-          {(['profile', 'friends'] as Tab[]).map((tab) => (
+          {(['profile', 'friends', 'match-history'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -67,7 +52,7 @@ function ProfileContent() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'match-history' ? 'Match History' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -76,71 +61,28 @@ function ProfileContent() {
           <div className="space-y-6">
             {/* Profile Info */}
             <div className="bg-white rounded-xl shadow-lg p-6">
-              <form onSubmit={handleSave}>
-                <div className="flex items-start gap-6 mb-6">
-                  {user?.image ? (
-                    <img
-                      src={user.image}
-                      alt="Profile"
-                      className="w-20 h-20 rounded-full"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
-                      {(user?.name || user?.email)?.[0]?.toUpperCase() || '?'}
-                    </div>
-                  )}
-
-                  <div className="flex-1">
-                    {user?.username && (
-                      <div className="mb-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Username
-                        </label>
-                        <p className="text-gray-600">@{user.username}</p>
-                      </div>
-                    )}
-
-                    <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      id="displayName"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter your display name"
-                    />
-
-                    <div className="mt-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <p className="text-gray-600">{user?.email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {message && (
-                  <div
-                    className={`mb-4 p-3 rounded-lg ${
-                      message.type === 'success'
-                        ? 'bg-green-50 text-green-700 border border-green-200'
-                        : 'bg-red-50 text-red-700 border border-red-200'
-                    }`}
-                  >
-                    {message.text}
+              <div className="flex items-center gap-6">
+                {user?.image ? (
+                  <img
+                    src={user.image}
+                    alt="Profile"
+                    className="w-20 h-20 rounded-full"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+                    {(user?.username || user?.name || user?.email)?.[0]?.toUpperCase() || '?'}
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </form>
+                <div className="flex-1">
+                  <p className="text-xl font-semibold text-gray-900">
+                    {user?.username || user?.name || 'User'}
+                  </p>
+                  {user?.email && (
+                    <p className="text-sm text-gray-500 mt-1">{user.email}</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Preferences */}
@@ -181,7 +123,88 @@ function ProfileContent() {
         )}
 
         {activeTab === 'friends' && <FriendsTab />}
+        {activeTab === 'match-history' && <MatchHistoryTab />}
       </div>
+    </div>
+  );
+}
+
+function MatchHistoryTab() {
+  const router = useRouter();
+  const [games, setGames] = useState<SavedGameSummary[]>([]);
+
+  useEffect(() => {
+    setGames(getSavedGamesList());
+  }, []);
+
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteSavedGame(id);
+    setGames(getSavedGamesList());
+  };
+
+  if (games.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Match History</h2>
+        <p className="text-sm text-gray-500">No saved games yet. Play a game to see it here!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {games.map((game) => {
+        const winnerColor = getPlayerColor(game.winner, game.playerColors);
+        const winnerName = getPlayerDisplayName(game.winner, game.activePlayers);
+        const dateStr = new Date(game.dateSaved).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        return (
+          <div
+            key={game.id}
+            onClick={() => router.push(`/replay/${game.id}`)}
+            className="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-5 h-5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: winnerColor }}
+                />
+                <div>
+                  <div className="font-medium text-gray-900">
+                    <span style={{ color: winnerColor }}>{winnerName}</span> won
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {game.playerCount} players &middot; {game.totalMoves} moves &middot; {dateStr}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {game.longestHop > 0 && (
+                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                    {game.longestHop}-jump hop
+                  </span>
+                )}
+                <button
+                  onClick={(e) => handleDelete(game.id, e)}
+                  className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                  title="Delete"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -232,15 +255,10 @@ function FriendSearch() {
       {results && results.length > 0 && (
         <div className="space-y-2">
           {results.map((user) => (
-            <div key={user.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+            <div key={user.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-100">
               <div className="flex items-center gap-3">
-                <UserAvatar name={user.displayName || user.username} image={null} size="sm" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {user.displayName || user.username}
-                  </p>
-                  <p className="text-xs text-gray-500">@{user.username}</p>
-                </div>
+                <UserAvatar name={user.username} image={null} size="sm" />
+                <p className="text-sm font-medium text-gray-900">{user.username}</p>
               </div>
               {user.friendshipStatus === 'none' && (
                 <button
@@ -290,15 +308,10 @@ function PendingRequests() {
         <div className="space-y-2 mb-4">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Incoming</h3>
           {pendingRequests.map((req) => (
-            <div key={req.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+            <div key={req.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-100">
               <div className="flex items-center gap-3">
-                <UserAvatar name={req.displayName || req.username} image={req.image} size="sm" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {req.displayName || req.username}
-                  </p>
-                  {req.username && <p className="text-xs text-gray-500">@{req.username}</p>}
-                </div>
+                <UserAvatar name={req.username} image={req.image} size="sm" />
+                <p className="text-sm font-medium text-gray-900">{req.username}</p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -323,15 +336,10 @@ function PendingRequests() {
         <div className="space-y-2">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Sent</h3>
           {sentRequests.map((req) => (
-            <div key={req.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+            <div key={req.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-100">
               <div className="flex items-center gap-3">
-                <UserAvatar name={req.displayName || req.username} image={req.image} size="sm" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {req.displayName || req.username}
-                  </p>
-                  {req.username && <p className="text-xs text-gray-500">@{req.username}</p>}
-                </div>
+                <UserAvatar name={req.username} image={req.image} size="sm" />
+                <p className="text-sm font-medium text-gray-900">{req.username}</p>
               </div>
               <button
                 onClick={() => void cancelRequest({ friendshipId: req.friendshipId })}
@@ -365,22 +373,17 @@ function FriendsList() {
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Friends</h2>
       <div className="space-y-2">
         {friends.map((friend) => (
-          <div key={friend.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+          <div key={friend.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-100">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <UserAvatar name={friend.displayName || friend.username} image={friend.image} size="sm" />
+                <UserAvatar name={friend.username} image={friend.image} size="sm" />
                 <div
                   className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
                     friend.online ? 'bg-green-500' : 'bg-gray-300'
                   }`}
                 />
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  {friend.displayName || friend.username}
-                </p>
-                {friend.username && <p className="text-xs text-gray-500">@{friend.username}</p>}
-              </div>
+              <p className="text-sm font-medium text-gray-900">{friend.username}</p>
             </div>
             <button
               onClick={() => void removeFriend({ friendshipId: friend.friendshipId })}

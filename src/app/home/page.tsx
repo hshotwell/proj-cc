@@ -39,7 +39,7 @@ export default function HomePage() {
         ) : isAuthenticated && user ? (
           <Link
             href="/profile"
-            className="text-sm font-medium text-gray-700 hover:underline"
+            className="text-base font-semibold text-gray-700 hover:underline"
           >
             {user.username || user.name || user.email}
           </Link>
@@ -125,12 +125,6 @@ export default function HomePage() {
             className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-purple-600 rounded-full hover:bg-purple-500 transition-colors shadow-lg hover:shadow-xl"
           >
             Board Editor
-          </Link>
-          <Link
-            href="/replays"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-amber-500 rounded-full hover:bg-amber-400 transition-colors shadow-lg hover:shadow-xl"
-          >
-            Past Games
           </Link>
           <Link
             href="/training"
