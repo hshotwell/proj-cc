@@ -258,7 +258,7 @@ function FriendSearch() {
             <div key={user.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-100">
               <div className="flex items-center gap-3">
                 <UserAvatar name={user.username} image={null} size="sm" />
-                <p className="text-sm font-medium text-gray-900">{user.username}</p>
+                <p className="text-sm font-medium text-black">{user.username}</p>
               </div>
               {user.friendshipStatus === 'none' && (
                 <button
@@ -311,7 +311,7 @@ function PendingRequests() {
             <div key={req.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-100">
               <div className="flex items-center gap-3">
                 <UserAvatar name={req.username} image={req.image} size="sm" />
-                <p className="text-sm font-medium text-gray-900">{req.username}</p>
+                <p className="text-sm font-medium text-black">{req.username}</p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -339,7 +339,7 @@ function PendingRequests() {
             <div key={req.friendshipId} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-100">
               <div className="flex items-center gap-3">
                 <UserAvatar name={req.username} image={req.image} size="sm" />
-                <p className="text-sm font-medium text-gray-900">{req.username}</p>
+                <p className="text-sm font-medium text-black">{req.username}</p>
               </div>
               <button
                 onClick={() => void cancelRequest({ friendshipId: req.friendshipId })}
@@ -383,7 +383,7 @@ function FriendsList() {
                   }`}
                 />
               </div>
-              <p className="text-sm font-medium text-gray-900">{friend.username}</p>
+              <p className="text-sm font-medium text-black">{friend.username}</p>
             </div>
             <button
               onClick={() => void removeFriend({ friendshipId: friend.friendshipId })}
