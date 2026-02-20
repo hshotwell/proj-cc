@@ -335,7 +335,8 @@ export default function EditorPage() {
   };
 
   // Touch handler - treat touch as a single toggle (no drag painting)
-  const handleCellTouchStart = (key: string) => {
+  const handleCellTouchStart = (key: string, e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent synthetic mousedown from firing (double-toggle)
     const currentState = getCellState(key);
     const action = currentState ? 'remove' : 'add';
     applyActionToCell(key, action);
@@ -974,7 +975,7 @@ export default function EditorPage() {
                     key={key}
                     onMouseDown={() => handleCellMouseDown(key)}
                     onMouseEnter={() => handleCellMouseEnter(key)}
-                    onTouchStart={() => handleCellTouchStart(key)}
+                    onTouchStart={(e) => handleCellTouchStart(key, e)}
                     style={{ cursor: 'pointer', userSelect: 'none' }}
                   >
                     {/* Cell background */}
