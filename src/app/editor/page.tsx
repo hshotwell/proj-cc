@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import type { PlayerIndex, BoardLayout } from '@/types/game';
 import { PLAYER_COLORS, HEX_SIZE, BOARD_PADDING, TRIANGLE_ASSIGNMENTS } from '@/game/constants';
@@ -126,6 +126,8 @@ export default function EditorPage() {
   // Paint mode state for click-and-drag
   const [isPainting, setIsPainting] = useState(false);
   const [paintAction, setPaintAction] = useState<'add' | 'remove'>('add');
+  // Guard: skip synthetic mousedown that fires after a touch
+  const touchHandledRef = useRef(false);
 
   // Load layouts on mount
   useEffect(() => {
@@ -319,8 +321,9 @@ export default function EditorPage() {
     }
   };
 
-  // Start painting on mouse down
+  // Start painting on mouse down (desktop only — skipped after touch)
   const handleCellMouseDown = (key: string) => {
+    if (touchHandledRef.current) return; // Skip synthetic mousedown after touch
     const currentState = getCellState(key);
     const action = currentState ? 'remove' : 'add';
     setPaintAction(action);
@@ -335,8 +338,9 @@ export default function EditorPage() {
   };
 
   // Touch handler - treat touch as a single toggle (no drag painting)
-  const handleCellTouchStart = (key: string, e: React.TouchEvent) => {
-    e.preventDefault(); // Prevent synthetic mousedown from firing (double-toggle)
+  const handleCellTouchStart = (key: string) => {
+    touchHandledRef.current = true;
+    setTimeout(() => { touchHandledRef.current = false; }, 400);
     const currentState = getCellState(key);
     const action = currentState ? 'remove' : 'add';
     applyActionToCell(key, action);
@@ -975,7 +979,7 @@ export default function EditorPage() {
                     key={key}
                     onMouseDown={() => handleCellMouseDown(key)}
                     onMouseEnter={() => handleCellMouseEnter(key)}
-                    onTouchStart={(e) => handleCellTouchStart(key, e)}
+                    onTouchStart={() => handleCellTouchStart(key)}
                     style={{ cursor: 'pointer', userSelect: 'none' }}
                   >
                     {/* Cell background */}
