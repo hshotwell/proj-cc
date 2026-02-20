@@ -8,7 +8,7 @@ import { AI_THINK_DELAY } from '@/types/ai';
 import { serializeGameState } from '@/game/ai/workerClient';
 import type { WorkerResponse } from '@/game/ai/workerClient';
 
-export function useAITurn() {
+export function useAITurn(enabled: boolean = true) {
   const {
     gameState,
     pendingConfirmation,
@@ -31,6 +31,7 @@ export function useAITurn() {
   }, []);
 
   const isAITurn =
+    enabled &&
     gameState != null &&
     !isGameFullyOver(gameState) &&
     gameState.aiPlayers?.[gameState.currentPlayer] != null;

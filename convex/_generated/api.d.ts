@@ -12,11 +12,13 @@ import type * as auth from "../auth.js";
 import type * as authFunctions from "../authFunctions.js";
 import type * as cleanup from "../cleanup.js";
 import type * as friends from "../friends.js";
+import type * as gameInvites from "../gameInvites.js";
 import type * as games from "../games.js";
 import type * as http from "../http.js";
 import type * as layouts from "../layouts.js";
 import type * as lib_email from "../lib/email.js";
 import type * as lib_usernameValidation from "../lib/usernameValidation.js";
+import type * as onlineGames from "../onlineGames.js";
 import type * as presence from "../presence.js";
 import type * as users from "../users.js";
 
@@ -31,11 +33,13 @@ declare const fullApi: ApiFromModules<{
   authFunctions: typeof authFunctions;
   cleanup: typeof cleanup;
   friends: typeof friends;
+  gameInvites: typeof gameInvites;
   games: typeof games;
   http: typeof http;
   layouts: typeof layouts;
   "lib/email": typeof lib_email;
   "lib/usernameValidation": typeof lib_usernameValidation;
+  onlineGames: typeof onlineGames;
   presence: typeof presence;
   users: typeof users;
 }>;

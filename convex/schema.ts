@@ -79,4 +79,30 @@ export default defineSchema({
     userId: v.id("users"),
     lastSeen: v.number(),
   }).index("by_userId", ["userId"]),
+
+  onlineGames: defineTable({
+    hostId: v.id("users"),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("finished"), v.literal("abandoned")),
+    playerCount: v.number(),
+    boardType: v.union(v.literal("standard"), v.literal("custom")),
+    customLayout: v.optional(v.any()),
+    players: v.any(),
+    turns: v.optional(v.any()),
+    currentPlayerIndex: v.optional(v.number()),
+    winner: v.optional(v.number()),
+    finishedPlayers: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_hostId", ["hostId"])
+    .index("by_status", ["status"]),
+
+  gameInvites: defineTable({
+    gameId: v.id("onlineGames"),
+    senderId: v.id("users"),
+    receiverId: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("accepted"), v.literal("declined")),
+    createdAt: v.number(),
+  })
+    .index("by_receiverId_status", ["receiverId", "status"])
+    .index("by_gameId", ["gameId"]),
 });

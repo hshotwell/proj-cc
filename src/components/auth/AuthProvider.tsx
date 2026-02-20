@@ -9,6 +9,7 @@ import { useLayoutStore } from '@/store/layoutStore';
 import { MigrationDialog } from './MigrationDialog';
 import { hasMigrated } from '@/services/migration';
 import { usePresence } from '@/hooks/usePresence';
+import { InviteNotification } from '@/components/InviteNotification';
 
 export function AuthSync() {
   const { isAuthenticated: isConvexAuthed, isLoading: isConvexLoading } = useConvexAuth();
@@ -68,5 +69,5 @@ export function AuthSync() {
     return <MigrationDialog onComplete={handleMigrationComplete} />;
   }
 
-  return null;
+  return <InviteNotification />;
 }

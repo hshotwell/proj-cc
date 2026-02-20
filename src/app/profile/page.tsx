@@ -358,6 +358,17 @@ function PendingRequests() {
 function FriendsList() {
   const friends = useQuery(api.friends.listFriends);
   const removeFriend = useMutation(api.friends.removeFriend);
+  const createLobby = useMutation(api.onlineGames.createLobby);
+  const router = useRouter();
+
+  const handleChallenge = useCallback(async (friendId: Id<"users">) => {
+    try {
+      const gameId = await createLobby({ playerCount: 2, receiverId: friendId });
+      router.push(`/lobby/${gameId}`);
+    } catch (e) {
+      console.error('Failed to create lobby:', e);
+    }
+  }, [createLobby, router]);
 
   if (!friends || friends.length === 0) {
     return (
@@ -385,12 +396,20 @@ function FriendsList() {
               </div>
               <p className="text-sm font-medium text-black">{friend.username}</p>
             </div>
-            <button
-              onClick={() => void removeFriend({ friendshipId: friend.friendshipId })}
-              className="px-3 py-1 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
-            >
-              Remove
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => void handleChallenge(friend.id)}
+                className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                Challenge
+              </button>
+              <button
+                onClick={() => void removeFriend({ friendshipId: friend.friendshipId })}
+                className="px-3 py-1 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ))}
       </div>
