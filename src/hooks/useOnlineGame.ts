@@ -9,8 +9,8 @@ import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { reconstructGameState, serializeMoves } from '@/game/onlineState';
 import type { OnlineGameData } from '@/game/onlineState';
-import { parseCoordKey } from '@/game/coordinates';
-import type { PlayerIndex } from '@/types/game';
+import { parseCoordKey, getMovePath } from '@/game/coordinates';
+import type { CubeCoord, PlayerIndex } from '@/types/game';
 
 export function useOnlineGame(gameId: Id<"onlineGames">) {
   const onlineGame = useQuery(api.onlineGames.getLobby, { gameId });
@@ -22,6 +22,8 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
   const lastSyncedTurnCount = useRef(-1);
   // Track the moveHistory length at the point of last server sync
   const moveHistoryBaseLength = useRef(0);
+  // Track whether a turn submission is in flight to block interaction
+  const isSubmittingRef = useRef(false);
 
   // Reconstruct GameState from online data
   const gameState = useMemo(() => {
@@ -48,13 +50,15 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
       const isInitialLoad = lastSyncedTurnCount.current === -1;
       lastSyncedTurnCount.current = turnCount;
       moveHistoryBaseLength.current = gameState.moveHistory.length;
+      // Server acknowledged the turn — clear submission lock
+      isSubmittingRef.current = false;
       useGameStore.getState().loadGame(gameId, gameState);
 
       // Set lastMoveInfo and animation for the latest turn so opponent
       // moves show the "last move" path and animate into place
       if (turnCount > 0) {
         const lastTurn = turns[turnCount - 1];
-        const moves = lastTurn.moves as Array<{ from: string; to: string }>;
+        const moves = lastTurn.moves as Array<{ from: string; to: string; jumpPath?: string[] }>;
         if (moves.length > 0) {
           const origin = parseCoordKey(moves[0].from);
           const destination = parseCoordKey(moves[moves.length - 1].to);
@@ -66,12 +70,22 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
 
           // Animate only for newly received turns, not on initial page load
           if (!isInitialLoad && useSettingsStore.getState().animateMoves) {
-            const path = [origin];
+            // Build full hop-by-hop path using jumpPath data
+            const fullPath: CubeCoord[] = [];
             for (const m of moves) {
-              path.push(parseCoordKey(m.to));
+              const from = parseCoordKey(m.from);
+              const to = parseCoordKey(m.to);
+              const jp = m.jumpPath?.map(parseCoordKey);
+              const segmentPath = getMovePath(from, to, jp);
+              if (fullPath.length === 0) {
+                fullPath.push(...segmentPath);
+              } else {
+                // Skip the first point of subsequent segments (it's the same as the last)
+                fullPath.push(...segmentPath.slice(1));
+              }
             }
             storeUpdate.animatingPiece = destination;
-            storeUpdate.animationPath = path;
+            storeUpdate.animationPath = fullPath;
             storeUpdate.animationStep = 0;
           }
 
@@ -94,6 +108,7 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
 
   // Submit turn handler
   const handleSubmitTurn = useCallback(async () => {
+    if (isSubmittingRef.current) return;
     const store = useGameStore.getState();
     if (!store.gameState || !onlineGame) return;
 
@@ -105,10 +120,14 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
     const currentPlayerColor = store.gameState.activePlayers[currentIdx];
     const justFinished = store.gameState.finishedPlayers.some(fp => fp.player === currentPlayerColor);
 
+    // Lock interaction immediately — cleared when server acknowledges
+    isSubmittingRef.current = true;
+
     try {
       await submitTurn({ gameId, moves, playerFinished: justFinished || undefined });
     } catch (e) {
       console.error('[OnlineGame] Failed to submit turn:', e);
+      isSubmittingRef.current = false;
     }
   }, [gameId, onlineGame, submitTurn]);
 
@@ -148,6 +167,7 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
     isAITurn,
     myPlayerIndex,
     myPlayerSlot,
+    isSubmittingRef,
     submitTurn: handleSubmitTurn,
   };
 }
