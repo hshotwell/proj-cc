@@ -6,8 +6,11 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { useAuthStore } from '@/store/authStore';
 import { useGameStore } from '@/store/gameStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { reconstructGameState, serializeMoves } from '@/game/onlineState';
 import type { OnlineGameData } from '@/game/onlineState';
+import { parseCoordKey } from '@/game/coordinates';
+import type { PlayerIndex } from '@/types/game';
 
 export function useOnlineGame(gameId: Id<"onlineGames">) {
   const onlineGame = useQuery(api.onlineGames.getLobby, { gameId });
@@ -38,13 +41,44 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
   useEffect(() => {
     if (!gameState || !onlineGame) return;
 
-    const turnCount = (onlineGame.turns as any[])?.length ?? 0;
+    const turns = (onlineGame.turns as any[]) ?? [];
+    const turnCount = turns.length;
 
     // Reload on initial load (lastSyncedTurnCount = -1) or when turn count changes
     if (turnCount !== lastSyncedTurnCount.current) {
+      const isInitialLoad = lastSyncedTurnCount.current === -1;
       lastSyncedTurnCount.current = turnCount;
       moveHistoryBaseLength.current = gameState.moveHistory.length;
       useGameStore.getState().loadGame(gameId, gameState);
+
+      // Set lastMoveInfo and animation for the latest turn so opponent
+      // moves show the "last move" path and animate into place
+      if (turnCount > 0) {
+        const lastTurn = turns[turnCount - 1];
+        const moves = lastTurn.moves as Array<{ from: string; to: string }>;
+        if (moves.length > 0) {
+          const origin = parseCoordKey(moves[0].from);
+          const destination = parseCoordKey(moves[moves.length - 1].to);
+          const playerIdx = gameState.activePlayers[lastTurn.playerIndex] as PlayerIndex;
+
+          const storeUpdate: Record<string, unknown> = {
+            lastMoveInfo: { origin, destination, player: playerIdx },
+          };
+
+          // Animate only for newly received turns, not on initial page load
+          if (!isInitialLoad && useSettingsStore.getState().animateMoves) {
+            const path = [origin];
+            for (const m of moves) {
+              path.push(parseCoordKey(m.to));
+            }
+            storeUpdate.animatingPiece = destination;
+            storeUpdate.animationPath = path;
+            storeUpdate.animationStep = 0;
+          }
+
+          useGameStore.setState(storeUpdate);
+        }
+      }
     }
   }, [gameState, onlineGame, gameId]);
 
@@ -85,18 +119,29 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
     }
   }, [gameId, onlineGame, submitTurn, markFinished, players]);
 
-  // Watch for pendingConfirmation → confirmed transition to submit turns
-  const prevPending = useRef(false);
+  // Watch gameStore for local turn completions and submit to server.
+  // Handles both normal confirm (pendingConfirmation true→false) and
+  // auto-confirm (lastMoveInfo set directly, pendingConfirmation never true).
   useEffect(() => {
-    const unsubscribe = useGameStore.subscribe((state) => {
-      // Detect transition from pending to not-pending (move confirmed)
-      if (prevPending.current && !state.pendingConfirmation) {
-        // A move was just confirmed locally
+    const unsubscribe = useGameStore.subscribe((state, prevState) => {
+      if (!state.gameState) return;
+
+      // Only submit if there are unsubmitted local moves
+      const hasLocalMoves = state.gameState.moveHistory.length > moveHistoryBaseLength.current;
+      if (!hasLocalMoves) return;
+
+      // Detect turn completion via either path:
+      // 1. Normal: pendingConfirmation went true → false
+      const normalConfirm = prevState.pendingConfirmation && !state.pendingConfirmation;
+      // 2. Auto-confirm: lastMoveInfo was just set (pending was never true)
+      const autoConfirmDone = !state.pendingConfirmation && !prevState.pendingConfirmation
+        && state.lastMoveInfo !== null && prevState.lastMoveInfo === null;
+
+      if (normalConfirm || autoConfirmDone) {
         if (isMyTurn || (isHost && isAITurn)) {
           void handleSubmitTurn();
         }
       }
-      prevPending.current = state.pendingConfirmation;
     });
 
     return unsubscribe;
