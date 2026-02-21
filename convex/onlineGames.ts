@@ -298,8 +298,9 @@ export const submitTurn = mutation({
   args: {
     gameId: v.id("onlineGames"),
     moves: v.any(),
+    playerFinished: v.optional(v.boolean()),
   },
-  handler: async (ctx, { gameId, moves }) => {
+  handler: async (ctx, { gameId, moves, playerFinished }) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -326,6 +327,13 @@ export const submitTurn = mutation({
       moves,
     });
 
+    // Handle player finishing
+    if (playerFinished && !finishedPlayers.includes(currentPlayerIndex)) {
+      finishedPlayers.push(currentPlayerIndex);
+    }
+
+    const allFinished = players.every((_: any, i: number) => finishedPlayers.includes(i));
+
     // Advance to next player, skipping finished ones
     const numPlayers = players.length;
     let nextIndex = (currentPlayerIndex + 1) % numPlayers;
@@ -337,35 +345,103 @@ export const submitTurn = mutation({
     await ctx.db.patch(gameId, {
       turns,
       currentPlayerIndex: nextIndex,
+      finishedPlayers,
+      winner: playerFinished ? (game.winner ?? currentPlayerIndex) : game.winner,
+      status: allFinished ? "finished" : game.status,
     });
   },
 });
 
-export const markPlayerFinished = mutation({
-  args: {
-    gameId: v.id("onlineGames"),
-    playerIndex: v.number(),
-  },
-  handler: async (ctx, { gameId, playerIndex }) => {
+export const requestRematch = mutation({
+  args: { gameId: v.id("onlineGames") },
+  handler: async (ctx, { gameId }) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
     const game = await ctx.db.get(gameId);
     if (!game) throw new Error("Game not found");
-    if (game.hostId !== userId) throw new Error("Only host can mark finished");
-
-    const finishedPlayers = (game.finishedPlayers as number[]) || [];
-    if (!finishedPlayers.includes(playerIndex)) {
-      finishedPlayers.push(playerIndex);
-    }
+    if (game.status !== "finished") throw new Error("Game is not finished");
 
     const players = game.players as any[];
-    const allFinished = players.every((_: any, i: number) => finishedPlayers.includes(i));
+    const isParticipant = players.some((p: any) => p.userId === userId);
+    if (!isParticipant) throw new Error("Not a participant");
 
     await ctx.db.patch(gameId, {
-      finishedPlayers,
-      winner: game.winner ?? playerIndex,
-      status: allFinished ? "finished" : game.status,
+      rematchRequestedBy: userId,
+      rematchAcceptedBy: [userId],
+      rematchDeclinedBy: undefined,
+    });
+  },
+});
+
+export const acceptRematch = mutation({
+  args: { gameId: v.id("onlineGames") },
+  handler: async (ctx, { gameId }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (!game.rematchRequestedBy) throw new Error("No rematch requested");
+
+    const players = game.players as any[];
+    const isParticipant = players.some((p: any) => p.userId === userId);
+    if (!isParticipant) throw new Error("Not a participant");
+
+    const accepted = (game.rematchAcceptedBy as string[]) || [];
+    if (accepted.includes(userId)) return; // Already accepted
+    accepted.push(userId);
+
+    // Check if all human players have accepted
+    const humanPlayers = players.filter((p: any) => p.type === "human" && p.userId);
+    const allAccepted = humanPlayers.every((p: any) => accepted.includes(p.userId));
+
+    if (allAccepted) {
+      // Create new game with same setup
+      const newPlayers = players.map((p: any) => ({
+        ...p,
+        isReady: true,
+      }));
+
+      const newGameId = await ctx.db.insert("onlineGames", {
+        hostId: game.hostId,
+        status: "playing",
+        playerCount: game.playerCount,
+        boardType: game.boardType,
+        customLayout: game.customLayout,
+        players: newPlayers,
+        turns: [],
+        currentPlayerIndex: 0,
+        finishedPlayers: [],
+        createdAt: Date.now(),
+      });
+
+      await ctx.db.patch(gameId, {
+        rematchAcceptedBy: accepted,
+        rematchGameId: newGameId,
+      });
+    } else {
+      await ctx.db.patch(gameId, {
+        rematchAcceptedBy: accepted,
+      });
+    }
+  },
+});
+
+export const declineRematch = mutation({
+  args: { gameId: v.id("onlineGames") },
+  handler: async (ctx, { gameId }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (!game.rematchRequestedBy) throw new Error("No rematch requested");
+
+    await ctx.db.patch(gameId, {
+      rematchDeclinedBy: userId,
+      rematchRequestedBy: undefined,
+      rematchAcceptedBy: undefined,
     });
   },
 });

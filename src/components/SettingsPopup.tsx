@@ -30,6 +30,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     showCoordinates,
     autoConfirm,
     showPlayerProgress,
+    darkMode,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -38,6 +39,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleShowCoordinates,
     toggleAutoConfirm,
     toggleShowPlayerProgress,
+    toggleDarkMode,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
@@ -190,6 +192,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleAnimateMoves}
               />
               <ToggleOption
+                label="Show last moves"
+                description={showLastMoves ? "Showing each player's last move" : 'Last moves hidden'}
+                checked={showLastMoves}
+                onChange={toggleShowLastMoves}
+              />
+              <ToggleOption
                 label="Rotate board"
                 description={rotateBoard ? 'Board faces active player' : 'Board stays fixed'}
                 checked={rotateBoard}
@@ -202,16 +210,16 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleTriangleLines}
               />
               <ToggleOption
-                label="Show last moves"
-                description={showLastMoves ? "Showing each player's last move" : 'Last moves hidden'}
-                checked={showLastMoves}
-                onChange={toggleShowLastMoves}
-              />
-              <ToggleOption
                 label="Show coordinates"
                 description={showCoordinates ? 'Hover cells to see coords' : 'Coordinates hidden'}
                 checked={showCoordinates}
                 onChange={toggleShowCoordinates}
+              />
+              <ToggleOption
+                label="Dark mode"
+                description={darkMode ? 'Dark background' : 'Light background'}
+                checked={darkMode}
+                onChange={toggleDarkMode}
               />
             </div>
           )}

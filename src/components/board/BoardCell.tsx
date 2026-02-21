@@ -13,9 +13,10 @@ interface BoardCellProps {
   isCustomLayout?: boolean;
   playerColors?: ColorMapping;
   customGoalPositions?: Partial<Record<PlayerIndex, string[]>>;
+  darkMode?: boolean;
 }
 
-export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = false, playerColors, customGoalPositions }: BoardCellProps) {
+export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = false, playerColors, customGoalPositions, darkMode = false }: BoardCellProps) {
   const { x, y } = cubeToPixel(coord, size);
   const coordKeyStr = `${coord.q},${coord.r}`;
 
@@ -50,14 +51,14 @@ export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = fa
         stroke="#9ca3af"
         strokeWidth={1}
       />
-      {/* Subtle goal tint overlay */}
+      {/* Goal tint overlay — more opaque in dark mode for visibility */}
       {goalColor && (
         <circle
           cx={x}
           cy={y}
           r={size * 0.45}
-          fill={hexToRgba(goalColor, 0.15)}
-          stroke={hexToRgba(goalColor, 0.35)}
+          fill={hexToRgba(goalColor, darkMode ? 0.65 : 0.15)}
+          stroke={hexToRgba(goalColor, darkMode ? 0.85 : 0.35)}
           strokeWidth={1.5}
         />
       )}

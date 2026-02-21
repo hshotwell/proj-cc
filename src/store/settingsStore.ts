@@ -71,14 +71,14 @@ export const useSettingsStore = create<SettingsStore>()(
       // Not persisted (reset on page load)
       settingsMenuOpen: false,
 
-      showAllMoves: true,
-      animateMoves: false,
+      showAllMoves: false,
+      animateMoves: true,
       rotateBoard: true,
       showTriangleLines: true,
-      showLastMoves: false,
+      showLastMoves: true,
       showCoordinates: false,
       autoConfirm: false,
-      showPlayerProgress: false,
+      showPlayerProgress: true,
       darkMode: false,
 
       // Sync state

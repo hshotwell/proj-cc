@@ -15,7 +15,6 @@ import type { PlayerIndex } from '@/types/game';
 export function useOnlineGame(gameId: Id<"onlineGames">) {
   const onlineGame = useQuery(api.onlineGames.getLobby, { gameId });
   const submitTurn = useMutation(api.onlineGames.submitTurn);
-  const markFinished = useMutation(api.onlineGames.markPlayerFinished);
   const { user } = useAuthStore();
 
   // Track the number of turns we've already synced to avoid re-processing
@@ -101,23 +100,17 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
     const moves = serializeMoves(store.gameState, moveHistoryBaseLength.current);
     if (moves.length === 0) return;
 
-    try {
-      await submitTurn({ gameId, moves });
+    // Check if the player who just moved has finished
+    const currentIdx = onlineGame.currentPlayerIndex ?? 0;
+    const currentPlayerColor = store.gameState.activePlayers[currentIdx];
+    const justFinished = store.gameState.finishedPlayers.some(fp => fp.player === currentPlayerColor);
 
-      // Check if the current player just won
-      if (store.gameState.winner !== null) {
-        const winnerIdx = players.findIndex((_: any, i: number) => {
-          const activePlayers = store.gameState!.activePlayers;
-          return activePlayers[i] === store.gameState!.winner;
-        });
-        if (winnerIdx >= 0) {
-          await markFinished({ gameId, playerIndex: winnerIdx });
-        }
-      }
+    try {
+      await submitTurn({ gameId, moves, playerFinished: justFinished || undefined });
     } catch (e) {
       console.error('[OnlineGame] Failed to submit turn:', e);
     }
-  }, [gameId, onlineGame, submitTurn, markFinished, players]);
+  }, [gameId, onlineGame, submitTurn]);
 
   // Watch gameStore for local turn completions and submit to server.
   // Handles both normal confirm (pendingConfirmation true→false) and

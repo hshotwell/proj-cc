@@ -42,7 +42,7 @@ export function Board() {
       confirmMove,
       undoLastMove,
     } = useGameStore();
-  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates } = useSettingsStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode } = useSettingsStore();
 
   // Track hovered cell for coordinate display
   const [hoveredCell, setHoveredCell] = useState<CubeCoord | null>(null);
@@ -65,8 +65,19 @@ export function Board() {
     if (isReplayActive) return;
     if (displayCurrentPlayer === undefined) return;
 
+    const isInitialRender = prevPlayerRef.current === undefined;
     const justEnabled = rotateBoard && !prevRotateBoardRef.current;
     prevRotateBoardRef.current = rotateBoard;
+
+    const targetAngle = ROTATION_FOR_PLAYER[displayCurrentPlayer];
+
+    if (isInitialRender) {
+      // Always snap to current player's orientation on first render,
+      // regardless of rotateBoard setting — the most natural starting view
+      setCumulativeRotation(targetAngle);
+      prevPlayerRef.current = displayCurrentPlayer;
+      return;
+    }
 
     if (!rotateBoard) return;
 
@@ -77,10 +88,8 @@ export function Board() {
       return;
     }
 
-    const targetAngle = ROTATION_FOR_PLAYER[displayCurrentPlayer];
-
-    if (prevPlayerRef.current === undefined || justEnabled) {
-      // First render or setting just re-enabled: snap to target angle directly
+    if (justEnabled) {
+      // Setting just re-enabled: snap to target angle directly
       setCumulativeRotation(targetAngle);
     } else if (prevPlayerRef.current !== displayCurrentPlayer) {
       // Player changed: compute shortest-path delta
@@ -466,7 +475,7 @@ export function Board() {
           let fill: string;
           if (tri.playerOwners.length > 0 && gameState) {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
-            fill = blendColorsRgba(colors, 0.15);
+            fill = blendColorsRgba(colors, darkMode ? 0.55 : 0.15);
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = '#e2e2e2';
           } else {
@@ -516,6 +525,7 @@ export function Board() {
               isCustomLayout={gameState?.isCustomLayout}
               playerColors={gameState?.playerColors}
               customGoalPositions={gameState?.customGoalPositions}
+              darkMode={darkMode}
             />
           </g>
         ))}

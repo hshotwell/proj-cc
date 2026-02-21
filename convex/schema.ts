@@ -92,6 +92,10 @@ export default defineSchema({
     winner: v.optional(v.number()),
     finishedPlayers: v.optional(v.any()),
     createdAt: v.number(),
+    rematchRequestedBy: v.optional(v.id("users")),
+    rematchAcceptedBy: v.optional(v.any()),
+    rematchDeclinedBy: v.optional(v.id("users")),
+    rematchGameId: v.optional(v.id("onlineGames")),
   })
     .index("by_hostId", ["hostId"])
     .index("by_status", ["status"]),
