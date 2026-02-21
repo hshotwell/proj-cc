@@ -29,6 +29,8 @@ interface GameStore {
   animatingPiece: CubeCoord | null; // The piece being animated (at its final position)
   animationPath: CubeCoord[] | null; // The full path for animation
   animationStep: number; // Current step in the animation (0 = at start)
+  // Online: signals that a turn was just confirmed and needs server submission
+  pendingServerSubmission: boolean;
 
   // Actions
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => string;
@@ -64,6 +66,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   animatingPiece: null,
   animationPath: null,
   animationStep: 0,
+  pendingServerSubmission: false,
 
   // Start a new game with the specified number of players
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => {
@@ -215,6 +218,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         animatingPiece: animate && path && path.length > 1 ? to : null,
         animationPath: path,
         animationStep: 0,
+        pendingServerSubmission: true,
       });
     } else {
       // Normal mode - set pending confirmation state
@@ -285,6 +289,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animatingPiece: null,
       animationPath: null,
       animationStep: 0,
+      pendingServerSubmission: true,
     });
   },
 
@@ -408,6 +413,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animatingPiece: null,
       animationPath: null,
       animationStep: 0,
+      pendingServerSubmission: false,
     });
   },
 

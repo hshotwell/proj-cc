@@ -172,7 +172,6 @@ function OnlineGameContent() {
     isHost,
     isAITurn,
     myPlayerIndex,
-    isSubmittingRef,
   } = useOnlineGame(gameId);
 
   // AI turns run only on host's client
@@ -201,7 +200,7 @@ function OnlineGameContent() {
     ? players[onlineGame.currentPlayerIndex]?.username || 'AI'
     : '';
   const isFinished = onlineGame.status === 'finished';
-  const canInteract = (isMyTurn || (isHost && isAITurn)) && !isSubmittingRef.current;
+  const canInteract = isMyTurn || (isHost && isAITurn);
 
   const handleAbandon = async () => {
     try {

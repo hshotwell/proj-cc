@@ -54,11 +54,18 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
       isSubmittingRef.current = false;
       useGameStore.getState().loadGame(gameId, gameState);
 
+      // Determine local player's slot index for animation skipping
+      const localPlayerIndex = (onlineGame.players as any[]).findIndex(
+        (p: any) => p.userId === user?.id
+      );
+
       // Set lastMoveInfo and animation for the latest turn so opponent
-      // moves show the "last move" path and animate into place
+      // moves show the "last move" path and animate into place.
+      // Skip animation for the local player's own moves (they already animated locally).
       if (turnCount > 0) {
         const lastTurn = turns[turnCount - 1];
         const moves = lastTurn.moves as Array<{ from: string; to: string; jumpPath?: string[] }>;
+        const isOwnMove = lastTurn.playerIndex === localPlayerIndex;
         if (moves.length > 0) {
           const origin = parseCoordKey(moves[0].from);
           const destination = parseCoordKey(moves[moves.length - 1].to);
@@ -68,8 +75,8 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
             lastMoveInfo: { origin, destination, player: playerIdx },
           };
 
-          // Animate only for newly received turns, not on initial page load
-          if (!isInitialLoad && useSettingsStore.getState().animateMoves) {
+          // Animate only for opponent turns, not initial load or own moves
+          if (!isInitialLoad && !isOwnMove && useSettingsStore.getState().animateMoves) {
             // Build full hop-by-hop path using jumpPath data
             const fullPath: CubeCoord[] = [];
             for (const m of moves) {
@@ -80,7 +87,6 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
               if (fullPath.length === 0) {
                 fullPath.push(...segmentPath);
               } else {
-                // Skip the first point of subsequent segments (it's the same as the last)
                 fullPath.push(...segmentPath.slice(1));
               }
             }
@@ -93,7 +99,7 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
         }
       }
     }
-  }, [gameState, onlineGame, gameId]);
+  }, [gameState, onlineGame, gameId, user?.id]);
 
   // Determine player info
   const players = (onlineGame?.players as any[]) ?? [];
@@ -132,24 +138,16 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
   }, [gameId, onlineGame, submitTurn]);
 
   // Watch gameStore for local turn completions and submit to server.
-  // Handles both normal confirm (pendingConfirmation true→false) and
-  // auto-confirm (lastMoveInfo set directly, pendingConfirmation never true).
+  // Both confirmMove() and auto-confirm in makeMove() set pendingServerSubmission.
   useEffect(() => {
     const unsubscribe = useGameStore.subscribe((state, prevState) => {
       if (!state.gameState) return;
 
-      // Only submit if there are unsubmitted local moves
-      const hasLocalMoves = state.gameState.moveHistory.length > moveHistoryBaseLength.current;
-      if (!hasLocalMoves) return;
+      // Detect turn completion: pendingServerSubmission just became true
+      if (state.pendingServerSubmission && !prevState.pendingServerSubmission) {
+        // Clear the flag immediately so it doesn't re-trigger
+        useGameStore.setState({ pendingServerSubmission: false });
 
-      // Detect turn completion via either path:
-      // 1. Normal: pendingConfirmation went true → false
-      const normalConfirm = prevState.pendingConfirmation && !state.pendingConfirmation;
-      // 2. Auto-confirm: lastMoveInfo was just set (pending was never true)
-      const autoConfirmDone = !state.pendingConfirmation && !prevState.pendingConfirmation
-        && state.lastMoveInfo !== null && prevState.lastMoveInfo === null;
-
-      if (normalConfirm || autoConfirmDone) {
         if (isMyTurn || (isHost && isAITurn)) {
           void handleSubmitTurn();
         }
@@ -167,7 +165,6 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
     isAITurn,
     myPlayerIndex,
     myPlayerSlot,
-    isSubmittingRef,
     submitTurn: handleSubmitTurn,
   };
 }
