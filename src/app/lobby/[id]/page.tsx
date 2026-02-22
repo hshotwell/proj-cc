@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from 'convex/react';
 import Link from 'next/link';
@@ -20,6 +20,45 @@ const PLAYER_COUNT_OPTIONS = [
   { count: 6, label: '6 Players' },
 ];
 
+function FriendPicker({ friends, onSelect, onClose }: {
+  friends: { id: Id<"users">; username: string | null; online: boolean }[];
+  onSelect: (friendId: Id<"users">) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  if (friends.length === 0) {
+    return (
+      <div ref={ref} className="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-56">
+        <p className="text-xs text-gray-400">No friends available to invite</p>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="absolute right-0 top-full mt-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-56 max-h-48 overflow-y-auto">
+      {friends.map((friend) => (
+        <button
+          key={friend.id}
+          onClick={() => onSelect(friend.id)}
+          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+        >
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${friend.online ? 'bg-green-500' : 'bg-gray-300'}`} />
+          <span className="text-gray-900 truncate">{friend.username || 'Unknown'}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function LobbyContent() {
   const params = useParams();
   const router = useRouter();
@@ -33,9 +72,12 @@ function LobbyContent() {
   const removeAIMutation = useMutation(api.onlineGames.removeAI);
   const toggleReady = useMutation(api.onlineGames.toggleReady);
   const leaveLobby = useMutation(api.onlineGames.leaveLobby);
+  const inviteToLobbyMutation = useMutation(api.onlineGames.inviteToLobby);
+  const cancelSlotInviteMutation = useMutation(api.onlineGames.cancelSlotInvite);
 
   const [aiDifficulty, setAiDifficulty] = useState<string>('medium');
   const [aiPersonality, setAiPersonality] = useState<string>('generalist');
+  const [inviteSlot, setInviteSlot] = useState<number | null>(null);
 
   // Redirect when game starts
   if (game?.status === 'playing') {
@@ -66,6 +108,11 @@ function LobbyContent() {
   const players = game.players as any[];
   const mySlot = players.find((p: any) => p.userId === user?.id);
   const hasEmptySlots = players.some((p: any) => p.type === 'empty');
+
+  // Friends list for inviting (only query when host)
+  const friends = useQuery(api.friends.listFriends, isHost ? {} : "skip");
+  const playerUserIds = new Set(players.filter((p: any) => p.userId).map((p: any) => p.userId));
+  const availableFriends = (friends ?? []).filter((f) => !playerUserIds.has(f.id));
 
   // Colors already taken by other players
   const takenColors = players
@@ -117,6 +164,23 @@ function LobbyContent() {
       await toggleReady({ gameId });
     } catch (e) {
       console.error('Failed to toggle ready:', e);
+    }
+  };
+
+  const handleInviteFriend = async (friendId: Id<"users">, slot: number) => {
+    try {
+      await inviteToLobbyMutation({ gameId, friendId, slot });
+      setInviteSlot(null);
+    } catch (e) {
+      console.error('Failed to invite friend:', e);
+    }
+  };
+
+  const handleCancelInvite = async (slot: number) => {
+    try {
+      await cancelSlotInviteMutation({ gameId, slot });
+    } catch (e) {
+      console.error('Failed to cancel invite:', e);
     }
   };
 
@@ -244,13 +308,37 @@ function LobbyContent() {
                     </span>
                   )}
 
-                  {/* Host controls for AI/empty slots */}
+                  {/* Host controls for empty slots */}
                   {isHost && player.type === 'empty' && (
+                    <div className="relative flex items-center gap-1">
+                      <button
+                        onClick={() => setInviteSlot(inviteSlot === index ? null : index)}
+                        className="px-3 py-1 text-xs font-medium text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50"
+                      >
+                        Invite
+                      </button>
+                      <button
+                        onClick={() => void handleAddAI(index)}
+                        className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50"
+                      >
+                        Add AI
+                      </button>
+                      {inviteSlot === index && (
+                        <FriendPicker
+                          friends={availableFriends}
+                          onSelect={(friendId) => void handleInviteFriend(friendId, index)}
+                          onClose={() => setInviteSlot(null)}
+                        />
+                      )}
+                    </div>
+                  )}
+                  {/* Host cancel button for invited (non-host) humans */}
+                  {isHost && player.type === 'human' && player.userId !== game.hostId && player.userId !== user?.id && (
                     <button
-                      onClick={() => void handleAddAI(index)}
-                      className="px-3 py-1 text-xs font-medium text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50"
+                      onClick={() => void handleCancelInvite(index)}
+                      className="px-3 py-1 text-xs font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50"
                     >
-                      Add AI
+                      Cancel
                     </button>
                   )}
                   {isHost && player.type === 'ai' && (

@@ -125,6 +125,126 @@ export const updateBoardConfig = mutation({
       customLayout: boardType === "custom" ? customLayout : undefined,
       players,
     });
+
+    // Clean up orphaned invites for players that no longer have a slot
+    const remainingUserIds = new Set(
+      players.filter((p: any) => p.userId).map((p: any) => p.userId)
+    );
+    const invites = await ctx.db
+      .query("gameInvites")
+      .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+      .collect();
+    for (const invite of invites) {
+      if (invite.status === "pending" && !remainingUserIds.has(invite.receiverId)) {
+        await ctx.db.patch(invite._id, { status: "declined" });
+      }
+    }
+  },
+});
+
+export const inviteToLobby = mutation({
+  args: {
+    gameId: v.id("onlineGames"),
+    friendId: v.id("users"),
+    slot: v.number(),
+  },
+  handler: async (ctx, { gameId, friendId, slot }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.hostId !== userId) throw new Error("Only the host can invite players");
+    if (game.status !== "lobby") throw new Error("Game is not in lobby");
+
+    const players = game.players as any[];
+    if (slot < 0 || slot >= players.length) throw new Error("Invalid slot");
+    if (players[slot].type !== "empty") throw new Error("Slot is not empty");
+
+    // Check friend is not already in the game
+    const alreadyInGame = players.some((p: any) => p.userId === friendId);
+    if (alreadyInGame) throw new Error("Player is already in this game");
+
+    // Verify they are actually friends
+    const friendship1 = await ctx.db
+      .query("friendships")
+      .withIndex("by_pair", (q) => q.eq("senderId", userId).eq("receiverId", friendId))
+      .first();
+    const friendship2 = await ctx.db
+      .query("friendships")
+      .withIndex("by_pair", (q) => q.eq("senderId", friendId).eq("receiverId", userId))
+      .first();
+    const areFriends =
+      (friendship1 && friendship1.status === "accepted") ||
+      (friendship2 && friendship2.status === "accepted");
+    if (!areFriends) throw new Error("You can only invite friends");
+
+    const friend = await ctx.db.get(friendId);
+    if (!friend) throw new Error("User not found");
+
+    // Reserve the slot for the invited friend
+    const updated = [...players];
+    updated[slot] = {
+      slot,
+      type: "human" as const,
+      userId: friendId,
+      username: friend.username || friend.name || "Guest",
+      color: updated[slot].color,
+      isReady: false,
+    };
+    await ctx.db.patch(gameId, { players: updated });
+
+    // Create game invite
+    await ctx.db.insert("gameInvites", {
+      gameId,
+      senderId: userId,
+      receiverId: friendId,
+      status: "pending",
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const cancelSlotInvite = mutation({
+  args: {
+    gameId: v.id("onlineGames"),
+    slot: v.number(),
+  },
+  handler: async (ctx, { gameId, slot }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.hostId !== userId) throw new Error("Only the host can cancel invites");
+    if (game.status !== "lobby") throw new Error("Game is not in lobby");
+
+    const players = game.players as any[];
+    if (slot < 0 || slot >= players.length) throw new Error("Invalid slot");
+    if (players[slot].type !== "human") throw new Error("Slot is not a human player");
+    if (players[slot].userId === userId) throw new Error("Cannot remove yourself");
+
+    const removedUserId = players[slot].userId;
+
+    // Reset slot to empty
+    const updated = [...players];
+    updated[slot] = {
+      slot,
+      type: "empty" as const,
+      color: updated[slot].color,
+      isReady: false,
+    };
+    await ctx.db.patch(gameId, { players: updated });
+
+    // Find and decline the associated invite
+    const invite = await ctx.db
+      .query("gameInvites")
+      .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+      .filter((q) => q.eq(q.field("receiverId"), removedUserId))
+      .first();
+    if (invite) {
+      await ctx.db.patch(invite._id, { status: "declined" });
+    }
   },
 });
 
