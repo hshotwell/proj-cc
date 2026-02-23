@@ -1,4 +1,5 @@
 import { getConvexClient } from '@/lib/convex';
+import { convexClient } from '@/components/ConvexClientProvider';
 import { api } from '../../../convex/_generated/api';
 import type { BoardLayout } from '@/types/game';
 import type { SavedGameSummary, SavedGameData } from '@/types/replay';
@@ -23,7 +24,7 @@ export const cloudSettingsStorage: SettingsStorageProvider = {
 
   async save(settings: SyncableSettings): Promise<void> {
     try {
-      await getConvexClient().mutation(api.users.saveSettings, settings);
+      await convexClient.mutation(api.users.saveSettings, settings);
     } catch (e) {
       console.error('Failed to save settings to cloud:', e);
     }
@@ -44,7 +45,7 @@ export const cloudLayoutStorage: LayoutStorageProvider = {
 
   async save(layout: BoardLayout): Promise<void> {
     try {
-      await getConvexClient().mutation(api.layouts.saveLayout, {
+      await convexClient.mutation(api.layouts.saveLayout, {
         layoutId: layout.id,
         name: layout.name,
         cells: layout.cells,
@@ -60,7 +61,7 @@ export const cloudLayoutStorage: LayoutStorageProvider = {
 
   async delete(id: string): Promise<void> {
     try {
-      await getConvexClient().mutation(api.layouts.deleteLayout, { layoutId: id });
+      await convexClient.mutation(api.layouts.deleteLayout, { layoutId: id });
     } catch (e) {
       console.error('Failed to delete layout from cloud:', e);
     }
@@ -68,7 +69,7 @@ export const cloudLayoutStorage: LayoutStorageProvider = {
 
   async setDefault(id: string): Promise<void> {
     try {
-      await getConvexClient().mutation(api.layouts.updateLayout, {
+      await convexClient.mutation(api.layouts.updateLayout, {
         layoutId: id,
         isDefault: true,
       });
@@ -124,7 +125,7 @@ export const cloudGameStorage: GameStorageProvider = {
     summary: SavedGameSummary
   ): Promise<void> {
     try {
-      await getConvexClient().mutation(api.games.saveGame, {
+      await convexClient.mutation(api.games.saveGame, {
         gameId: id,
         gameData: data,
         summary,
@@ -136,7 +137,7 @@ export const cloudGameStorage: GameStorageProvider = {
 
   async deleteGame(id: string): Promise<void> {
     try {
-      await getConvexClient().mutation(api.games.deleteGame, { gameId: id });
+      await convexClient.mutation(api.games.deleteGame, { gameId: id });
     } catch (e) {
       console.error('Failed to delete game from cloud:', e);
     }
