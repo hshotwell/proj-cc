@@ -5,7 +5,7 @@ import type { CubeCoord, PlayerIndex, Move } from '@/types/game';
 import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION } from '@/game/constants';
 import { generateBoardPositions } from '@/game/board';
 import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath } from '@/game/coordinates';
-import { getPlayerColorFromState, hexToRgba, blendColorsRgba } from '@/game/colors';
+import { getPlayerColorFromState, hexToRgba, blendColorsRgba, lightenHex } from '@/game/colors';
 import { findBoardTriangles, findBorderEdges } from '@/game/triangles';
 import { isGameFullyOver } from '@/game/state';
 import { useGameStore } from '@/store/gameStore';
@@ -495,11 +495,16 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           let fill: string;
           if (tri.playerOwners.length > 0 && gameState) {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
-            fill = blendColorsRgba(colors, darkMode ? 0.55 : 0.15);
+            if (darkMode) {
+              const lightened = colors.map((c) => lightenHex(c, 0.55));
+              fill = blendColorsRgba(lightened, 0.35);
+            } else {
+              fill = blendColorsRgba(colors, 0.15);
+            }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
-            fill = '#e2e2e2';
+            fill = darkMode ? '#3a3a3a' : '#e2e2e2';
           } else {
-            fill = '#f8f8f8';
+            fill = darkMode ? '#2a2a2a' : '#f8f8f8';
           }
 
           return (
@@ -507,8 +512,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`tri-${tri.vertices.join('-')}`}
               points={points}
               fill={fill}
-              stroke={showTriangleLines ? 'black' : 'none'}
-              strokeWidth={0.5}
+              stroke={showTriangleLines ? (darkMode ? '#888' : 'black') : fill}
+              strokeWidth={showTriangleLines ? 0.5 : 0.5}
+              strokeLinejoin="round"
             />
           );
         })}
@@ -521,8 +527,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`border-${edge.a}-${edge.b}`}
               x1={pa.x} y1={pa.y}
               x2={pb.x} y2={pb.y}
-              stroke="black"
-              strokeWidth={1.5}
+              stroke={darkMode ? 'white' : 'black'}
+              strokeWidth={2.5}
+              strokeLinecap="round"
             />
           );
         })}
@@ -719,7 +726,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               <Piece
                 coord={coord}
                 player={player}
-                isCurrentPlayer={!isReplayActive && !isAITurn && isLocalPlayerTurn !== false && player === displayCurrentPlayer}
+                isCurrentPlayer={!isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer}
                 isSelected={
                   !isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)
                 }

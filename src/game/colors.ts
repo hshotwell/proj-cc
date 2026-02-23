@@ -25,6 +25,18 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 /**
+ * Lighten a hex color by blending it toward white.
+ * amount=0 returns the original color, amount=1 returns white.
+ */
+export function lightenHex(hex: string, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const lr = Math.round(r + (255 - r) * amount);
+  const lg = Math.round(g + (255 - g) * amount);
+  const lb = Math.round(b + (255 - b) * amount);
+  return `#${lr.toString(16).padStart(2, '0')}${lg.toString(16).padStart(2, '0')}${lb.toString(16).padStart(2, '0')}`;
+}
+
+/**
  * Blend multiple hex colors weighted by occurrence count, returning rgba string.
  * E.g. 2x red + 1x blue → weighted 2:1 toward red.
  */
