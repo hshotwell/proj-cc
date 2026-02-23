@@ -79,6 +79,10 @@ function LobbyContent() {
   const [aiPersonality, setAiPersonality] = useState<string>('generalist');
   const [inviteSlot, setInviteSlot] = useState<number | null>(null);
 
+  // Friends list for inviting (only query when host, skip until game loads)
+  const isHost = game ? game.hostId === user?.id : false;
+  const friends = useQuery(api.friends.listFriends, isHost ? {} : "skip");
+
   // Redirect when game starts
   if (game?.status === 'playing') {
     router.replace(`/online/${gameId}`);
@@ -104,13 +108,10 @@ function LobbyContent() {
     );
   }
 
-  const isHost = game.hostId === user?.id;
   const players = game.players as any[];
   const mySlot = players.find((p: any) => p.userId === user?.id);
   const hasEmptySlots = players.some((p: any) => p.type === 'empty');
 
-  // Friends list for inviting (only query when host)
-  const friends = useQuery(api.friends.listFriends, isHost ? {} : "skip");
   const playerUserIds = new Set(players.filter((p: any) => p.userId).map((p: any) => p.userId));
   const availableFriends = (friends ?? []).filter((f) => !playerUserIds.has(f.id));
 
