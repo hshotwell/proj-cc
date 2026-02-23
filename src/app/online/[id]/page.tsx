@@ -17,6 +17,7 @@ import { MoveConfirmation } from '@/components/game/MoveConfirmation';
 import { SettingsPopup } from '@/components/SettingsPopup';
 import { SettingsButton } from '@/components/SettingsButton';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
+import type { PlayerIndex } from '@/types/game';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
@@ -202,6 +203,11 @@ function OnlineGameContent() {
   const isFinished = onlineGame.status === 'finished';
   const canInteract = isMyTurn || (isHost && isAITurn);
 
+  // Compute local player's PlayerIndex for board rotation
+  const localPlayerColor = myPlayerIndex >= 0 && gameState
+    ? gameState.activePlayers[myPlayerIndex]
+    : undefined;
+
   const handleAbandon = async () => {
     try {
       await abandonGame({ gameId });
@@ -229,9 +235,20 @@ function OnlineGameContent() {
           )}
         </div>
 
-        {/* Turn status banner */}
+        {/* Board - disable interaction when not your turn */}
+        <div className="relative w-full bg-white rounded-lg shadow-lg p-2 sm:p-4">
+          <SettingsButton />
+          <div style={!canInteract && !isFinished ? { pointerEvents: 'none' } : undefined}>
+            <Board
+              fixedRotationPlayer={localPlayerColor as PlayerIndex | undefined}
+              isLocalPlayerTurn={isMyTurn}
+            />
+          </div>
+        </div>
+
+        {/* Turn status banner - below board */}
         {!isFinished && !isMyTurn && !isAITurn && myPlayerIndex >= 0 && (
-          <div className="mb-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-center">
+          <div className="mt-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-center">
             <p className="text-sm text-amber-800">
               Waiting for <span className="font-semibold">{currentPlayerName}</span>...
             </p>
@@ -239,19 +256,10 @@ function OnlineGameContent() {
         )}
 
         {!isFinished && isAITurn && (
-          <div className="mb-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-center">
+          <div className="mt-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-center">
             <p className="text-sm text-blue-800">AI is thinking...</p>
           </div>
         )}
-
-        {/* Board - disable interaction when not your turn */}
-        <div
-          className="relative w-full bg-white rounded-lg shadow-lg p-2 sm:p-4"
-          style={!canInteract && !isFinished ? { pointerEvents: 'none' } : undefined}
-        >
-          <SettingsButton />
-          <Board />
-        </div>
 
         {/* Turn Indicator */}
         <div className="mt-2 sm:mt-4">

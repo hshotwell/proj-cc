@@ -15,7 +15,14 @@ import { BoardCell } from './BoardCell';
 import { Piece } from './Piece';
 import { MoveIndicator } from './MoveIndicator';
 
-export function Board() {
+interface BoardProps {
+  /** When set, lock board rotation to this player's perspective (for online games) */
+  fixedRotationPlayer?: PlayerIndex;
+  /** When false, suppress spinning highlights on pieces (online: not your turn) */
+  isLocalPlayerTurn?: boolean;
+}
+
+export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {}) {
   // Replay store
   const {
     isReplayActive,
@@ -69,6 +76,16 @@ export function Board() {
     const justEnabled = rotateBoard && !prevRotateBoardRef.current;
     prevRotateBoardRef.current = rotateBoard;
 
+    // In online mode with fixedRotationPlayer, always lock to that player's perspective
+    if (fixedRotationPlayer !== undefined) {
+      const fixedAngle = ROTATION_FOR_PLAYER[fixedRotationPlayer];
+      if (isInitialRender) {
+        setCumulativeRotation(fixedAngle);
+        prevPlayerRef.current = displayCurrentPlayer;
+      }
+      return;
+    }
+
     const targetAngle = ROTATION_FOR_PLAYER[displayCurrentPlayer];
 
     if (isInitialRender) {
@@ -102,7 +119,7 @@ export function Board() {
     }
 
     prevPlayerRef.current = displayCurrentPlayer;
-  }, [displayCurrentPlayer, rotateBoard, gameState?.aiPlayers, isReplayActive]);
+  }, [displayCurrentPlayer, rotateBoard, gameState?.aiPlayers, isReplayActive, fixedRotationPlayer]);
 
   // Reset rotation when entering/leaving replay mode
   useEffect(() => {
@@ -699,7 +716,7 @@ export function Board() {
               <Piece
                 coord={coord}
                 player={player}
-                isCurrentPlayer={!isReplayActive && !isAITurn && player === displayCurrentPlayer}
+                isCurrentPlayer={!isReplayActive && !isAITurn && isLocalPlayerTurn !== false && player === displayCurrentPlayer}
                 isSelected={
                   !isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)
                 }

@@ -31,6 +31,8 @@ interface GameStore {
   animationStep: number; // Current step in the animation (0 = at start)
   // Online: signals that a turn was just confirmed and needs server submission
   pendingServerSubmission: boolean;
+  // Online: animation is playing and submission should happen after it finishes
+  pendingAnimationSubmission: boolean;
 
   // Actions
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => string;
@@ -67,6 +69,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   animationPath: null,
   animationStep: 0,
   pendingServerSubmission: false,
+  pendingAnimationSubmission: false,
 
   // Start a new game with the specified number of players
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => {
@@ -207,6 +210,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       }
 
+      const isAnimatingMove = animate && path && path.length > 1;
       set({
         gameState: finalState,
         selectedPiece: null,
@@ -215,10 +219,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         stateBeforeMove: null,
         originalPiecePosition: null,
         lastMoveInfo: confirmedMoveInfo,
-        animatingPiece: animate && path && path.length > 1 ? to : null,
+        animatingPiece: isAnimatingMove ? to : null,
         animationPath: path,
         animationStep: 0,
-        pendingServerSubmission: true,
+        // Delay server submission until animation finishes
+        pendingServerSubmission: !isAnimatingMove,
+        pendingAnimationSubmission: !!isAnimatingMove,
       });
     } else {
       // Normal mode - set pending confirmation state
@@ -414,6 +420,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animationPath: null,
       animationStep: 0,
       pendingServerSubmission: false,
+      pendingAnimationSubmission: false,
     });
   },
 
@@ -433,6 +440,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Clear animation immediately
   clearAnimation: () => {
-    set({ animatingPiece: null, animationPath: null, animationStep: 0 });
+    const { pendingAnimationSubmission } = get();
+    set({
+      animatingPiece: null,
+      animationPath: null,
+      animationStep: 0,
+      // If auto-confirm was waiting for animation, trigger submission now
+      ...(pendingAnimationSubmission ? {
+        pendingServerSubmission: true,
+        pendingAnimationSubmission: false,
+      } : {}),
+    });
   },
 }));
