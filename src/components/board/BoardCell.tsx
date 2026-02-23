@@ -51,15 +51,15 @@ export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = fa
         stroke="#9ca3af"
         strokeWidth={1}
       />
-      {/* Goal tint overlay — more opaque in dark mode for visibility */}
+      {/* Goal ring — colored stroke only, no fill */}
       {goalColor && (
         <circle
           cx={x}
           cy={y}
           r={size * 0.45}
-          fill={hexToRgba(goalColor, darkMode ? 0.65 : 0.15)}
-          stroke={hexToRgba(goalColor, darkMode ? 0.85 : 0.35)}
-          strokeWidth={1.5}
+          fill="none"
+          stroke={hexToRgba(goalColor, darkMode ? 0.85 : 0.5)}
+          strokeWidth={2.5}
         />
       )}
     </g>

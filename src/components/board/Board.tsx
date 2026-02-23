@@ -370,7 +370,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
   const handleCellClick = (coord: CubeCoord) => {
     if (isReplayActive) return;
-    if (!gameState || isGameFullyOver(gameState)) return;
+    if (!gameState) return;
+    // Allow confirming a pending move even if the game just ended (winning move)
+    if (isGameFullyOver(gameState) && !pendingConfirmation) return;
     // Block interaction during animation or AI turn
     if (animatingPiece || isAITurn) return;
 
@@ -407,7 +409,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
   const handlePieceClick = (coord: CubeCoord) => {
     if (isReplayActive) return;
-    if (!gameState || isGameFullyOver(gameState)) return;
+    if (!gameState) return;
+    if (isGameFullyOver(gameState) && !pendingConfirmation) return;
     // Block interaction during animation or AI turn
     if (animatingPiece || isAITurn) return;
 
