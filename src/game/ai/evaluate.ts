@@ -8,7 +8,7 @@ import { computePlayerProgress } from '../progress';
 import { getWorstAssignmentCost } from '../pathfinding';
 import { loadEvolvedGenome } from '../training/persistence';
 import { evaluateWithGenome } from '../training/evaluate';
-import { getCachedLearnedWeights } from '../learning';
+import { getCachedLearnedWeights, getCachedEndgameInsights } from '../learning';
 
 const PERSONALITY_WEIGHTS: Record<AIPersonality, {
   progress: number;
@@ -151,6 +151,19 @@ export function evaluatePosition(
   // Post-winner urgency: when someone has already won, further boost distance weight
   if (state.winner !== null) {
     wDistProgress *= 1.5;
+  }
+
+  // Apply learned endgame insights (for medium+ difficulty in endgame)
+  if (endgame && difficulty !== 'easy') {
+    const endgameInsights = getCachedEndgameInsights();
+    if (endgameInsights && endgameInsights.gamesAnalyzed > 10) {
+      if (endgameInsights.avgMovesFrom7 < 15) {
+        wStraggler *= 1.3;
+      }
+      if (endgameInsights.avgShuffleMoves < 3) {
+        wDistProgress *= 1.2;
+      }
+    }
   }
 
   // For custom layouts, progress is the ONLY thing that matters

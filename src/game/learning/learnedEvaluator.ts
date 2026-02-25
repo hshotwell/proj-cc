@@ -1,11 +1,12 @@
 import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
-import type { LearnedWeights } from './types';
+import type { LearnedWeights, EndgameInsights } from './types';
 import { getLearnedWeights } from './learningStore';
 import { DEFAULT_LEARNED_WEIGHTS } from './types';
 import { coordKey, cubeDistance, centroid } from '../coordinates';
 import { getGoalPositionsForState } from '../state';
 import { getPlayerPieces } from '../setup';
 import { DIRECTIONS } from '../constants';
+import { getCachedSharedWeights, getCachedEndgameInsights as getSharedEndgameInsights } from '@/hooks/useSharedInsights';
 
 // Cache learned weights to avoid repeated localStorage reads
 let cachedWeights: LearnedWeights | null = null;
@@ -13,15 +14,61 @@ let cacheTimestamp = 0;
 const CACHE_TTL = 60000; // 1 minute
 
 /**
- * Get learned weights with caching
+ * Get learned weights with caching.
+ * Blends local weights (0.1) with shared server weights (0.9) when available.
  */
 export function getCachedLearnedWeights(): LearnedWeights {
   const now = Date.now();
   if (!cachedWeights || now - cacheTimestamp > CACHE_TTL) {
-    cachedWeights = getLearnedWeights();
+    const localWeights = getLearnedWeights();
+    const sharedWeights = getCachedSharedWeights();
+
+    if (sharedWeights && sharedWeights.gamesAnalyzed > 0 && localWeights.gamesAnalyzed > 0) {
+      cachedWeights = blendWeights(localWeights, sharedWeights, 0.1, 0.9);
+    } else if (sharedWeights && sharedWeights.gamesAnalyzed > 0) {
+      cachedWeights = sharedWeights;
+    } else {
+      cachedWeights = localWeights;
+    }
     cacheTimestamp = now;
   }
   return cachedWeights;
+}
+
+/**
+ * Get cached endgame insights (from server if available).
+ */
+export function getCachedEndgameInsights(): EndgameInsights | null {
+  return getSharedEndgameInsights();
+}
+
+/**
+ * Blend two weight sets with given ratios.
+ */
+function blendWeights(
+  local: LearnedWeights,
+  shared: LearnedWeights,
+  localRatio: number,
+  sharedRatio: number
+): LearnedWeights {
+  const blend = (l: number, s: number) => l * localRatio + s * sharedRatio;
+
+  return {
+    version: Math.max(local.version, shared.version),
+    lastUpdated: Math.max(local.lastUpdated, shared.lastUpdated),
+    gamesAnalyzed: local.gamesAnalyzed + shared.gamesAnalyzed,
+
+    distanceWeight: blend(local.distanceWeight, shared.distanceWeight),
+    cohesionWeight: blend(local.cohesionWeight, shared.cohesionWeight),
+    mobilityWeight: blend(local.mobilityWeight, shared.mobilityWeight),
+    advancementBalance: blend(local.advancementBalance, shared.advancementBalance),
+    jumpPreference: blend(local.jumpPreference, shared.jumpPreference),
+    goalOccupationWeight: blend(local.goalOccupationWeight, shared.goalOccupationWeight),
+
+    avgWinningMoveCount: blend(local.avgWinningMoveCount, shared.avgWinningMoveCount),
+    optimalJumpChainLength: blend(local.optimalJumpChainLength, shared.optimalJumpChainLength),
+    optimalCohesionLevel: blend(local.optimalCohesionLevel, shared.optimalCohesionLevel),
+  };
 }
 
 /**

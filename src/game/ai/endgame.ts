@@ -11,11 +11,12 @@
 
 import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
 import { coordKey, cubeEquals, cubeDistance, centroid } from '../coordinates';
-import { getGoalPositionsForState } from '../state';
+import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
 import { getAllValidMoves } from '../moves';
 import { applyMove } from '../state';
 import { DIRECTIONS } from '../constants';
+import { getCachedEndgameInsights } from '../learning';
 
 /**
  * Check if we're in late endgame where finishing logic should take over.
@@ -611,6 +612,31 @@ export function scoreEndgameMove(state: GameState, move: Move, player: PlayerInd
   for (const entry of enabledEntries) {
     const depth = getGoalPositionDepth(entry.to);
     score += 3000 + depth * 500;
+  }
+
+  // Apply learned endgame adjustments
+  const endgameInsights = getCachedEndgameInsights();
+  if (endgameInsights && endgameInsights.gamesAnalyzed > 10) {
+    const inGoal = countPiecesInGoal(state, player);
+
+    // If winners fill deep-first, increase depth bonus for entries
+    if (endgameInsights.optimalFillOrderScore > 0.6 && !fromInGoal && toInGoal) {
+      const depth = getGoalPositionDepth(move.to);
+      score += depth * 300;
+    }
+
+    // If winners rarely shuffle, reduce score for within-goal rearrangements
+    if (endgameInsights.avgShuffleMoves < 3 && fromInGoal && toInGoal) {
+      const depthGain = getGoalPositionDepth(move.to) - getGoalPositionDepth(move.from);
+      if (depthGain <= 0) {
+        score -= 500;
+      }
+    }
+
+    // If winners finish fast from 9, boost direct entry even more at 9+
+    if (inGoal >= 9 && endgameInsights.avgMovesFrom9 < 4 && !fromInGoal && toInGoal) {
+      score += 10000;
+    }
   }
 
   return score;

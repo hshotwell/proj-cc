@@ -1,6 +1,30 @@
 import type { PlayerIndex, GameState, Move } from '@/types/game';
 
 /**
+ * Endgame-specific metrics extracted per-player when a game ends
+ */
+export interface EndgameMetrics {
+  movesFrom7ToFinish: number | null;
+  movesFrom8ToFinish: number | null;
+  movesFrom9ToFinish: number | null;
+  goalFillOrder: number[];
+  shuffleMovesInEndgame: number;
+  exitAndReenterCount: number;
+}
+
+/**
+ * Server-aggregated endgame insights from all games
+ */
+export interface EndgameInsights {
+  avgMovesFrom7: number;
+  avgMovesFrom8: number;
+  avgMovesFrom9: number;
+  optimalFillOrderScore: number;
+  avgShuffleMoves: number;
+  gamesAnalyzed: number;
+}
+
+/**
  * Extracted patterns from a single game
  */
 export interface GamePatterns {
@@ -17,6 +41,9 @@ export interface GamePatterns {
   // Overall game metrics
   totalMoves: number;
   winnerMoveCount: number; // Moves made by the winner
+
+  // Endgame metrics for the winner (if applicable)
+  endgameMetrics?: EndgameMetrics;
 }
 
 /**
@@ -123,6 +150,18 @@ export const DEFAULT_LEARNED_WEIGHTS: LearnedWeights = {
   avgWinningMoveCount: 50,
   optimalJumpChainLength: 3,
   optimalCohesionLevel: 0.5,
+};
+
+/**
+ * Default endgame insights before any learning
+ */
+export const DEFAULT_ENDGAME_INSIGHTS: EndgameInsights = {
+  avgMovesFrom7: 20,
+  avgMovesFrom8: 12,
+  avgMovesFrom9: 5,
+  optimalFillOrderScore: 0.5,
+  avgShuffleMoves: 5,
+  gamesAnalyzed: 0,
 };
 
 /**

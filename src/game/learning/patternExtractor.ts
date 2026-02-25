@@ -3,6 +3,7 @@ import type { GamePatterns, PlayerGameMetrics, GameSummary } from './types';
 import { coordKey, cubeDistance, centroid } from '../coordinates';
 import { getGoalPositionsForState } from '../state';
 import { DIRECTIONS } from '../constants';
+import { extractEndgameMetrics } from './endgamePatternExtractor';
 
 /**
  * Extract learning patterns from a completed game
@@ -45,6 +46,11 @@ export function extractGamePatterns(
     ? (movesByPlayer.get(winner)?.length || 0)
     : moveHistory.length;
 
+  // Extract endgame metrics for the winner
+  const endgameMetrics = winner !== null
+    ? extractEndgameMetrics(finalState, winner)
+    : undefined;
+
   return {
     gameId,
     timestamp: Date.now(),
@@ -54,6 +60,7 @@ export function extractGamePatterns(
     playerMetrics,
     totalMoves: moveHistory.length,
     winnerMoveCount,
+    endgameMetrics,
   };
 }
 

@@ -109,4 +109,31 @@ export default defineSchema({
   })
     .index("by_receiverId_status", ["receiverId", "status"])
     .index("by_gameId", ["gameId"]),
+
+  learnedInsights: defineTable({
+    gamesAnalyzed: v.number(),
+    weights: v.any(),
+    endgameStats: v.any(),
+    lastUpdated: v.number(),
+  }),
+
+  trainingState: defineTable({
+    config: v.any(),
+    currentGeneration: v.number(),
+    population: v.any(),
+    bestGenome: v.optional(v.any()),
+    generationHistory: v.any(),
+    matchupSchedule: v.any(),
+    matchupIndex: v.number(),
+    gameWithinMatchup: v.number(),
+    gamesCompletedInGeneration: v.number(),
+    lastUpdated: v.number(),
+  }),
+
+  evolvedGenome: defineTable({
+    genome: v.any(),
+    generation: v.number(),
+    fitness: v.number(),
+    lastUpdated: v.number(),
+  }),
 });

@@ -6,11 +6,14 @@ export type {
   LearnedWeights,
   GameSummary,
   LearningData,
+  EndgameMetrics,
+  EndgameInsights,
 } from './types';
 
 export {
   DEFAULT_LEARNED_WEIGHTS,
   DEFAULT_LEARNING_DATA,
+  DEFAULT_ENDGAME_INSIGHTS,
 } from './types';
 
 export {
@@ -18,6 +21,11 @@ export {
   calculateGameQuality,
   createGameSummary,
 } from './patternExtractor';
+
+export {
+  extractEndgameMetrics,
+  scoreGoalFillOrder,
+} from './endgamePatternExtractor';
 
 export {
   loadLearningData,
@@ -32,6 +40,7 @@ export {
 
 export {
   getCachedLearnedWeights,
+  getCachedEndgameInsights,
   clearWeightsCache,
   applyLearnedWeights,
   computeEvaluationFactors,

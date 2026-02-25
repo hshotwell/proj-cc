@@ -8,6 +8,7 @@ import type { Id } from '../../../../convex/_generated/dataModel';
 import { api } from '../../../../convex/_generated/api';
 import { AuthGuard } from '@/components/auth';
 import { useOnlineGame } from '@/hooks/useOnlineGame';
+import { useOnlineGameLearning } from '@/hooks/useOnlineGameLearning';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { useAITurn } from '@/hooks/useAITurn';
@@ -177,6 +178,9 @@ function OnlineGameContent() {
 
   // AI turns run only on host's client
   useAITurn(isHost && isAITurn);
+
+  // Learn from finished games
+  useOnlineGameLearning(gameId, onlineGame);
 
   // Redirect if game is abandoned or lobby
   useEffect(() => {

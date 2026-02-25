@@ -1,4 +1,5 @@
 import type { Genome, Individual, TrainingConfig, GenerationResult } from '@/types/training';
+import { getServerEvolvedGenome } from '@/hooks/useEvolvedGenome';
 
 const STORAGE_KEY = 'chinese-checkers-evolved-ai';
 const SESSION_KEY = 'chinese-checkers-training-session';
@@ -12,6 +13,11 @@ export function saveEvolvedGenome(genome: Genome): void {
 }
 
 export function loadEvolvedGenome(): Genome | null {
+  // Try server-evolved genome first
+  const serverGenome = getServerEvolvedGenome();
+  if (serverGenome) return serverGenome;
+
+  // Fall back to localStorage
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;

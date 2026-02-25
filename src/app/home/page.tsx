@@ -126,12 +126,6 @@ export default function HomePage() {
           >
             Board Editor
           </Link>
-          <Link
-            href="/training"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-white bg-green-600 rounded-full hover:bg-green-500 transition-colors shadow-lg hover:shadow-xl"
-          >
-            AI Training
-          </Link>
         </div>
 
       </main>
