@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useCallback, useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
@@ -10,6 +10,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { reconstructGameState, serializeMoves } from '@/game/onlineState';
 import type { OnlineGameData } from '@/game/onlineState';
 import { parseCoordKey, getMovePath } from '@/game/coordinates';
+import { clearStateHistory, recordBoardState } from '@/game/ai/search';
+import { clearPathfindingCache } from '@/game/pathfinding';
 import type { CubeCoord, PlayerIndex } from '@/types/game';
 
 export function useOnlineGame(gameId: Id<"onlineGames">) {
@@ -24,6 +26,8 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
   const moveHistoryBaseLength = useRef(0);
   // Track whether a turn submission is in flight to block interaction
   const isSubmittingRef = useRef(false);
+  // Reactive version so the UI re-renders when submission state changes
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reconstruct GameState from online data
   const gameState = useMemo(() => {
@@ -52,16 +56,22 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
       moveHistoryBaseLength.current = gameState.moveHistory.length;
       // Server acknowledged the turn — clear submission lock
       isSubmittingRef.current = false;
-      useGameStore.getState().loadGame(gameId, gameState);
+      setIsSubmitting(false);
+
+      // Run side effects before the atomic state update
+      clearStateHistory();
+      clearPathfindingCache();
+      recordBoardState(gameState);
+
+      // Build the animation overlay for opponent moves BEFORE updating the store,
+      // so we can apply everything in a single atomic setState (prevents highlight flash).
+      const animationOverlay: Record<string, unknown> = {};
 
       // Determine local player's slot index for animation skipping
       const localPlayerIndex = (onlineGame.players as any[]).findIndex(
         (p: any) => p.userId === user?.id
       );
 
-      // Set lastMoveInfo and animation for the latest turn so opponent
-      // moves show the "last move" path and animate into place.
-      // Skip animation for the local player's own moves (they already animated locally).
       if (turnCount > 0) {
         const lastTurn = turns[turnCount - 1];
         const moves = lastTurn.moves as Array<{ from: string; to: string; jumpPath?: string[] }>;
@@ -71,13 +81,10 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
           const destination = parseCoordKey(moves[moves.length - 1].to);
           const playerIdx = gameState.activePlayers[lastTurn.playerIndex] as PlayerIndex;
 
-          const storeUpdate: Record<string, unknown> = {
-            lastMoveInfo: { origin, destination, player: playerIdx },
-          };
+          animationOverlay.lastMoveInfo = { origin, destination, player: playerIdx };
 
           // Animate only for opponent turns, not initial load or own moves
           if (!isInitialLoad && !isOwnMove && useSettingsStore.getState().animateMoves) {
-            // Build full hop-by-hop path using jumpPath data
             const fullPath: CubeCoord[] = [];
             for (const m of moves) {
               const from = parseCoordKey(m.from);
@@ -90,14 +97,30 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
                 fullPath.push(...segmentPath.slice(1));
               }
             }
-            storeUpdate.animatingPiece = destination;
-            storeUpdate.animationPath = fullPath;
-            storeUpdate.animationStep = 0;
+            animationOverlay.animatingPiece = destination;
+            animationOverlay.animationPath = fullPath;
+            animationOverlay.animationStep = 0;
           }
-
-          useGameStore.setState(storeUpdate);
         }
       }
+
+      // Single atomic update — loadGame fields + animation overlay together
+      useGameStore.setState({
+        gameId,
+        gameState,
+        selectedPiece: null,
+        validMovesForSelected: [],
+        pendingConfirmation: false,
+        stateBeforeMove: null,
+        lastMoveInfo: null,
+        originalPiecePosition: null,
+        animatingPiece: null,
+        animationPath: null,
+        animationStep: 0,
+        pendingServerSubmission: false,
+        pendingAnimationSubmission: false,
+        ...animationOverlay,
+      });
     }
   }, [gameState, onlineGame, gameId, user?.id]);
 
@@ -128,12 +151,14 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
 
     // Lock interaction immediately — cleared when server acknowledges
     isSubmittingRef.current = true;
+    setIsSubmitting(true);
 
     try {
       await submitTurn({ gameId, moves, playerFinished: justFinished || undefined });
     } catch (e) {
       console.error('[OnlineGame] Failed to submit turn:', e);
       isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   }, [gameId, onlineGame, submitTurn]);
 
@@ -163,6 +188,7 @@ export function useOnlineGame(gameId: Id<"onlineGames">) {
     isMyTurn,
     isHost,
     isAITurn,
+    isSubmitting,
     myPlayerIndex,
     myPlayerSlot,
     submitTurn: handleSubmitTurn,

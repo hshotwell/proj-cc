@@ -513,7 +513,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               points={points}
               fill={fill}
               stroke={showTriangleLines ? (darkMode ? '#888' : 'black') : fill}
-              strokeWidth={showTriangleLines ? 0.5 : 0.5}
+              strokeWidth={showTriangleLines ? 0.5 : 1.5}
               strokeLinejoin="round"
             />
           );

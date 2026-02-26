@@ -105,10 +105,9 @@ export function Piece({
           cy={0}
           r={pieceRadius + size * 0.1}
           fill="none"
-          stroke={pieceColor}
-          strokeWidth={2}
+          stroke="#fff"
+          strokeWidth={2.5}
           strokeDasharray="6 4"
-          opacity={0.7}
           className="active-piece-highlight"
           style={{ transformOrigin: '0px 0px' }}
         />

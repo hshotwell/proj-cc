@@ -29,8 +29,16 @@ export function GameOverDialog() {
 
   if (!gameState || !isOver) return null;
 
-  const { finishedPlayers, activePlayers } = gameState;
-  const firstMoveCount = finishedPlayers[0]?.moveCount ?? 0;
+  const { finishedPlayers, activePlayers, moveHistory } = gameState;
+
+  // Count per-player moves from history
+  const playerMoveCounts = new Map<number, number>();
+  for (const move of moveHistory) {
+    if (move.player !== undefined) {
+      playerMoveCounts.set(move.player, (playerMoveCounts.get(move.player) ?? 0) + 1);
+    }
+  }
+  const firstPlayerMoves = finishedPlayers[0] ? (playerMoveCounts.get(finishedPlayers[0].player) ?? 0) : 0;
 
   const handleWatchReplay = () => {
     if (!gameId) return;
@@ -48,7 +56,8 @@ export function GameOverDialog() {
             {finishedPlayers.map((fp, i) => {
               const color = getPlayerColorFromState(fp.player, gameState);
               const name = getPlayerDisplayNameFromState(fp.player, gameState);
-              const extra = fp.moveCount - firstMoveCount;
+              const thisPlayerMoves = playerMoveCounts.get(fp.player) ?? 0;
+              const extra = thisPlayerMoves - firstPlayerMoves;
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                   <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>

@@ -74,6 +74,7 @@ function LobbyContent() {
   const leaveLobby = useMutation(api.onlineGames.leaveLobby);
   const inviteToLobbyMutation = useMutation(api.onlineGames.inviteToLobby);
   const cancelSlotInviteMutation = useMutation(api.onlineGames.cancelSlotInvite);
+  const reorderPlayers = useMutation(api.onlineGames.reorderPlayers);
 
   const [aiDifficulty, setAiDifficulty] = useState<string>('medium');
   const [aiPersonality, setAiPersonality] = useState<string>('generalist');
@@ -185,6 +186,14 @@ function LobbyContent() {
     }
   };
 
+  const handleReorder = async (fromSlot: number, toSlot: number) => {
+    try {
+      await reorderPlayers({ gameId, fromSlot, toSlot });
+    } catch (e) {
+      console.error('Failed to reorder players:', e);
+    }
+  };
+
   const handleLeave = async () => {
     try {
       await leaveLobby({ gameId });
@@ -293,6 +302,27 @@ function LobbyContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Reorder arrows (host only, non-empty slots) */}
+                  {isHost && player.type !== 'empty' && (
+                    <div className="flex flex-col -my-1">
+                      <button
+                        disabled={index === 0}
+                        onClick={() => void handleReorder(index, index - 1)}
+                        className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed px-1 leading-none"
+                        title="Move up"
+                      >
+                        &#x25B2;
+                      </button>
+                      <button
+                        disabled={index === players.length - 1}
+                        onClick={() => void handleReorder(index, index + 1)}
+                        className="text-xs text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed px-1 leading-none"
+                        title="Move down"
+                      >
+                        &#x25BC;
+                      </button>
+                    </div>
+                  )}
                   {/* Ready indicator */}
                   {player.type === 'human' && (
                     <span className={`text-xs font-medium px-2 py-1 rounded ${

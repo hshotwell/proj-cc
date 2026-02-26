@@ -345,6 +345,48 @@ export const removeAI = mutation({
   },
 });
 
+export const reorderPlayers = mutation({
+  args: {
+    gameId: v.id("onlineGames"),
+    fromSlot: v.number(),
+    toSlot: v.number(),
+  },
+  handler: async (ctx, { gameId, fromSlot, toSlot }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.hostId !== userId) throw new Error("Only the host can reorder players");
+    if (game.status !== "lobby") throw new Error("Game is not in lobby");
+
+    const players = game.players as any[];
+    if (fromSlot < 0 || fromSlot >= players.length) throw new Error("Invalid fromSlot");
+    if (toSlot < 0 || toSlot >= players.length) throw new Error("Invalid toSlot");
+    if (fromSlot === toSlot) return;
+
+    // Swap the two players, each keeps their chosen color
+    const updated = [...players];
+    const fromPlayer = { ...updated[fromSlot] };
+    const toPlayer = { ...updated[toSlot] };
+
+    // Swap colors so each player keeps their own color in the new slot
+    const fromColor = fromPlayer.color;
+    const toColor = toPlayer.color;
+    updated[fromSlot] = { ...toPlayer, slot: fromSlot, color: toColor };
+    updated[toSlot] = { ...fromPlayer, slot: toSlot, color: fromColor };
+
+    // Reset ready status for all human players since order changed
+    for (let i = 0; i < updated.length; i++) {
+      if (updated[i].type === "human") {
+        updated[i] = { ...updated[i], isReady: false };
+      }
+    }
+
+    await ctx.db.patch(gameId, { players: updated });
+  },
+});
+
 export const toggleReady = mutation({
   args: { gameId: v.id("onlineGames") },
   handler: async (ctx, { gameId }) => {
@@ -517,9 +559,27 @@ export const acceptRematch = mutation({
     const allAccepted = humanPlayers.every((p: any) => accepted.includes(p.userId));
 
     if (allAccepted) {
-      // Create new game with same setup
-      const newPlayers = players.map((p: any) => ({
+      // Reorder players by finish placement — first finisher goes first in rematch
+      const finishedSlots = (game.finishedPlayers as number[]) || [];
+      const orderedPlayers: any[] = [];
+
+      // Add finished players in their finish order
+      for (const slotIdx of finishedSlots) {
+        if (players[slotIdx]) {
+          orderedPlayers.push(players[slotIdx]);
+        }
+      }
+      // Append any unfinished players (edge case: abandoned games)
+      for (let i = 0; i < players.length; i++) {
+        if (!finishedSlots.includes(i) && players[i]) {
+          orderedPlayers.push(players[i]);
+        }
+      }
+
+      // Reassign slot indices to new positions
+      const newPlayers = orderedPlayers.map((p: any, i: number) => ({
         ...p,
+        slot: i,
         isReady: true,
       }));
 
