@@ -45,7 +45,10 @@
       "Bash(git -C /home/henry/code/proj-cc log --oneline -5)",
       "Bash(git -C /home/henry/code/proj-cc add convex/_generated/api.d.ts convex/schema.ts convex/cleanup.ts convex/crons.ts convex/learning.ts convex/training.ts convex/trainingActions.ts next-env.d.ts src/app/home/page.tsx src/app/online/[id]/page.tsx src/game/ai/endgame.ts src/game/ai/evaluate.ts src/game/learning/index.ts src/game/learning/learnedEvaluator.ts src/game/learning/patternExtractor.ts src/game/learning/types.ts src/game/learning/endgamePatternExtractor.ts src/game/training/persistence.ts src/hooks/useEvolvedGenome.ts src/hooks/useOnlineGameLearning.ts src/hooks/useSharedInsights.ts docs/)",
       "Bash(git -C /home/henry/code/proj-cc diff --cached --stat)",
-      "Bash(git -C /home/henry/code/proj-cc push)"
+      "Bash(git -C /home/henry/code/proj-cc push)",
+      "Bash(git commit:*)",
+      "Bash(npx convex logs:*)",
+      "Bash(npx convex dev:*)"
     ]
   }
 }

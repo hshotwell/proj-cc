@@ -512,8 +512,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`tri-${tri.vertices.join('-')}`}
               points={points}
               fill={fill}
-              stroke={showTriangleLines ? (darkMode ? '#888' : 'black') : fill}
-              strokeWidth={showTriangleLines ? 0.5 : 1.5}
+              stroke={showTriangleLines ? (darkMode ? '#888' : 'black') : 'none'}
+              strokeWidth={showTriangleLines ? 0.5 : 0}
               strokeLinejoin="round"
             />
           );
@@ -726,7 +726,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               <Piece
                 coord={coord}
                 player={player}
-                isCurrentPlayer={!isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer}
+                isCurrentPlayer={!isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer && (isLocalPlayerTurn === undefined || player === fixedRotationPlayer)}
                 isSelected={
                   !isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)
                 }

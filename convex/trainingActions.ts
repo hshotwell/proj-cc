@@ -2,6 +2,8 @@
 
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { runHeadlessGame } from "../src/game/training/runner";
+import { createInitialPopulation, evolveGeneration } from "../src/game/training/evolution";
 
 const SERVER_TRAINING_CONFIG = {
   populationSize: 12,
@@ -11,10 +13,10 @@ const SERVER_TRAINING_CONFIG = {
   mutationStrength: 0.3,
   eliteCount: 2,
   tournamentSize: 3,
-  maxMovesPerGame: 300,
+  maxMovesPerGame: 150,
 };
 
-const GAMES_PER_BATCH = 20;
+const GAMES_PER_BATCH = 2;
 
 function buildMatchupSchedule(populationSize: number): [number, number][] {
   const schedule: [number, number][] = [];
@@ -33,9 +35,9 @@ function buildMatchupSchedule(populationSize: number): [number, number][] {
 export const runTrainingStep = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Dynamically import game engine modules (Node runtime)
-    const { runHeadlessGame } = await import("../src/game/training/runner");
-    const { createInitialPopulation, evolveGeneration } = await import("../src/game/training/evolution");
+    const startTime = Date.now();
+    let gamesRan = 0;
+    try {
 
     // Load current state
     const state = await ctx.runQuery(internal.training.getTrainingState);
@@ -103,6 +105,7 @@ export const runTrainingStep = internalAction({
 
       gamesThisBatch++;
       gamesCompleted++;
+      gamesRan++;
       gameWithinMatchup++;
 
       // Move to next matchup if games for this one are done
@@ -194,6 +197,13 @@ export const runTrainingStep = internalAction({
         gamesCompletedInGeneration: gamesCompleted,
         lastUpdated: Date.now(),
       });
+    }
+
+    console.log(`[Training] Step completed in ${((Date.now() - startTime) / 1000).toFixed(1)}s (${gamesRan} games)`);
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[Training] FAILED after ${elapsed}s (${gamesRan} games):`, String(error));
+      throw error;
     }
   },
 });
