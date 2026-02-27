@@ -223,6 +223,25 @@ export function computeRegressionPenalty(
   const progressAfter = computePlayerProgress(nextState, player);
   const progressDelta = progressAfter - progressBefore; // Positive = good
 
+  // Hard-veto backward moves unless they set up a better next hop
+  if (progressDelta < 0) {
+    const nextMoves = getAllValidMoves(nextState, player);
+    let bestNextDelta = 0;
+    for (const nextMove of nextMoves) {
+      const afterNext = applyMove(nextState, nextMove);
+      const progressAfterNext = computePlayerProgress(afterNext, player);
+      const nextDelta = progressAfterNext - progressAfter;
+      if (nextDelta > bestNextDelta) {
+        bestNextDelta = nextDelta;
+      }
+    }
+
+    // Veto if 2-move net is not positive (backward move doesn't set up anything useful)
+    if (progressDelta + bestNextDelta <= 0) {
+      return Infinity;
+    }
+  }
+
   let penalty = 0;
 
   // Check for IMMEDIATE stepping stone (enables a jump right now)
@@ -644,7 +663,13 @@ export function findBestMove(
   if (isLateEndgame(state, player)) {
     const endgameMove = findEndgameMove(state, player);
     if (endgameMove) {
-      return endgameMove;
+      // Don't use endgame move if it would create a cycle
+      const { repeats } = wouldRepeatState(state, endgameMove);
+      const { returns } = wouldReturnToPreviousPosition(state, endgameMove);
+      if (!repeats && !returns) {
+        return endgameMove;
+      }
+      // Endgame move would cycle — fall through to normal search with full penalty logic
     }
     // If no clear finishing move found, continue with normal logic
     // but endgame scoring will still apply
