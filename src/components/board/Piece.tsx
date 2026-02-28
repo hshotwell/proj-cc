@@ -94,13 +94,13 @@ export function Piece({
         cx={0}
         cy={0}
         r={pieceRadius}
-        fill={pieceColor} // Use the potentially darkened color
+        fill={pieceColor}
         stroke={isSelected ? '#000' : '#fff'}
-        strokeWidth={isSelected ? 3.5 : 3}
+        strokeWidth={isSelected ? 3 : (isCurrentPlayer ? 2.5 : 2)}
       />
       {/* Highlight for current player's pieces - 6 spinning segments */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
-        const highlightR = pieceRadius + size * 0.03;
+        const highlightR = pieceRadius + size * 0.06;
         const circumference = 2 * Math.PI * highlightR;
         const segmentLen = circumference / 12;
         return (
@@ -110,26 +110,40 @@ export function Piece({
             r={highlightR}
             fill="none"
             stroke={pieceColor}
-            strokeWidth={2.5}
+            strokeWidth={2}
             strokeDasharray={`${segmentLen} ${segmentLen}`}
             className="active-piece-highlight"
             style={{ transformOrigin: '0px 0px' }}
           />
         );
       })()}
-      {/* Selection indicator with animation */}
-      {isSelected && !isAnimating && (
-        <circle
-          cx={0}
-          cy={0}
-          r={pieceRadius + size * 0.12}
-          fill="none"
-          stroke="#000"
-          strokeWidth={2}
-          strokeDasharray="4 2"
-          className="selection-dash"
-        />
-      )}
+      {/* Selection indicator - 12 pointy triangle segments rotating opposite */}
+      {isSelected && !isAnimating && (() => {
+        const selR = pieceRadius + size * 0.14;
+        const innerR = pieceRadius + size * 0.04;
+        const segments = 12;
+        const segAngle = (2 * Math.PI) / (segments * 2);
+        const triangles: string[] = [];
+        for (let i = 0; i < segments; i++) {
+          const angle = i * 2 * segAngle;
+          const midAngle = angle + segAngle * 0.5;
+          const x1 = Math.cos(angle) * innerR;
+          const y1 = Math.sin(angle) * innerR;
+          const tx = Math.cos(midAngle) * selR;
+          const ty = Math.sin(midAngle) * selR;
+          const x2 = Math.cos(angle + segAngle) * innerR;
+          const y2 = Math.sin(angle + segAngle) * innerR;
+          triangles.push(`M${x1},${y1} L${tx},${ty} L${x2},${y2} Z`);
+        }
+        return (
+          <path
+            d={triangles.join(' ')}
+            fill="#000"
+            className="selection-dash"
+            style={{ transformOrigin: '0px 0px' }}
+          />
+        );
+      })()}
     </g>
   );
 }
