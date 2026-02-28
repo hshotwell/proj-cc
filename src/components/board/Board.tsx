@@ -529,10 +529,29 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           if (tri.playerOwners.length > 0 && gameState) {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
             if (darkMode) {
+              // Blend colors then lighten heavily to produce a muted opaque tint
               const lightened = colors.map((c) => lightenHex(c, 0.55));
-              fill = blendColorsRgba(lightened, 0.35);
+              const n = lightened.length;
+              const avg = lightened.reduce((acc, c) => {
+                const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
+                return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
+              }, [0, 0, 0]);
+              // Blend toward dark background (#2a2a2a) at 35% color strength
+              const br = Math.round(0x2a + (avg[0] - 0x2a) * 0.35);
+              const bg = Math.round(0x2a + (avg[1] - 0x2a) * 0.35);
+              const bb = Math.round(0x2a + (avg[2] - 0x2a) * 0.35);
+              fill = `#${br.toString(16).padStart(2, '0')}${bg.toString(16).padStart(2, '0')}${bb.toString(16).padStart(2, '0')}`;
             } else {
-              fill = blendColorsRgba(colors, 0.15);
+              // Blend colors then lighten toward white (#f8f8f8) at 15% color strength
+              const n = colors.length;
+              const avg = colors.reduce((acc, c) => {
+                const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
+                return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
+              }, [0, 0, 0]);
+              const br = Math.round(0xf8 + (avg[0] - 0xf8) * 0.15);
+              const bg = Math.round(0xf8 + (avg[1] - 0xf8) * 0.15);
+              const bb = Math.round(0xf8 + (avg[2] - 0xf8) * 0.15);
+              fill = `#${br.toString(16).padStart(2, '0')}${bg.toString(16).padStart(2, '0')}${bb.toString(16).padStart(2, '0')}`;
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = darkMode ? '#3a3a3a' : '#e2e2e2';
@@ -545,8 +564,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`tri-${tri.vertices.join('-')}`}
               points={points}
               fill={fill}
-              stroke={showTriangleLines ? (darkMode ? '#888' : 'black') : 'none'}
-              strokeWidth={showTriangleLines ? 0.5 : 0}
+              stroke={showTriangleLines ? (darkMode ? '#888' : 'black') : fill}
+              strokeWidth={showTriangleLines ? 0.5 : 0.5}
               strokeLinejoin="round"
             />
           );

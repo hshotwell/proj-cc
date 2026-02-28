@@ -100,7 +100,7 @@ export function Piece({
       />
       {/* Highlight for current player's pieces - 6 spinning segments */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
-        const highlightR = pieceRadius - size * 0.04;
+        const highlightR = pieceRadius + size * 0.03;
         const circumference = 2 * Math.PI * highlightR;
         const segmentLen = circumference / 12;
         return (
