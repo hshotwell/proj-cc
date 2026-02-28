@@ -89,6 +89,17 @@ export function Piece({
         r={pieceRadius}
         fill="rgba(0,0,0,0.2)"
       />
+      {/* White backing ring for highlight (drawn behind piece so it only extends outward) */}
+      {isCurrentPlayer && !isSelected && !isAnimating && (
+        <circle
+          cx={0}
+          cy={0}
+          r={pieceRadius + size * 0.06}
+          fill="none"
+          stroke="#fff"
+          strokeWidth={size * 0.12 + 2}
+        />
+      )}
       {/* Main piece */}
       <circle
         cx={0}
@@ -96,7 +107,7 @@ export function Piece({
         r={pieceRadius}
         fill={pieceColor}
         stroke={isSelected ? '#000' : '#fff'}
-        strokeWidth={isSelected ? 2 : (isCurrentPlayer ? 3.5 : 1.5)}
+        strokeWidth={isSelected ? 2 : 1.5}
       />
       {/* Highlight for current player's pieces - 6 spinning segments */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
