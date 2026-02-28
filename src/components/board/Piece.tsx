@@ -96,7 +96,7 @@ export function Piece({
         r={pieceRadius}
         fill={pieceColor}
         stroke={isSelected ? '#000' : '#fff'}
-        strokeWidth={isSelected ? 2 : (isCurrentPlayer ? 2 : 1.5)}
+        strokeWidth={isSelected ? 2 : (isCurrentPlayer ? 3.5 : 1.5)}
       />
       {/* Highlight for current player's pieces - 6 spinning segments */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
@@ -117,13 +117,13 @@ export function Piece({
           />
         );
       })()}
-      {/* Selection indicator - 12 sharp spikes rotating opposite */}
+      {/* Selection indicator - 12 triangle spikes rotating opposite */}
       {isSelected && !isAnimating && (() => {
-        const spikeR = pieceRadius + size * 0.35;
+        const spikeR = pieceRadius + size * 0.18;
         const innerR = pieceRadius + size * 0.02;
         const segments = 12;
         const spikeAngle = (2 * Math.PI) / segments;
-        const baseHalfAngle = spikeAngle * 0.1;
+        const baseHalfAngle = spikeAngle * 0.5;
         const triangles: string[] = [];
         for (let i = 0; i < segments; i++) {
           const tipAngle = i * spikeAngle;
