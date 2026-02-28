@@ -22,6 +22,7 @@ interface SettingsStore {
   autoConfirm: boolean;
   showPlayerProgress: boolean;
   darkMode: boolean;
+  woodenBoard: boolean;
 
   // Sync state
   isSyncing: boolean;
@@ -43,6 +44,7 @@ interface SettingsStore {
   toggleAutoConfirm: () => void;
   toggleShowPlayerProgress: () => void;
   toggleDarkMode: () => void;
+  toggleWoodenBoard: () => void;
 
   // Sync actions
   syncFromCloud: () => Promise<void>;
@@ -62,6 +64,7 @@ function getSyncableSettings(state: SettingsStore): SyncableSettings {
     autoConfirm: state.autoConfirm,
     showPlayerProgress: state.showPlayerProgress,
     darkMode: state.darkMode,
+    woodenBoard: state.woodenBoard,
   };
 }
 
@@ -80,6 +83,7 @@ export const useSettingsStore = create<SettingsStore>()(
       autoConfirm: false,
       showPlayerProgress: true,
       darkMode: false,
+      woodenBoard: false,
 
       // Sync state
       isSyncing: false,
@@ -136,6 +140,10 @@ export const useSettingsStore = create<SettingsStore>()(
           document.documentElement.classList.toggle('dark', newDark);
           return { darkMode: newDark };
         });
+        get().syncToCloud();
+      },
+      toggleWoodenBoard: () => {
+        set((state) => ({ woodenBoard: !state.woodenBoard }));
         get().syncToCloud();
       },
 
@@ -198,6 +206,7 @@ export const useSettingsStore = create<SettingsStore>()(
         autoConfirm: state.autoConfirm,
         showPlayerProgress: state.showPlayerProgress,
         darkMode: state.darkMode,
+        woodenBoard: state.woodenBoard,
       }),
     }
   )

@@ -49,7 +49,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       confirmMove,
       undoLastMove,
     } = useGameStore();
-  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode } = useSettingsStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard } = useSettingsStore();
 
   // Track hovered cell for coordinate display
   const [hoveredCell, setHoveredCell] = useState<CubeCoord | null>(null);
@@ -468,6 +468,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
   // Parse viewBox to calculate aspect ratio
   const [vbMinX, vbMinY, vbWidth, vbHeight] = viewBox.split(' ').map(Number);
   const aspectRatio = vbWidth && vbHeight ? vbWidth / vbHeight : 1;
+  const boardRadius = Math.max(vbWidth, vbHeight) / 2 - BOARD_PADDING / 2;
 
   return (
     <svg
@@ -483,6 +484,38 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           transition: !isReplayActive && rotateBoard ? `transform ${BOARD_ROTATION_DURATION}ms ease-in-out` : undefined,
         }}
       >
+      {/* Layer -1: Wooden board background */}
+      {woodenBoard && (
+        <g>
+          <defs>
+            <radialGradient id="wood-grain" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={darkMode ? '#6b4c1e' : '#d4a056'} />
+              <stop offset="70%" stopColor={darkMode ? '#4a3412' : '#b8873a'} />
+              <stop offset="100%" stopColor={darkMode ? '#3d2b0f' : '#8B6914'} />
+            </radialGradient>
+          </defs>
+          {/* Wood base */}
+          <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-grain)" />
+          {/* Concentric grain rings */}
+          {Array.from({ length: 12 }, (_, i) => (
+            <circle
+              key={`ring-${i}`}
+              cx={0} cy={0}
+              r={boardRadius * (0.15 + i * 0.075)}
+              fill="none"
+              stroke={darkMode ? 'rgba(139,105,20,0.12)' : 'rgba(101,67,33,0.15)'}
+              strokeWidth={0.5 + (i % 3) * 0.5}
+            />
+          ))}
+          {/* Board edge */}
+          <circle cx={0} cy={0} r={boardRadius}
+            fill="none"
+            stroke={darkMode ? '#2a1a08' : '#5c3a10'}
+            strokeWidth={2.5}
+          />
+        </g>
+      )}
+
       {/* Layer 0: Triangle fills between adjacent cells */}
       <g>
         {boardTriangles.map((tri) => {
@@ -497,14 +530,14 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
             if (darkMode) {
               const lightened = colors.map((c) => lightenHex(c, 0.55));
-              fill = blendColorsRgba(lightened, 0.35);
+              fill = blendColorsRgba(lightened, woodenBoard ? 0.20 : 0.35);
             } else {
-              fill = blendColorsRgba(colors, 0.15);
+              fill = blendColorsRgba(colors, woodenBoard ? 0.08 : 0.15);
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
-            fill = darkMode ? '#3a3a3a' : '#e2e2e2';
+            fill = woodenBoard ? 'transparent' : (darkMode ? '#3a3a3a' : '#e2e2e2');
           } else {
-            fill = darkMode ? '#2a2a2a' : '#f8f8f8';
+            fill = woodenBoard ? 'transparent' : (darkMode ? '#2a2a2a' : '#f8f8f8');
           }
 
           return (
@@ -527,7 +560,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`border-${edge.a}-${edge.b}`}
               x1={pa.x} y1={pa.y}
               x2={pb.x} y2={pb.y}
-              stroke={darkMode ? 'white' : 'black'}
+              stroke={woodenBoard ? (darkMode ? '#8B6914' : '#5c3a10') : (darkMode ? 'white' : 'black')}
               strokeWidth={2.5}
               strokeLinecap="round"
             />

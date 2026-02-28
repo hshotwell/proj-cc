@@ -67,6 +67,7 @@ export const getSettings = query({
         autoConfirm: false,
         showPlayerProgress: false,
         darkMode: false,
+        woodenBoard: false,
       };
     }
 
@@ -80,6 +81,7 @@ export const getSettings = query({
       autoConfirm: settings.autoConfirm,
       showPlayerProgress: settings.showPlayerProgress,
       darkMode: settings.darkMode ?? false,
+      woodenBoard: settings.woodenBoard ?? false,
     };
   },
 });
@@ -96,6 +98,7 @@ export const saveSettings = mutation({
     autoConfirm: v.boolean(),
     showPlayerProgress: v.boolean(),
     darkMode: v.optional(v.boolean()),
+    woodenBoard: v.optional(v.boolean()),
   },
   handler: async (ctx, settings) => {
     const userId = await auth.getUserId(ctx);

@@ -31,6 +31,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     autoConfirm,
     showPlayerProgress,
     darkMode,
+    woodenBoard,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -40,6 +41,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleAutoConfirm,
     toggleShowPlayerProgress,
     toggleDarkMode,
+    toggleWoodenBoard,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
@@ -208,6 +210,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 description={showTriangleLines ? 'Grid lines visible' : 'Grid lines hidden'}
                 checked={showTriangleLines}
                 onChange={toggleTriangleLines}
+              />
+              <ToggleOption
+                label="Wooden board"
+                description={woodenBoard ? 'Classic wood finish' : 'Standard flat board'}
+                checked={woodenBoard}
+                onChange={toggleWoodenBoard}
               />
               <ToggleOption
                 label="Show coordinates"

@@ -33,6 +33,7 @@ export const localSettingsStorage: SettingsStorageProvider = {
         autoConfirm: data.state?.autoConfirm ?? false,
         showPlayerProgress: data.state?.showPlayerProgress ?? false,
         darkMode: data.state?.darkMode ?? false,
+        woodenBoard: data.state?.woodenBoard ?? false,
       };
     } catch {
       return null;
