@@ -98,20 +98,25 @@ export function Piece({
         stroke={isSelected ? '#000' : '#fff'}
         strokeWidth={isSelected ? 3.5 : 3}
       />
-      {/* Highlight for current player's pieces - spinning dashed circle */}
-      {isCurrentPlayer && !isSelected && !isAnimating && (
-        <circle
-          cx={0}
-          cy={0}
-          r={pieceRadius + size * 0.1}
-          fill="none"
-          stroke={pieceColor}
-          strokeWidth={2}
-          strokeDasharray="6 4"
-          className="active-piece-highlight"
-          style={{ transformOrigin: '0px 0px' }}
-        />
-      )}
+      {/* Highlight for current player's pieces - 6 spinning segments */}
+      {isCurrentPlayer && !isSelected && !isAnimating && (() => {
+        const highlightR = pieceRadius - size * 0.04;
+        const circumference = 2 * Math.PI * highlightR;
+        const segmentLen = circumference / 12;
+        return (
+          <circle
+            cx={0}
+            cy={0}
+            r={highlightR}
+            fill="none"
+            stroke={pieceColor}
+            strokeWidth={2.5}
+            strokeDasharray={`${segmentLen} ${segmentLen}`}
+            className="active-piece-highlight"
+            style={{ transformOrigin: '0px 0px' }}
+          />
+        );
+      })()}
       {/* Selection indicator with animation */}
       {isSelected && !isAnimating && (
         <circle

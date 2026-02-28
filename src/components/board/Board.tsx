@@ -530,14 +530,14 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
             if (darkMode) {
               const lightened = colors.map((c) => lightenHex(c, 0.55));
-              fill = blendColorsRgba(lightened, woodenBoard ? 0.20 : 0.35);
+              fill = blendColorsRgba(lightened, 0.35);
             } else {
-              fill = blendColorsRgba(colors, woodenBoard ? 0.08 : 0.15);
+              fill = blendColorsRgba(colors, 0.15);
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
-            fill = woodenBoard ? 'transparent' : (darkMode ? '#3a3a3a' : '#e2e2e2');
+            fill = darkMode ? '#3a3a3a' : '#e2e2e2';
           } else {
-            fill = woodenBoard ? 'transparent' : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            fill = darkMode ? '#2a2a2a' : '#f8f8f8';
           }
 
           return (
