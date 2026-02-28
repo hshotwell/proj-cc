@@ -45,12 +45,12 @@ export const DEFAULT_PLAYER_NAMES: Record<PlayerIndex, string> = {
 // Triangles are numbered 0-5 going clockwise, with 0 at top-right
 // Each player starts in their home triangle and must move all pieces to goal triangle (opposite)
 export const TRIANGLE_ASSIGNMENTS: Record<PlayerIndex, { home: TriangleIndex; goal: TriangleIndex }> = {
-  0: { home: 0, goal: 3 }, // Red: top-right -> bottom-left
-  1: { home: 3, goal: 0 }, // Green: bottom-left -> top-right
-  2: { home: 1, goal: 4 }, // Blue: right -> left
-  3: { home: 4, goal: 1 }, // Orange: left -> right
-  4: { home: 2, goal: 5 }, // Purple: bottom-right -> top-left
-  5: { home: 5, goal: 2 }, // Yellow: top-left -> bottom-right
+  0: { home: 0, goal: 2 }, // Red: top -> bottom (opposite of Blue)
+  1: { home: 1, goal: 4 }, // Green: left -> right (opposite of Purple)
+  2: { home: 2, goal: 0 }, // Blue: bottom -> top (opposite of Red)
+  3: { home: 3, goal: 5 }, // Orange: bottom-right -> top-left (opposite of Yellow)
+  4: { home: 4, goal: 1 }, // Purple: right -> left (opposite of Green)
+  5: { home: 5, goal: 3 }, // Yellow: top-left -> bottom-right (opposite of Orange)
 };
 
 // Maps a goal triangle to the player who is trying to reach it

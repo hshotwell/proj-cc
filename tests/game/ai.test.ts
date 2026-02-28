@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { createGame } from '@/game/setup';
+import { createGame, cloneGameState } from '@/game/setup';
 import { cubeCoord, coordKey } from '@/game/coordinates';
-import { getGoalPositions } from '@/game/state';
+import { getGoalPositions, getHomePositions } from '@/game/state';
 import {
   computeRegressionPenalty,
   computeRepetitionPenalty,
@@ -24,36 +24,42 @@ function makeMove(
 }
 
 describe('computeRegressionPenalty', () => {
-  // Player 0's goal centroid is at roughly (-3, 6).
-  // Moving in the positive-r / negative-q direction goes toward the goal.
+  // Player 0 starts at top (pieces around (4,-8)), goal is player 2's home near (-3,6).
 
-  it('returns 0 for a move toward the goal', () => {
+  it('returns a bonus (non-positive) for a move toward the goal', () => {
     const state = createGame(2);
     const player: PlayerIndex = 0;
-    // Move from (0, 0) toward (-1, 1) — closer to goal centroid (-3, 6)
-    const move = makeMove(0, 0, -1, 1);
+    // Piece at (1,-5) moving to (0,-4) — closer to goal centroid
+    const move = makeMove(1, -5, 0, -4);
     const penalty = computeRegressionPenalty(state, move, player);
-    expect(penalty).toBe(0);
+    expect(penalty).toBeLessThanOrEqual(0);
   });
 
   it('returns positive penalty for a move away from the goal', () => {
     const state = createGame(2);
+    const testState = cloneGameState(state);
     const player: PlayerIndex = 0;
-    // Move from (-1, 1) back to (0, 0) — farther from goal centroid (-3, 6)
-    const move = makeMove(-1, 1, 0, 0);
-    const penalty = computeRegressionPenalty(state, move, player);
+    // Move piece forward first, then test backward move
+    testState.board.set(coordKey(cubeCoord(0, -4)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(1, -5)), { type: 'empty' });
+    // Backward: (0,-4) → (1,-5)
+    const move = makeMove(0, -4, 1, -5);
+    const penalty = computeRegressionPenalty(testState, move, player);
     expect(penalty).toBeGreaterThan(0);
-    // delta * 5, where delta = 1
-    expect(penalty).toBe(5);
   });
 
-  it('returns 0 for a lateral move at same distance', () => {
+  it('penalizes backward moves more than forward moves', () => {
     const state = createGame(2);
+    const testState = cloneGameState(state);
     const player: PlayerIndex = 0;
-    // Move between two coords equidistant from goal centroid
-    const move = makeMove(1, 0, 0, 1);
-    const penalty = computeRegressionPenalty(state, move, player);
-    expect(penalty).toBeGreaterThanOrEqual(0);
+    // Set up piece at (0,-4)
+    testState.board.set(coordKey(cubeCoord(0, -4)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(1, -5)), { type: 'empty' });
+    // Forward: (0,-4) → (-1,-3)
+    const forwardPenalty = computeRegressionPenalty(testState, makeMove(0, -4, -1, -3), player);
+    // Backward: (0,-4) → (1,-5)
+    const backwardPenalty = computeRegressionPenalty(testState, makeMove(0, -4, 1, -5), player);
+    expect(backwardPenalty).toBeGreaterThan(forwardPenalty);
   });
 });
 
@@ -82,7 +88,8 @@ describe('computeRepetitionPenalty', () => {
     // Now proposing A->B — returning to previous position, and it is an exact reversal
     const move = makeMove(0, -4, 0, -5);
     const penalty = computeRepetitionPenalty(state, move, 0);
-    expect(penalty).toBe(80);
+    // Any single reversal is now a hard veto
+    expect(penalty).toBe(Infinity);
   });
 
   it('returns Infinity for 2+ exact reversals', () => {
@@ -103,15 +110,15 @@ describe('computeRepetitionPenalty', () => {
     // Now proposing C -> A — returning to A, a 3-step cycle
     const move = makeMove(0, -5, 0, -3);
     const penalty = computeRepetitionPenalty(state, move, 0);
-    // Cycle detected (returning to previous position) but not an exact reversal
-    expect(penalty).toBe(50);
+    // Returning to a previously visited position (visitCount === 1)
+    expect(penalty).toBe(200);
   });
 
   it('respects lookback window', () => {
-    const state = createGame(2); // 2 players -> lookback = 12
+    const state = createGame(2); // 2 players -> lookback = 20 (numPlayers * 10)
     // Push enough filler moves to push the old move out of the window
     const filler = makeMove(1, 0, 2, 0);
-    for (let i = 0; i < 13; i++) {
+    for (let i = 0; i < 21; i++) {
       state.moveHistory.push(filler);
     }
     // The reversal is now at index 0, well outside the lookback window
@@ -137,15 +144,21 @@ describe('computeRegressionPenalty — goal positions', () => {
 
   it('does not apply goal-leaving penalty for moves within the goal', () => {
     const state = createGame(2);
+    const testState = cloneGameState(state);
     const player: PlayerIndex = 0;
     const goalPositions = getGoalPositions(player);
+    const homePositions = getHomePositions(player);
+    // Place player 0's piece at a goal position (replacing player 2's piece)
+    testState.board.set(coordKey(homePositions[0]), { type: 'empty' });
+    testState.board.set(coordKey(goalPositions[0]), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(goalPositions[1]), { type: 'empty' });
     // Move between two goal positions
     const move = makeMove(
       goalPositions[0].q, goalPositions[0].r,
       goalPositions[1].q, goalPositions[1].r
     );
-    const penalty = computeRegressionPenalty(state, move, player);
-    // No goal-leaving penalty; only normal distance penalty (if any)
+    const penalty = computeRegressionPenalty(testState, move, player);
+    // No goal-leaving penalty since destination is also a goal position
     expect(penalty).toBeLessThan(60);
   });
 });

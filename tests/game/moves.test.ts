@@ -202,8 +202,8 @@ describe('getAllValidMoves', () => {
   it('returns no moves for invalid player', () => {
     const state = createGame(2);
 
-    // Player 2 is not active in a 2-player game
-    const allMoves = getAllValidMoves(state, 2);
+    // Player 1 is not active in a 2-player game (active players are [0, 2])
+    const allMoves = getAllValidMoves(state, 1);
     expect(allMoves.length).toBe(0);
   });
 });

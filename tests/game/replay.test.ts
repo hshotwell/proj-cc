@@ -36,8 +36,8 @@ describe('normalizeMoveHistory', () => {
     const jumped2 = cubeCoord(0, -1);
 
     const moves: Move[] = [
-      { from, to: mid, isJump: true, jumpPath: [jumped1] },
-      { from: mid, to, isJump: true, jumpPath: [jumped2] },
+      { from, to: mid, isJump: true, jumpPath: [jumped1], player: 0, turnNumber: 1 },
+      { from: mid, to, isJump: true, jumpPath: [jumped2], player: 0, turnNumber: 1 },
     ];
 
     const result = normalizeMoveHistory(moves, activePlayers);
@@ -72,12 +72,12 @@ describe('normalizeMoveHistory', () => {
   it('handles mixed steps and jumps', () => {
     const moves: Move[] = [
       // Player 0: step
-      { from: cubeCoord(0, -4), to: cubeCoord(1, -4), isJump: false },
+      { from: cubeCoord(0, -4), to: cubeCoord(1, -4), isJump: false, player: 0, turnNumber: 1 },
       // Player 2: step
-      { from: cubeCoord(0, 4), to: cubeCoord(-1, 4), isJump: false },
+      { from: cubeCoord(0, 4), to: cubeCoord(-1, 4), isJump: false, player: 2, turnNumber: 1 },
       // Player 0: chain jump (2 hops)
-      { from: cubeCoord(1, -4), to: cubeCoord(1, -2), isJump: true, jumpPath: [cubeCoord(1, -3)] },
-      { from: cubeCoord(1, -2), to: cubeCoord(1, 0), isJump: true, jumpPath: [cubeCoord(1, -1)] },
+      { from: cubeCoord(1, -4), to: cubeCoord(1, -2), isJump: true, jumpPath: [cubeCoord(1, -3)], player: 0, turnNumber: 2 },
+      { from: cubeCoord(1, -2), to: cubeCoord(1, 0), isJump: true, jumpPath: [cubeCoord(1, -1)], player: 0, turnNumber: 2 },
     ];
 
     const result = normalizeMoveHistory(moves, activePlayers);

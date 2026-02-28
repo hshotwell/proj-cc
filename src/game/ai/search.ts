@@ -72,21 +72,21 @@ export function clearStateHistory(): void {
 
 /**
  * Check if a move creates an IMMEDIATE jumping opportunity for another piece.
- * Only returns true if a friendly piece can jump over the destination position
- * right after this move is made.
+ * Returns 'leapfrog' if the stone can then advance past the hopper for another hop,
+ * 'steppingStone' if it enables a forward jump, or 'none'.
  */
 function isImmediateSteppingStone(
   state: GameState,
   move: Move,
   player: PlayerIndex,
   goalCenter: CubeCoord
-): boolean {
+): 'none' | 'steppingStone' | 'leapfrog' {
   // Only applies to step moves (not jumps) that go forward
-  if (move.isJump) return false;
+  if (move.isJump) return 'none';
 
   const distBefore = cubeDistance(move.from, goalCenter);
   const distAfter = cubeDistance(move.to, goalCenter);
-  if (distAfter >= distBefore) return false; // Not moving forward
+  if (distAfter >= distBefore) return 'none'; // Not moving forward
 
   // Simulate the state after the move
   const nextState = applyMove(state, move);
@@ -121,12 +121,73 @@ function isImmediateSteppingStone(
     const jumperDist = cubeDistance(jumperPos, goalCenter);
     const landingDist = cubeDistance(landingPos, goalCenter);
     if (landingDist < jumperDist) {
-      // This is a valid forward jump enabled by the stepping stone
-      return true;
+      // Found a valid forward jump — check for leapfrog continuation
+      // Can the stone (move.to) then step/hop forward past the hopper's landing
+      // and set up another hop?
+      const stoneDist = cubeDistance(move.to, goalCenter);
+      for (const d of DIRECTIONS) {
+        // Stone STEP forward
+        const stepTarget = {
+          q: move.to.q + d.q,
+          r: move.to.r + d.r,
+          s: move.to.s + d.s,
+        };
+        if (nextState.board.get(coordKey(stepTarget))?.type === 'empty' &&
+            cubeDistance(stepTarget, goalCenter) < stoneDist) {
+          // Check if the hopper at landingPos could then hop over stepTarget
+          for (const d2 of DIRECTIONS) {
+            if (landingPos.q + d2.q === stepTarget.q &&
+                landingPos.r + d2.r === stepTarget.r) {
+              const nextLand = {
+                q: stepTarget.q + d2.q,
+                r: stepTarget.r + d2.r,
+                s: stepTarget.s + d2.s,
+              };
+              if (nextState.board.get(coordKey(nextLand))?.type === 'empty' &&
+                  cubeDistance(nextLand, goalCenter) < landingDist) {
+                return 'leapfrog';
+              }
+            }
+          }
+        }
+
+        // Stone HOP forward
+        const overPos = {
+          q: move.to.q + d.q,
+          r: move.to.r + d.r,
+          s: move.to.s + d.s,
+        };
+        const hopLand = {
+          q: move.to.q + d.q * 2,
+          r: move.to.r + d.r * 2,
+          s: move.to.s + d.s * 2,
+        };
+        if (nextState.board.get(coordKey(overPos))?.type === 'piece' &&
+            nextState.board.get(coordKey(hopLand))?.type === 'empty' &&
+            cubeDistance(hopLand, goalCenter) < stoneDist) {
+          // Check if the hopper at landingPos could then hop over hopLand
+          for (const d2 of DIRECTIONS) {
+            if (landingPos.q + d2.q === hopLand.q &&
+                landingPos.r + d2.r === hopLand.r) {
+              const nextLand = {
+                q: hopLand.q + d2.q,
+                r: hopLand.r + d2.r,
+                s: hopLand.s + d2.s,
+              };
+              if (nextState.board.get(coordKey(nextLand))?.type === 'empty' &&
+                  cubeDistance(nextLand, goalCenter) < landingDist) {
+                return 'leapfrog';
+              }
+            }
+          }
+        }
+      }
+
+      return 'steppingStone';
     }
   }
 
-  return false;
+  return 'none';
 }
 
 /**
@@ -245,25 +306,29 @@ export function computeRegressionPenalty(
   let penalty = 0;
 
   // Check for IMMEDIATE stepping stone (enables a jump right now)
-  const enablesJump = isImmediateSteppingStone(state, move, player, goalCenter);
+  const steppingStoneResult = isImmediateSteppingStone(state, move, player, goalCenter);
+  const enablesJump = steppingStoneResult !== 'none';
+  const enablesLeapfrog = steppingStoneResult === 'leapfrog';
 
   // Standard layout penalty logic
   {
-    // STANDARD LAYOUT: More nuanced penalties
+    // STANDARD LAYOUT: More nuanced penalties with leapfrog tier
     if (progressDelta < 0) {
       const progressLoss = -progressDelta;
       if (progressLoss > 2) {
-        penalty = 500 + progressLoss * 50;
+        penalty = enablesLeapfrog ? 300 + progressLoss * 30 : 500 + progressLoss * 50;
       } else if (progressLoss > 0.5) {
-        penalty = enablesJump ? 150 : 300;
+        penalty = enablesLeapfrog ? 80 : enablesJump ? 150 : 300;
       } else {
-        penalty = enablesJump ? 50 : 100;
+        penalty = enablesLeapfrog ? 20 : enablesJump ? 50 : 100;
       }
     } else if (progressDelta === 0) {
-      penalty = enablesJump ? 40 : 80;
+      penalty = enablesLeapfrog ? 15 : enablesJump ? 40 : 80;
     } else {
       penalty = -progressDelta * 30;
-      if (enablesJump) {
+      if (enablesLeapfrog) {
+        penalty -= 25;
+      } else if (enablesJump) {
         penalty -= 15;
       }
     }

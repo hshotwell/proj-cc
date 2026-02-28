@@ -279,6 +279,77 @@ export function findOpponentJumpThreats(
 }
 
 /**
+ * Check if hopperPos can hop over newStonePos toward goal.
+ * Returns distance gain, or 0 if not possible.
+ */
+function checkHopOver(
+  board: Map<string, { type: string; player?: number }>,
+  hopperPos: CubeCoord,
+  newStonePos: CubeCoord,
+  goalCenter: CubeCoord
+): number {
+  for (const dir of DIRECTIONS) {
+    if (hopperPos.q + dir.q === newStonePos.q &&
+        hopperPos.r + dir.r === newStonePos.r) {
+      const landPos = cubeAdd(newStonePos, dir);
+      const landContent = board.get(coordKey(landPos));
+      if (landContent?.type === 'empty') {
+        const gain = cubeDistance(hopperPos, goalCenter) - cubeDistance(landPos, goalCenter);
+        if (gain > 0) return gain;
+      }
+    }
+  }
+  return 0;
+}
+
+/**
+ * After a hop is discovered (hopper jumps over stone to landPos),
+ * check if the stone can then advance past the hopper to set up another hop.
+ * Returns discounted bonus.
+ */
+function evaluateLeapfrogContinuation(
+  board: Map<string, { type: string; player?: number }>,
+  stonePos: CubeCoord,
+  hopperOrigPos: CubeCoord,
+  hopperLandPos: CubeCoord,
+  goalCenter: CubeCoord
+): number {
+  // Temporarily simulate the hop
+  const hopperContent = board.get(coordKey(hopperOrigPos));
+  board.set(coordKey(hopperOrigPos), { type: 'empty' });
+  board.set(coordKey(hopperLandPos), hopperContent!);
+
+  const stoneDist = cubeDistance(stonePos, goalCenter);
+  let bestContinuation = 0;
+
+  for (const dir of DIRECTIONS) {
+    // Stone STEP forward
+    const stepTarget = cubeAdd(stonePos, dir);
+    if (board.get(coordKey(stepTarget))?.type === 'empty' &&
+        cubeDistance(stepTarget, goalCenter) < stoneDist) {
+      const bonus = checkHopOver(board, hopperLandPos, stepTarget, goalCenter);
+      if (bonus > bestContinuation) bestContinuation = bonus;
+    }
+
+    // Stone HOP forward
+    const overPos = cubeAdd(stonePos, dir);
+    const hopLand: CubeCoord = { q: stonePos.q + dir.q * 2, r: stonePos.r + dir.r * 2, s: stonePos.s + dir.s * 2 };
+    if (board.get(coordKey(overPos))?.type === 'piece' &&
+        board.get(coordKey(hopLand))?.type === 'empty' &&
+        cubeDistance(hopLand, goalCenter) < stoneDist) {
+      const bonus = checkHopOver(board, hopperLandPos, hopLand, goalCenter);
+      if (bonus > bestContinuation) bestContinuation = bonus;
+    }
+  }
+
+  // Restore board
+  board.set(coordKey(hopperOrigPos), hopperContent!);
+  board.set(coordKey(hopperLandPos), { type: 'empty' });
+
+  return bestContinuation * 0.5; // Discounted — requires a future turn
+}
+
+/**
  * Check if a move sets up a stepping stone for future jumps.
  * Returns the potential value of jumps it enables.
  */
@@ -335,6 +406,11 @@ export function evaluateSteppingStoneSetup(
 
           if (gain > 0) {
             steppingStoneValue += gain;
+
+            // Leapfrog continuation: can the stone advance past the hopper for another hop?
+            steppingStoneValue += evaluateLeapfrogContinuation(
+              newBoard, move.to, piecePos, landPos, goalCenter
+            );
           }
         }
       }

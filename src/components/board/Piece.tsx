@@ -96,7 +96,7 @@ export function Piece({
         r={pieceRadius}
         fill={pieceColor} // Use the potentially darkened color
         stroke={isSelected ? '#000' : '#fff'}
-        strokeWidth={isSelected ? 3 : 2}
+        strokeWidth={isSelected ? 3.5 : 3}
       />
       {/* Highlight for current player's pieces - spinning dashed circle */}
       {isCurrentPlayer && !isSelected && !isAnimating && (
