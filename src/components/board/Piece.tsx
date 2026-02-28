@@ -96,7 +96,7 @@ export function Piece({
         r={pieceRadius}
         fill={pieceColor}
         stroke={isSelected ? '#000' : '#fff'}
-        strokeWidth={isSelected ? 3 : (isCurrentPlayer ? 2.5 : 2)}
+        strokeWidth={isSelected ? 2 : (isCurrentPlayer ? 2 : 1.5)}
       />
       {/* Highlight for current player's pieces - 6 spinning segments */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
@@ -117,22 +117,22 @@ export function Piece({
           />
         );
       })()}
-      {/* Selection indicator - 12 pointy triangle segments rotating opposite */}
+      {/* Selection indicator - 12 sharp spikes rotating opposite */}
       {isSelected && !isAnimating && (() => {
-        const selR = pieceRadius + size * 0.14;
-        const innerR = pieceRadius + size * 0.04;
+        const spikeR = pieceRadius + size * 0.35;
+        const innerR = pieceRadius + size * 0.02;
         const segments = 12;
-        const segAngle = (2 * Math.PI) / (segments * 2);
+        const spikeAngle = (2 * Math.PI) / segments;
+        const baseHalfAngle = spikeAngle * 0.1;
         const triangles: string[] = [];
         for (let i = 0; i < segments; i++) {
-          const angle = i * 2 * segAngle;
-          const midAngle = angle + segAngle * 0.5;
-          const x1 = Math.cos(angle) * innerR;
-          const y1 = Math.sin(angle) * innerR;
-          const tx = Math.cos(midAngle) * selR;
-          const ty = Math.sin(midAngle) * selR;
-          const x2 = Math.cos(angle + segAngle) * innerR;
-          const y2 = Math.sin(angle + segAngle) * innerR;
+          const tipAngle = i * spikeAngle;
+          const x1 = Math.cos(tipAngle - baseHalfAngle) * innerR;
+          const y1 = Math.sin(tipAngle - baseHalfAngle) * innerR;
+          const tx = Math.cos(tipAngle) * spikeR;
+          const ty = Math.sin(tipAngle) * spikeR;
+          const x2 = Math.cos(tipAngle + baseHalfAngle) * innerR;
+          const y2 = Math.sin(tipAngle + baseHalfAngle) * innerR;
           triangles.push(`M${x1},${y1} L${tx},${ty} L${x2},${y2} Z`);
         }
         return (
