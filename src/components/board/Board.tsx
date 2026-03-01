@@ -656,7 +656,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
                 return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
               }, [0, 0, 0]);
-              const strength = 0.95;
+              const strength = 0.85;
               const br = Math.round(woodBase[0] + (avg[0] - woodBase[0]) * strength);
               const bg = Math.round(woodBase[1] + (avg[1] - woodBase[1]) * strength);
               const bb = Math.round(woodBase[2] + (avg[2] - woodBase[2]) * strength);
@@ -688,10 +688,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = woodenBoard
-              ? (darkMode ? 'rgba(30,30,30,0.55)' : 'rgba(60,60,60,0.45)')
+              ? (darkMode ? 'rgba(30,30,30,0.75)' : 'rgba(60,60,60,0.65)')
               : (darkMode ? '#3a3a3a' : '#e2e2e2');
           } else {
-            fill = woodenBoard ? (darkMode ? 'rgba(50,50,50,0.4)' : 'rgba(120,120,120,0.3)') : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            fill = woodenBoard ? (darkMode ? 'rgba(80,80,80,0.6)' : 'rgba(140,140,140,0.55)') : (darkMode ? '#2a2a2a' : '#f8f8f8');
           }
 
           return (
@@ -699,8 +699,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`tri-${tri.vertices.join('-')}`}
               points={points}
               fill={fill}
-              stroke={showTriangleLines ? (woodenBoard ? (darkMode ? '#5a4020' : '#6e5030') : (darkMode ? '#888' : 'black')) : fill}
-              strokeWidth={showTriangleLines ? 0.5 : 0.5}
+              stroke={showTriangleLines ? (woodenBoard ? (darkMode ? '#5a4020' : '#6e5030') : (darkMode ? '#888' : 'black')) : 'none'}
+              strokeWidth={showTriangleLines ? 0.5 : 0}
               strokeLinejoin="round"
             />
           );
