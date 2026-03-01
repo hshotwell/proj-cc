@@ -620,10 +620,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = woodenBoard
-              ? (darkMode ? '#3e2a14' : '#7a5830')
+              ? (darkMode ? '#2a1a0a' : '#5a4020')
               : (darkMode ? '#3a3a3a' : '#e2e2e2');
           } else {
-            fill = woodenBoard ? (darkMode ? '#4a3018' : '#8b6038') : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            fill = woodenBoard ? (darkMode ? '#3a2510' : '#6e4a28') : (darkMode ? '#2a2a2a' : '#f8f8f8');
           }
 
           return (
@@ -646,8 +646,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`border-${edge.a}-${edge.b}`}
               x1={pa.x} y1={pa.y}
               x2={pb.x} y2={pb.y}
-              stroke={woodenBoard ? (darkMode ? '#8B6914' : '#5c3a10') : (darkMode ? 'white' : 'black')}
-              strokeWidth={2.5}
+              stroke={woodenBoard ? (darkMode ? '#d4a040' : '#2a1808') : (darkMode ? 'white' : 'black')}
+              strokeWidth={woodenBoard ? 3 : 2.5}
               strokeLinecap="round"
             />
           );

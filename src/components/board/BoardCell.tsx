@@ -49,12 +49,12 @@ export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = fa
         cy={y}
         r={size * 0.45}
         fill={woodenBoard
-          ? (darkMode ? '#6a5030' : '#b89068')
+          ? (darkMode ? '#7a6040' : '#c8a878')
           : '#e5e7eb'}
         stroke={woodenBoard
-          ? (darkMode ? '#4a3820' : '#7a6040')
+          ? (darkMode ? '#3a2810' : '#5a4020')
           : '#9ca3af'}
-        strokeWidth={woodenBoard ? 1.2 : 1}
+        strokeWidth={woodenBoard ? 1.5 : 1}
       />
       {/* Goal ring — colored stroke only, no fill */}
       {goalColor && (
