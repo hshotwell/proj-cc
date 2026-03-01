@@ -8,6 +8,7 @@ export interface HopParticle {
   y: number;
   color: string;
   isFinal: boolean;
+  isGoalEntry: boolean;
   createdAt: number;
 }
 
@@ -56,9 +57,13 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-function generateDots(id: string, isFinal: boolean): ParticleDot[] {
+function generateDots(id: string, isFinal: boolean, isGoalEntry: boolean): ParticleDot[] {
   const rand = seededRandom(hashString(id));
-  const count = isFinal ? 14 + Math.floor(rand() * 5) : 8 + Math.floor(rand() * 5);
+  const count = isGoalEntry
+    ? 20 + Math.floor(rand() * 6)   // 20-25 particles
+    : isFinal
+      ? 14 + Math.floor(rand() * 5) // 14-18 particles
+      : 8 + Math.floor(rand() * 5); // 8-12 particles
   const dots: ParticleDot[] = [];
 
   const angleStep = (Math.PI * 2) / count;
@@ -67,14 +72,20 @@ function generateDots(id: string, isFinal: boolean): ParticleDot[] {
   for (let i = 0; i < count; i++) {
     const baseAngle = angleStep * i;
     const angle = baseAngle + (rand() * 2 - 1) * jitterRange;
-    const radius = isFinal
-      ? 10 + rand() * 6   // 10-16px
-      : 6 + rand() * 4;   // 6-10px
-    const size = isFinal
-      ? 1.5 + rand() * 1.5 // 1.5-3px
-      : 1 + rand() * 1;    // 1-2px
+    const radius = isGoalEntry
+      ? 14 + rand() * 8   // 14-22px
+      : isFinal
+        ? 10 + rand() * 6 // 10-16px
+        : 6 + rand() * 4; // 6-10px
+    const size = isGoalEntry
+      ? 2 + rand() * 2    // 2-4px
+      : isFinal
+        ? 1.5 + rand() * 1.5 // 1.5-3px
+        : 1 + rand() * 1;    // 1-2px
     const colorShift = (rand() * 2 - 1); // -1 to 1
-    const duration = 450 + rand() * 300;  // 450-750ms
+    const duration = isGoalEntry
+      ? 550 + rand() * 350   // 550-900ms
+      : 450 + rand() * 300;  // 450-750ms
 
     dots.push({ angle, radius, size, colorShift, duration });
   }
@@ -88,7 +99,7 @@ export function HopParticles({ particles }: { particles: HopParticle[] }) {
     const layouts = new Map<string, ParticleDot[]>();
     for (const p of particles) {
       if (!layouts.has(p.id)) {
-        layouts.set(p.id, generateDots(p.id, p.isFinal));
+        layouts.set(p.id, generateDots(p.id, p.isFinal, p.isGoalEntry));
       }
     }
     return layouts;

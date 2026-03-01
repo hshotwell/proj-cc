@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import type { CubeCoord, PlayerIndex, Move } from '@/types/game';
-import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION } from '@/game/constants';
-import { generateBoardPositions } from '@/game/board';
+import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION, TRIANGLE_ASSIGNMENTS } from '@/game/constants';
+import { generateBoardPositions, getTriangleForPosition } from '@/game/board';
 import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath } from '@/game/coordinates';
 import { getPlayerColorFromState, hexToRgba, blendColorsRgba, lightenHex } from '@/game/colors';
 import { findBoardTriangles, findBorderEdges } from '@/game/triangles';
@@ -152,6 +152,16 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       const pieceContent = gameState.board.get(coordKey(animatingPiece));
       const player = pieceContent?.type === 'piece' ? pieceContent.player : gameState.currentPlayer;
       const playerColor = getPlayerColorFromState(player, gameState);
+      // Detect goal entry: piece lands in goal triangle but started outside it
+      let isGoalEntry = false;
+      if (isFinal) {
+        const goalTriangle = TRIANGLE_ASSIGNMENTS[player]?.goal;
+        if (goalTriangle !== undefined) {
+          const startTriangle = getTriangleForPosition(animationPath[0]);
+          const endTriangle = getTriangleForPosition(animationPath[animationPath.length - 1]);
+          isGoalEntry = endTriangle === goalTriangle && startTriangle !== goalTriangle;
+        }
+      }
       setHopParticles((prev) => [
         ...prev,
         {
@@ -160,6 +170,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           y: pos.y,
           color: playerColor,
           isFinal,
+          isGoalEntry,
           createdAt: Date.now(),
         },
       ]);
@@ -199,7 +210,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
     if (hopParticles.length === 0) return;
     const timer = setInterval(() => {
       const now = Date.now();
-      setHopParticles((prev) => prev.filter((p) => now - p.createdAt < 900));
+      setHopParticles((prev) => prev.filter((p) => now - p.createdAt < 1000));
     }, 100);
     return () => clearInterval(timer);
   }, [hopParticles.length]);
@@ -628,7 +639,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
                 return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
               }, [0, 0, 0]);
-              const strength = darkMode ? 0.85 : 0.8;
+              const strength = 0.95;
               const br = Math.round(woodBase[0] + (avg[0] - woodBase[0]) * strength);
               const bg = Math.round(woodBase[1] + (avg[1] - woodBase[1]) * strength);
               const bb = Math.round(woodBase[2] + (avg[2] - woodBase[2]) * strength);
