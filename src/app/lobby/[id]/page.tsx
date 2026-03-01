@@ -8,10 +8,10 @@ import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
-import { PLAYER_COLORS } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS } from '@/game/constants';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 
-const AVAILABLE_COLORS = Object.values(PLAYER_COLORS);
+const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
 
 const PLAYER_COUNT_OPTIONS = [
   { count: 2, label: '2 Players' },

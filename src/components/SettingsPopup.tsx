@@ -186,6 +186,18 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 checked={showPlayerProgress}
                 onChange={toggleShowPlayerProgress}
               />
+              <ToggleOption
+                label="Rotate board"
+                description={rotateBoard ? 'Board faces active player' : 'Board stays fixed'}
+                checked={rotateBoard}
+                onChange={toggleRotateBoard}
+              />
+              <ToggleOption
+                label="Show coordinates"
+                description={showCoordinates ? 'Hover cells to see coords' : 'Coordinates hidden'}
+                checked={showCoordinates}
+                onChange={toggleShowCoordinates}
+              />
             </div>
           )}
 
@@ -210,12 +222,6 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleShowLastMoves}
               />
               <ToggleOption
-                label="Rotate board"
-                description={rotateBoard ? 'Board faces active player' : 'Board stays fixed'}
-                checked={rotateBoard}
-                onChange={toggleRotateBoard}
-              />
-              <ToggleOption
                 label="Triangle lines"
                 description={showTriangleLines ? 'Grid lines visible' : 'Grid lines hidden'}
                 checked={showTriangleLines}
@@ -232,12 +238,6 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 description={glassPieces ? 'Shiny glass marbles' : 'Flat colored pieces'}
                 checked={glassPieces}
                 onChange={toggleGlassPieces}
-              />
-              <ToggleOption
-                label="Show coordinates"
-                description={showCoordinates ? 'Hover cells to see coords' : 'Coordinates hidden'}
-                checked={showCoordinates}
-                onChange={toggleShowCoordinates}
               />
               <ToggleOption
                 label="Dark mode"

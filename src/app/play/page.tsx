@@ -5,14 +5,14 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping } from '@/types/game';
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
-import { PLAYER_COLORS, ACTIVE_PLAYERS } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS, ACTIVE_PLAYERS } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { hasEvolvedGenome } from '@/game/training/persistence';
 
 // All available colors for selection
-const AVAILABLE_COLORS = Object.values(PLAYER_COLORS);
+const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
 
 const PLAYER_COUNT_OPTIONS: { count: PlayerCount; description: string }[] = [
   { count: 2, description: 'Head to head' },

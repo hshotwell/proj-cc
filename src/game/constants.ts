@@ -21,6 +21,12 @@ export const PLAYER_COLORS: Record<PlayerIndex, string> = {
   5: '#facc15', // Yellow (top-left) - brighter yellow
 };
 
+// Additional color options beyond the defaults
+export const EXTRA_COLORS = [
+  '#c0c0c0', // Silver
+  '#ffd700', // Gold
+];
+
 // Light background colors for triangles
 export const TRIANGLE_COLORS: Record<TriangleIndex, string> = {
   0: '#fecaca', // Light red

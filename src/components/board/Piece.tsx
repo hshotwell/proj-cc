@@ -22,6 +22,20 @@ interface PieceProps {
   glassPieces?: boolean;
 }
 
+// Metallic colors that get special shiny treatment
+const METALLIC_COLORS: Record<string, { light: string; mid: string; dark: string; highlight: string }> = {
+  '#c0c0c0': { light: '#f0f0f0', mid: '#c0c0c0', dark: '#808080', highlight: '#ffffff' }, // Silver
+  '#ffd700': { light: '#fff4b0', mid: '#ffd700', dark: '#b8960a', highlight: '#fffde0' }, // Gold
+};
+
+function isMetallic(hex: string): boolean {
+  return hex.toLowerCase() in METALLIC_COLORS;
+}
+
+function getMetallicInfo(hex: string) {
+  return METALLIC_COLORS[hex.toLowerCase()];
+}
+
 // Lighten a hex color by mixing with white
 function lightenColor(hex: string, amount: number): string {
   // Remove # if present
@@ -75,10 +89,12 @@ export function Piece({
   // Piece radius is larger than board cell (0.45) so pieces stand out
   const pieceRadius = size * 0.58;
 
-  // Glass marble gradient IDs (unique per piece coordinate)
-  const gId = glassPieces ? `mb${coord.q}_${coord.r}` : '';
+  // Gradient IDs (unique per piece coordinate)
+  const gId = `mb${coord.q}_${coord.r}`;
+  const metallic = isMetallic(baseColor) ? getMetallicInfo(baseColor) : null;
   const lightColor = glassPieces ? lightenColor(pieceColor, 0.35) : '';
   const darkColor = glassPieces ? darkenColor(pieceColor, 0.25) : '';
+  const needsGradient = glassPieces || metallic;
 
   return (
     <g
@@ -91,20 +107,41 @@ export function Piece({
           : undefined,
       }}
     >
-      {glassPieces && (
+      {needsGradient && (
         <defs>
-          <radialGradient id={`${gId}f`} cx="35%" cy="35%" r="65%">
-            <stop offset="0%" stopColor={lightColor} />
-            <stop offset="100%" stopColor={darkColor} />
-          </radialGradient>
-          <radialGradient id={`${gId}h`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.75)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
-          <radialGradient id={`${gId}r`} cx="50%" cy="30%" r="50%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.35)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
+          {metallic ? (
+            <>
+              <radialGradient id={`${gId}f`} cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stopColor={metallic.highlight} />
+                <stop offset="30%" stopColor={metallic.light} />
+                <stop offset="70%" stopColor={metallic.mid} />
+                <stop offset="100%" stopColor={metallic.dark} />
+              </radialGradient>
+              <radialGradient id={`${gId}h`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+              </radialGradient>
+              <radialGradient id={`${gId}r`} cx="50%" cy="30%" r="50%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.5)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+              </radialGradient>
+            </>
+          ) : (
+            <>
+              <radialGradient id={`${gId}f`} cx="35%" cy="35%" r="65%">
+                <stop offset="0%" stopColor={lightColor} />
+                <stop offset="100%" stopColor={darkColor} />
+              </radialGradient>
+              <radialGradient id={`${gId}h`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.75)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+              </radialGradient>
+              <radialGradient id={`${gId}r`} cx="50%" cy="30%" r="50%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.35)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+              </radialGradient>
+            </>
+          )}
         </defs>
       )}
       {/* Piece shadow */}
@@ -119,12 +156,12 @@ export function Piece({
         cx={0}
         cy={0}
         r={pieceRadius}
-        fill={glassPieces ? `url(#${gId}f)` : pieceColor}
-        stroke={glassPieces ? 'none' : (isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff'))}
-        strokeWidth={glassPieces ? 0 : 1.5}
+        fill={needsGradient ? `url(#${gId}f)` : pieceColor}
+        stroke={needsGradient ? 'none' : (isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff'))}
+        strokeWidth={needsGradient ? 0 : 1.5}
       />
-      {/* Glass marble effects */}
-      {glassPieces && (
+      {/* Glass marble / metallic shine effects */}
+      {needsGradient && (
         <>
           {/* Specular highlight - top-left shine spot */}
           <ellipse
