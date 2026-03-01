@@ -646,6 +646,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           }).join(' ');
 
           let fill: string;
+          let isRgbaFill = false;
           if (tri.playerOwners.length > 0 && gameState) {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
             if (woodenBoard) {
@@ -688,10 +689,12 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = woodenBoard
-              ? (darkMode ? 'rgba(30,30,30,0.75)' : 'rgba(60,60,60,0.65)')
+              ? (darkMode ? 'rgba(30,30,30,0.8)' : 'rgba(60,60,60,0.7)')
               : (darkMode ? '#3a3a3a' : '#e2e2e2');
+            if (woodenBoard) isRgbaFill = true;
           } else {
-            fill = woodenBoard ? (darkMode ? 'rgba(80,80,80,0.6)' : 'rgba(140,140,140,0.55)') : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            fill = woodenBoard ? (darkMode ? 'rgba(80,80,80,0.65)' : 'rgba(140,140,140,0.6)') : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            if (woodenBoard) isRgbaFill = true;
           }
 
           return (
@@ -699,8 +702,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`tri-${tri.vertices.join('-')}`}
               points={points}
               fill={fill}
-              stroke={showTriangleLines ? (woodenBoard ? (darkMode ? '#5a4020' : '#6e5030') : (darkMode ? '#888' : 'black')) : 'none'}
-              strokeWidth={showTriangleLines ? 0.5 : 0}
+              stroke={showTriangleLines ? (woodenBoard ? (darkMode ? '#5a4020' : '#6e5030') : (darkMode ? '#888' : 'black')) : (isRgbaFill ? 'none' : fill)}
+              strokeWidth={showTriangleLines ? 0.5 : (isRgbaFill ? 0 : 0.5)}
               strokeLinejoin="round"
             />
           );
