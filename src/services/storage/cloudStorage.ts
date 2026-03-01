@@ -15,7 +15,8 @@ export const cloudSettingsStorage: SettingsStorageProvider = {
   async load(): Promise<SyncableSettings | null> {
     try {
       const settings = await getConvexClient().query(api.users.getSettings);
-      return settings;
+      if (!settings) return null;
+      return { hopEffect: false, ...settings };
     } catch (e) {
       console.error('Failed to load settings from cloud:', e);
       return null;

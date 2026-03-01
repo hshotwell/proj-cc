@@ -14,6 +14,7 @@ export interface SyncableSettings {
   darkMode: boolean;
   woodenBoard: boolean;
   glassPieces: boolean;
+  hopEffect: boolean;
 }
 
 // Storage provider interface for settings

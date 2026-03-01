@@ -33,6 +33,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     darkMode,
     woodenBoard,
     glassPieces,
+    hopEffect,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -44,6 +45,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleDarkMode,
     toggleWoodenBoard,
     toggleGlassPieces,
+    toggleHopEffect,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
@@ -196,6 +198,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleAnimateMoves}
               />
               <ToggleOption
+                label="Hop effect"
+                description={hopEffect ? 'Particle burst on landing' : 'No landing effect'}
+                checked={hopEffect}
+                onChange={toggleHopEffect}
+              />
+              <ToggleOption
                 label="Show last moves"
                 description={showLastMoves ? "Showing each player's last move" : 'Last moves hidden'}
                 checked={showLastMoves}
@@ -262,7 +270,7 @@ function ToggleOption({ label, description, checked, onChange }: ToggleOptionPro
           onChange={onChange}
           className="sr-only peer"
         />
-        <div className="w-10 h-6 bg-gray-200 rounded-full peer-checked:bg-blue-500 transition-colors" />
+        <div className={`w-10 h-6 rounded-full transition-colors ${checked ? 'bg-blue-500' : 'bg-gray-200'}`} />
         <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
       </div>
       <div className="flex-1">

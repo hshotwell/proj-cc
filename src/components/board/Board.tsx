@@ -14,6 +14,8 @@ import { useReplayStore } from '@/store/replayStore';
 import { BoardCell } from './BoardCell';
 import { Piece } from './Piece';
 import { MoveIndicator } from './MoveIndicator';
+import { HopParticles } from './HopParticles';
+import type { HopParticle } from './HopParticles';
 
 interface BoardProps {
   /** When set, lock board rotation to this player's perspective (for online games) */
@@ -49,10 +51,13 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       confirmMove,
       undoLastMove,
     } = useGameStore();
-  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard, glassPieces } = useSettingsStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard, glassPieces, hopEffect } = useSettingsStore();
 
   // Track hovered cell for coordinate display
   const [hoveredCell, setHoveredCell] = useState<CubeCoord | null>(null);
+
+  // Hop particle effect state
+  const [hopParticles, setHopParticles] = useState<HopParticle[]>([]);
 
   // Choose data source based on replay mode
   const gameState = isReplayActive ? replayDisplayState : liveGameState;
@@ -137,6 +142,25 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
     if (isReplayActive) return;
     if (!animatingPiece || !animationPath) return;
 
+    // Helper to spawn a hop particle at the current animation position
+    const spawnParticle = () => {
+      if (!hopEffect || !animateMoves || !gameState) return;
+      const pos = cubeToPixel(animationPath[animationStep], HEX_SIZE);
+      const isFinal = animationStep === animationPath.length - 1;
+      const playerColor = getPlayerColorFromState(gameState.currentPlayer, gameState);
+      setHopParticles((prev) => [
+        ...prev,
+        {
+          id: `${coordKey(animatingPiece)}-${animationStep}-${Date.now()}`,
+          x: pos.x,
+          y: pos.y,
+          color: playerColor,
+          isFinal,
+          createdAt: Date.now(),
+        },
+      ]);
+    };
+
     if (animationStep === 0) {
       // Initial render at path[0]. Wait one frame then advance to path[1]
       // to trigger the first CSS transition.
@@ -147,11 +171,13 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
     } else if (animationStep < animationPath.length - 1) {
       // Mid-path: wait for the current transition to finish, then advance
       animationTimerRef.current = setTimeout(() => {
+        spawnParticle();
         useGameStore.getState().advanceAnimation();
       }, MOVE_ANIMATION_DURATION);
     } else {
       // At final position: wait for the last transition to finish, then clear
       animationTimerRef.current = setTimeout(() => {
+        spawnParticle();
         useGameStore.getState().clearAnimation();
       }, MOVE_ANIMATION_DURATION);
     }
@@ -162,7 +188,17 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
         animationTimerRef.current = null;
       }
     };
-  }, [animatingPiece, animationPath, animationStep, isReplayActive]);
+  }, [animatingPiece, animationPath, animationStep, isReplayActive, hopEffect, animateMoves, gameState]);
+
+  // Auto-cleanup hop particles after animation completes
+  useEffect(() => {
+    if (hopParticles.length === 0) return;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setHopParticles((prev) => prev.filter((p) => now - p.createdAt < 600));
+    }, 100);
+    return () => clearInterval(timer);
+  }, [hopParticles.length]);
 
   // Generate board positions - use game state for custom layouts, or standard positions
   const boardPositions = useMemo(() => {
@@ -588,7 +624,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
                 return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
               }, [0, 0, 0]);
-              const strength = darkMode ? 0.55 : 0.5;
+              const strength = darkMode ? 0.7 : 0.65;
               const br = Math.round(woodBase[0] + (avg[0] - woodBase[0]) * strength);
               const bg = Math.round(woodBase[1] + (avg[1] - woodBase[1]) * strength);
               const bb = Math.round(woodBase[2] + (avg[2] - woodBase[2]) * strength);
@@ -863,6 +899,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           );
         })}
       </g>
+
+      {/* Layer 4: Hop particle effects */}
+      {hopParticles.length > 0 && <HopParticles particles={hopParticles} />}
       </g>
 
       {/* Coordinate tooltip - outside rotation group so text stays upright */}

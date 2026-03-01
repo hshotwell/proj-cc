@@ -35,6 +35,7 @@ export const localSettingsStorage: SettingsStorageProvider = {
         darkMode: data.state?.darkMode ?? false,
         woodenBoard: data.state?.woodenBoard ?? false,
         glassPieces: data.state?.glassPieces ?? false,
+        hopEffect: data.state?.hopEffect ?? false,
       };
     } catch {
       return null;
