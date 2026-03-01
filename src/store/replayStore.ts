@@ -59,6 +59,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       longestHop: hop?.jumpLength ?? 0,
       playerColors: savedGame.initialConfig.playerColors,
       aiPlayers: savedGame.initialConfig.aiPlayers,
+      ...(savedGame.initialConfig.teamMode ? { teamMode: true } : {}),
     };
 
     set({
@@ -99,6 +100,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
         playerColors: finalState.playerColors,
         aiPlayers: finalState.aiPlayers,
         ...customLayoutData,
+        ...(finalState.teamMode ? { teamMode: true } : {}),
       },
       moves: normalizedMoves,
       finishedPlayers: finalState.finishedPlayers,
@@ -119,6 +121,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       longestHop: hop?.jumpLength ?? 0,
       playerColors: finalState.playerColors,
       aiPlayers: finalState.aiPlayers,
+      ...(finalState.teamMode ? { teamMode: true } : {}),
     };
 
     set({

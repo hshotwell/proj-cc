@@ -18,6 +18,7 @@ export interface SerializedGameState {
   aiPlayers?: GameState['aiPlayers'];
   customGoalPositions?: GameState['customGoalPositions'];
   startingPositions?: GameState['startingPositions'];
+  teamMode?: GameState['teamMode'];
 }
 
 export interface WorkerRequest {
@@ -45,6 +46,7 @@ export function serializeGameState(state: GameState): SerializedGameState {
     aiPlayers: state.aiPlayers,
     customGoalPositions: state.customGoalPositions,
     startingPositions: state.startingPositions,
+    teamMode: state.teamMode,
   };
 }
 
@@ -63,5 +65,6 @@ export function deserializeGameState(serialized: SerializedGameState): GameState
     aiPlayers: serialized.aiPlayers,
     customGoalPositions: serialized.customGoalPositions,
     startingPositions: serialized.startingPositions,
+    teamMode: serialized.teamMode,
   };
 }

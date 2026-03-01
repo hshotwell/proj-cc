@@ -32,6 +32,7 @@ export default function PlayPage() {
   const [customColors, setCustomColors] = useState<ColorMapping>({});
   const [playerNames, setPlayerNames] = useState<PlayerNameMapping>({});
   const [aiConfig, setAiConfig] = useState<AIPlayerMap>({});
+  const [teamMode, setTeamMode] = useState(false);
   const [evolvedAvailable, setEvolvedAvailable] = useState(false);
   const [editingName, setEditingName] = useState<PlayerIndex | null>(null);
 
@@ -58,6 +59,7 @@ export default function PlayPage() {
     setCustomColors({});
     setPlayerNames({});
     setAiConfig({});
+    setTeamMode(false);
   }, [selectedCount, selectedLayout?.id]);
 
   const handleColorSelect = (player: PlayerIndex, color: string) => {
@@ -88,13 +90,15 @@ export default function PlayPage() {
     const hasCustomColors = Object.keys(customColors).length > 0;
     const hasCustomNames = Object.keys(playerNames).length > 0;
     const hasAI = Object.keys(aiConfig).length > 0;
+    const effectiveTeamMode = teamMode && (selectedCount === 4 || selectedCount === 6) ? true : undefined;
 
     if (useCustomLayout && selectedLayout) {
       gameId = startGameFromLayout(
         selectedLayout,
         hasCustomColors ? customColors : undefined,
         hasAI ? aiConfig : undefined,
-        hasCustomNames ? playerNames : undefined
+        hasCustomNames ? playerNames : undefined,
+        effectiveTeamMode
       );
     } else {
       gameId = startGame(
@@ -102,7 +106,8 @@ export default function PlayPage() {
         undefined,
         hasCustomColors ? customColors : undefined,
         hasAI ? aiConfig : undefined,
-        hasCustomNames ? playerNames : undefined
+        hasCustomNames ? playerNames : undefined,
+        effectiveTeamMode
       );
     }
 
@@ -355,6 +360,26 @@ export default function PlayPage() {
                 </button>
               ))}
             </div>
+
+            {/* Team mode toggle */}
+            {(selectedCount === 4 || selectedCount === 6) && (
+              <div className="bg-white rounded-xl shadow p-4 mb-8">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={teamMode}
+                    onChange={(e) => setTeamMode(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900">Team Mode</div>
+                    <div className="text-sm text-gray-500">
+                      Opposite players are teammates — both must finish to win
+                    </div>
+                  </div>
+                </label>
+              </div>
+            )}
 
             {/* Players section (combined colors, names, and AI) */}
             <div className="bg-white rounded-xl shadow p-6 mb-8">

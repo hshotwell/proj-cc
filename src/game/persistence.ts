@@ -42,6 +42,7 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
     longestHop: longestHopResult?.jumpLength ?? 0,
     ...(finalState.playerColors ? { playerColors: { ...finalState.playerColors } } : {}),
     ...(finalState.aiPlayers ? { aiPlayers: { ...finalState.aiPlayers } } : {}),
+    ...(finalState.teamMode ? { teamMode: true } : {}),
   };
 
   // Build custom layout data if this is a custom board
@@ -63,6 +64,7 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
       ...(finalState.playerColors ? { playerColors: { ...finalState.playerColors } } : {}),
       ...(finalState.aiPlayers ? { aiPlayers: { ...finalState.aiPlayers } } : {}),
       ...customLayoutData,
+      ...(finalState.teamMode ? { teamMode: true } : {}),
     },
     moves: normalizedMoves.map(serializeMove),
     finishedPlayers: finalState.finishedPlayers.map(fp => ({ ...fp })),

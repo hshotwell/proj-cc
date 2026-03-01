@@ -35,8 +35,8 @@ interface GameStore {
   pendingAnimationSubmission: boolean;
 
   // Actions
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => string;
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => string;
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => string;
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => string;
   selectPiece: (coord: CubeCoord) => void;
   makeMove: (to: CubeCoord, animate?: boolean) => boolean;
   clearSelection: () => void;
@@ -72,8 +72,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   pendingAnimationSubmission: false,
 
   // Start a new game with the specified number of players
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => {
-    const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers, playerNames);
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => {
+    const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers, playerNames, teamMode);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
     clearStateHistory();
@@ -94,8 +94,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   // Start a game from a custom board layout
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping) => {
-    const gameState = createGameFromLayout(layout, playerColors, aiPlayers, playerNames);
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => {
+    const gameState = createGameFromLayout(layout, playerColors, aiPlayers, playerNames, teamMode);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
     clearStateHistory();
@@ -379,7 +379,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       undefined,
       gameState.playerColors,
       gameState.aiPlayers,
-      gameState.playerNames
+      gameState.playerNames,
+      gameState.teamMode
     );
     const gameId = generateGameId();
     // Clear AI tracking state for new game

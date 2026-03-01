@@ -12,6 +12,7 @@ export interface SavedGameSummary {
   longestHop: number;
   playerColors?: ColorMapping;
   aiPlayers?: AIPlayerMap;
+  teamMode?: boolean;
 }
 
 export interface SavedGameData {
@@ -27,6 +28,7 @@ export interface SavedGameData {
     customStartingPositions?: Partial<Record<PlayerIndex, string[]>>;
     customGoalPositions?: Partial<Record<PlayerIndex, string[]>>;
     customWalls?: string[];
+    teamMode?: boolean;
   };
   moves: Move[];
   finishedPlayers: Array<{ player: PlayerIndex; moveCount: number }>;

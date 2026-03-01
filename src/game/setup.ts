@@ -51,7 +51,8 @@ export function createGame(
   selectedPlayers?: PlayerIndex[],
   playerColors?: ColorMapping,
   aiPlayers?: AIPlayerMap,
-  playerNames?: PlayerNameMapping
+  playerNames?: PlayerNameMapping,
+  teamMode?: boolean
 ): GameState {
   // Use selectedPlayers if provided, otherwise fall back to defaults
   const activePlayers = selectedPlayers ?? (ACTIVE_PLAYERS[playerCount] as PlayerIndex[]);
@@ -77,6 +78,7 @@ export function createGame(
     playerNames,
     aiPlayers,
     startingPositions,
+    ...(teamMode ? { teamMode } : {}),
   };
 }
 
@@ -85,7 +87,8 @@ export function createGameFromLayout(
   layout: BoardLayout,
   playerColors?: ColorMapping,
   aiPlayers?: AIPlayerMap,
-  playerNames?: PlayerNameMapping
+  playerNames?: PlayerNameMapping,
+  teamMode?: boolean
 ): GameState {
   const board = new Map<string, CellContent>();
 
@@ -134,6 +137,7 @@ export function createGameFromLayout(
     playerColors,
     playerNames,
     aiPlayers,
+    ...(teamMode ? { teamMode } : {}),
   };
 }
 
@@ -152,6 +156,7 @@ export function cloneGameState(state: GameState): GameState {
     // Preserve custom layout data for AI evaluation
     isCustomLayout: state.isCustomLayout,
     customGoalPositions: state.customGoalPositions ? { ...state.customGoalPositions } : undefined,
+    teamMode: state.teamMode,
   };
 }
 

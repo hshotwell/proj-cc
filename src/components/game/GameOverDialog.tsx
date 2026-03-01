@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PlayerIndex } from '@/types/game';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
-import { isGameFullyOver } from '@/game/state';
+import { isGameFullyOver, OPPOSITE_PLAYER } from '@/game/state';
 import { saveCompletedGame } from '@/game/persistence';
 import { useGameStore } from '@/store/gameStore';
 import { useReplayStore } from '@/store/replayStore';
@@ -56,10 +56,48 @@ export function GameOverDialog() {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Game Over!</h2>
+          <h2 className="text-2xl font-bold mb-4">
+            {gameState.teamMode ? 'Game Over! Team Victory!' : 'Game Over!'}
+          </h2>
 
           <div className="space-y-2 mb-6 text-left">
-            {finishedPlayers.map((fp, i) => {
+            {gameState.teamMode ? (() => {
+              // Group finished players into teams by opposite-player pairing
+              const teamMap = new Map<number, { players: PlayerIndex[]; maxMoveCount: number }>();
+              for (const fp of finishedPlayers) {
+                const teamKey = Math.min(fp.player, OPPOSITE_PLAYER[fp.player]);
+                const team = teamMap.get(teamKey);
+                if (team) {
+                  team.players.push(fp.player);
+                  team.maxMoveCount = Math.max(team.maxMoveCount, fp.moveCount);
+                } else {
+                  teamMap.set(teamKey, { players: [fp.player], maxMoveCount: fp.moveCount });
+                }
+              }
+              // Sort teams by when their 2nd member finished
+              const teams = Array.from(teamMap.values()).sort((a, b) => a.maxMoveCount - b.maxMoveCount);
+              return teams.map((team, i) => (
+                <div key={team.players.join(',')} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+                  <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>
+                  <div className="flex items-center gap-2 flex-1">
+                    {team.players.map((p, j) => {
+                      const color = getPlayerColorFromState(p, gameState);
+                      const name = getPlayerDisplayNameFromState(p, gameState);
+                      return (
+                        <span key={p} className="flex items-center gap-1">
+                          {j > 0 && <span className="text-gray-400 mx-1">&</span>}
+                          <div
+                            className="w-4 h-4 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="font-semibold" style={{ color }}>{name}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })() : finishedPlayers.map((fp, i) => {
               const color = getPlayerColorFromState(fp.player, gameState);
               const name = getPlayerDisplayNameFromState(fp.player, gameState);
               // Additional turns this player took beyond the first finisher

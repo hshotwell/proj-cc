@@ -79,6 +79,8 @@ export function reconstructGameStates(savedGame: SavedGameData): GameState[] {
       layout,
       initialConfig.playerColors,
       initialConfig.aiPlayers,
+      undefined,
+      initialConfig.teamMode,
     );
   } else {
     initialState = createGame(
@@ -86,6 +88,8 @@ export function reconstructGameStates(savedGame: SavedGameData): GameState[] {
       initialConfig.activePlayers,
       initialConfig.playerColors,
       initialConfig.aiPlayers,
+      undefined,
+      initialConfig.teamMode,
     );
   }
 

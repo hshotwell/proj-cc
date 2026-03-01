@@ -71,6 +71,8 @@ export interface GameState {
   customGoalPositions?: Partial<Record<PlayerIndex, string[]>>;
   // Starting positions for each player (used for triangle coloring)
   startingPositions?: Partial<Record<PlayerIndex, string[]>>;
+  // Team mode: opposite players are teammates, both must finish to win
+  teamMode?: boolean;
 }
 
 // Player configuration (name, color, etc.)

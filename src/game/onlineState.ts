@@ -32,6 +32,7 @@ export interface OnlineGameData {
   currentPlayerIndex?: number;
   winner?: number;
   finishedPlayers?: number[];
+  teamMode?: boolean;
 }
 
 /**
@@ -104,9 +105,9 @@ export function reconstructGameState(onlineGame: OnlineGameData): GameState {
   // 1. Create initial state
   let state: GameState;
   if (onlineGame.boardType === 'custom' && onlineGame.customLayout) {
-    state = createGameFromLayout(onlineGame.customLayout, playerColors, aiPlayers, playerNames);
+    state = createGameFromLayout(onlineGame.customLayout, playerColors, aiPlayers, playerNames, onlineGame.teamMode);
   } else {
-    state = createGame(playerCount, undefined, playerColors, aiPlayers, playerNames);
+    state = createGame(playerCount, undefined, playerColors, aiPlayers, playerNames, onlineGame.teamMode);
   }
 
   // 2. Replay each confirmed turn

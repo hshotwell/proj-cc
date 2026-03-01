@@ -13,6 +13,16 @@ export const OPPOSITE_PLAYER: Record<PlayerIndex, PlayerIndex> = {
   5: 3,
 };
 
+export function getTeammate(player: PlayerIndex): PlayerIndex {
+  return OPPOSITE_PLAYER[player];
+}
+
+function hasTeamWon(state: GameState, player: PlayerIndex): boolean {
+  const teammate = getTeammate(player);
+  return state.finishedPlayers.some(fp => fp.player === player)
+      && state.finishedPlayers.some(fp => fp.player === teammate);
+}
+
 // Apply a move to the game state, returning a new immutable state
 export function applyMove(state: GameState, move: Move): GameState {
   const newState = cloneGameState(state);
@@ -43,7 +53,13 @@ export function applyMove(state: GameState, move: Move): GameState {
   if (!alreadyFinished && hasPlayerWon(newState, movingPlayer)) {
     newState.finishedPlayers.push({ player: movingPlayer, moveCount: newState.moveHistory.length });
     if (newState.winner === null) {
-      newState.winner = movingPlayer;
+      if (newState.teamMode) {
+        if (hasTeamWon(newState, movingPlayer)) {
+          newState.winner = movingPlayer;
+        }
+      } else {
+        newState.winner = movingPlayer;
+      }
     }
   }
 
@@ -95,7 +111,13 @@ export function movePiece(state: GameState, move: Move): GameState {
   if (!alreadyFinished && hasPlayerWon(newState, player)) {
     newState.finishedPlayers.push({ player, moveCount: newState.moveHistory.length });
     if (newState.winner === null) {
-      newState.winner = player;
+      if (newState.teamMode) {
+        if (hasTeamWon(newState, player)) {
+          newState.winner = player;
+        }
+      } else {
+        newState.winner = player;
+      }
     }
   }
 
@@ -158,8 +180,10 @@ export function undoMove(state: GameState): GameState | null {
     (fp) => fp.player !== piece.player || hasPlayerWon(newState, piece.player)
   );
 
-  // Clear winner if no one has finished
-  if (newState.finishedPlayers.length === 0) {
+  // Clear winner if the undone player was the winner
+  if (newState.winner === piece.player) {
+    newState.winner = null;
+  } else if (newState.finishedPlayers.length === 0) {
     newState.winner = null;
   }
 
