@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import type { PlayerIndex } from '@/types/game';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { isGameFullyOver } from '@/game/state';
 import { saveCompletedGame } from '@/game/persistence';
@@ -49,8 +50,20 @@ export function GameOverDialog() {
             {finishedPlayers.map((fp, i) => {
               const color = getPlayerColorFromState(fp.player, gameState);
               const name = getPlayerDisplayNameFromState(fp.player, gameState);
-              const extra = moveHistory.slice(firstFinishMoveCount)
-                .filter(m => m.player === fp.player).length;
+              // Count distinct turns (not individual hops) this player took after first finish
+              let extra = 0;
+              if (i > 0) {
+                const movesAfterFirst = moveHistory.slice(firstFinishMoveCount);
+                let lastPlayer: PlayerIndex | undefined;
+                for (const m of movesAfterFirst) {
+                  if (m.player === fp.player && m.player !== lastPlayer) {
+                    extra++;
+                  }
+                  lastPlayer = m.player;
+                }
+                // Ensure at least +1 for anyone who finished after first
+                if (extra === 0) extra = 1;
+              }
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                   <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>
@@ -62,7 +75,7 @@ export function GameOverDialog() {
                     {name}
                   </span>
                   {i > 0 && (
-                    <span className="text-xs text-gray-400">+{extra} moves</span>
+                    <span className="text-xs text-gray-400">+{extra} {extra === 1 ? 'turn' : 'turns'}</span>
                   )}
                 </div>
               );
