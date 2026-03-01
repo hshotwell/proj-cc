@@ -788,6 +788,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 displayCoord={displayCoord}
                 isAnimating={isThisAnimating}
                 isLastMoved={isLastMoved}
+                darkMode={darkMode}
               />
             </g>
           );

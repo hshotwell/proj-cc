@@ -18,6 +18,7 @@ interface PieceProps {
   isAnimating?: boolean;
   // Highlight this piece as the last moved piece for its player
   isLastMoved?: boolean;
+  darkMode?: boolean;
 }
 
 // Lighten a hex color by mixing with white
@@ -61,6 +62,7 @@ export function Piece({
   displayCoord,
   isAnimating,
   isLastMoved,
+  darkMode,
 }: PieceProps) {
   // Use displayCoord for visual position if provided, otherwise use actual coord
   const renderCoord = displayCoord ?? coord;
@@ -95,7 +97,7 @@ export function Piece({
         cy={0}
         r={pieceRadius}
         fill={pieceColor}
-        stroke={isSelected ? '#000' : '#fff'}
+        stroke={isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff')}
         strokeWidth={1.5}
       />
       {/* Highlight for current player's pieces - 6 spinning segments outside border */}
@@ -104,13 +106,14 @@ export function Piece({
         const highlightR = borderOuter + 1 + 1; // 1px gap + half of 2px stroke
         const circumference = 2 * Math.PI * highlightR;
         const segmentLen = circumference / 12;
+        const segmentColor = darkMode ? lightenColor(pieceColor, 0.4) : pieceColor;
         return (
           <circle
             cx={0}
             cy={0}
             r={highlightR}
             fill="none"
-            stroke={pieceColor}
+            stroke={segmentColor}
             strokeWidth={2}
             strokeDasharray={`${segmentLen} ${segmentLen}`}
             className="active-piece-highlight"
@@ -139,7 +142,7 @@ export function Piece({
         return (
           <path
             d={triangles.join(' ')}
-            fill="#000"
+            fill={darkMode ? '#fff' : '#000'}
             className="selection-dash"
             style={{ transformOrigin: '0px 0px' }}
           />
