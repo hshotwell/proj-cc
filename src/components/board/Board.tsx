@@ -561,6 +561,23 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               {/* Clip output to source shape so grain doesn't bleed into rectangular bounding box */}
               <feComposite operator="in" in="blended" in2="SourceGraphic"/>
             </filter>
+            {/* Subtle version: 30% grain blended with 70% original */}
+            <filter id="wood-grain-subtle" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
+              <feTurbulence type="fractalNoise" baseFrequency="0.004 0.035" numOctaves="3" seed="8" result="noise"/>
+              <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
+              <feComponentTransfer in="grayNoise" result="grain">
+                <feFuncR type="linear" slope={darkMode ? 1.1 : 1.3} intercept={darkMode ? -0.1 : -0.15}/>
+                <feFuncG type="linear" slope={darkMode ? 1.1 : 1.3} intercept={darkMode ? -0.1 : -0.15}/>
+                <feFuncB type="linear" slope={darkMode ? 1.1 : 1.3} intercept={darkMode ? -0.1 : -0.15}/>
+                <feFuncA type="linear" slope="0" intercept="1"/>
+              </feComponentTransfer>
+              <feBlend mode="soft-light" in="SourceGraphic" in2="grain" result="blended"/>
+              {/* Mix 30% grain effect with 70% original source */}
+              <feColorMatrix type="matrix" in="SourceGraphic" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.7 0" result="srcFaded"/>
+              <feColorMatrix type="matrix" in="blended" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.3 0" result="grainFaded"/>
+              <feComposite operator="over" in="srcFaded" in2="grainFaded" result="mixed"/>
+              <feComposite operator="in" in="mixed" in2="SourceGraphic"/>
+            </filter>
           </defs>
           {/* Wood base with grain texture */}
           <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-base)" filter="url(#wood-grain-filter)" />
@@ -620,7 +637,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       )}
 
       {/* Layer 0: Triangle fills between adjacent cells */}
-      <g>
+      <g filter={woodenBoard ? 'url(#wood-grain-subtle)' : undefined}>
         {boardTriangles.map((tri) => {
           const points = tri.vertices.map((key) => {
             const pos = parseCoordKey(key);
@@ -706,7 +723,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       </g>
 
       {/* Layer 1: Background cells */}
-      <g filter={woodenBoard ? 'url(#wood-grain-filter)' : undefined}>
+      <g>
         {boardPositions.map((coord) => (
           <g
             key={coordKey(coord)}
