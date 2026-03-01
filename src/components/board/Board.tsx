@@ -494,11 +494,16 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               <stop offset="70%" stopColor={darkMode ? '#5a3e16' : '#b8873a'} />
               <stop offset="100%" stopColor={darkMode ? '#4a3412' : '#a87830'} />
             </linearGradient>
-            <filter id="wood-grain-filter" colorInterpolationFilters="sRGB">
+            <clipPath id="wood-clip">
+              <circle cx={0} cy={0} r={boardRadius} />
+            </clipPath>
+            <filter id="wood-grain-filter" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
               {/* Stretched noise for directional grain */}
               <feTurbulence type="fractalNoise" baseFrequency="0.005 0.06" numOctaves="4" seed="8" result="noise"/>
+              {/* Desaturate to grayscale to prevent rainbow artifacts */}
+              <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
               {/* High contrast to create distinct grain bands */}
-              <feComponentTransfer in="noise" result="grain">
+              <feComponentTransfer in="grayNoise" result="grain">
                 <feFuncR type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
                 <feFuncG type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
                 <feFuncB type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
@@ -508,7 +513,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             </filter>
           </defs>
           {/* Wood base with grain texture */}
-          <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-base)" filter="url(#wood-grain-filter)" />
+          <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-base)" filter="url(#wood-grain-filter)" clipPath="url(#wood-clip)" />
           {/* Subtle radial grain lines suggesting linear grain direction */}
           {[0.15, 0.55, 1.05, 1.45, 1.95, 2.35, 2.85].map((angle, i) => (
             <line
