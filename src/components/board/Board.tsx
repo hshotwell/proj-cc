@@ -509,6 +509,18 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           </defs>
           {/* Wood base with grain texture */}
           <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-base)" filter="url(#wood-grain-filter)" />
+          {/* Subtle radial grain lines suggesting linear grain direction */}
+          {[0.15, 0.55, 1.05, 1.45, 1.95, 2.35, 2.85].map((angle, i) => (
+            <line
+              key={`grain-${i}`}
+              x1={0}
+              y1={0}
+              x2={Math.cos(angle) * boardRadius * 0.92}
+              y2={Math.sin(angle) * boardRadius * 0.92}
+              stroke={darkMode ? 'rgba(90,65,20,0.05)' : 'rgba(80,50,20,0.05)'}
+              strokeWidth={0.8}
+            />
+          ))}
           {/* Wood knots */}
           {[
             { x: boardRadius * -0.3, y: boardRadius * 0.2, scale: 0.1 },
