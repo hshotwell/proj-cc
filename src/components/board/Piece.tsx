@@ -23,9 +23,12 @@ interface PieceProps {
 }
 
 // Metallic colors that get special shiny treatment
-const METALLIC_COLORS: Record<string, { light: string; mid: string; dark: string; highlight: string }> = {
-  '#c0c0c0': { light: '#f0f0f0', mid: '#c0c0c0', dark: '#808080', highlight: '#ffffff' }, // Silver
-  '#ffd700': { light: '#fff4b0', mid: '#ffd700', dark: '#b8960a', highlight: '#fffde0' }, // Gold
+const METALLIC_COLORS: Record<string, {
+  light: string; mid: string; dark: string; rim: string;
+  bandLight: string; bandDark: string;
+}> = {
+  '#c0c0c0': { light: '#e8e8e8', mid: '#c0c0c0', dark: '#606060', rim: '#909090', bandLight: '#f8f8f8', bandDark: '#888888' }, // Silver
+  '#ffd700': { light: '#ffe566', mid: '#ffd700', dark: '#996800', rim: '#cc9900', bandLight: '#fff0a0', bandDark: '#b8860b' }, // Gold
 };
 
 function isMetallic(hex: string): boolean {
@@ -94,7 +97,11 @@ export function Piece({
   const metallic = isMetallic(baseColor) ? getMetallicInfo(baseColor) : null;
   const lightColor = glassPieces ? lightenColor(pieceColor, 0.35) : '';
   const darkColor = glassPieces ? darkenColor(pieceColor, 0.25) : '';
-  const needsGradient = glassPieces || metallic;
+  const useGlassGradient = glassPieces && !metallic;
+  const useMetallicGradient = glassPieces && !!metallic;
+
+  // Deterministic twinkle delay per piece so they don't all sync
+  const twinkleDelay = ((coord.q * 7 + coord.r * 13) % 11) * 0.7;
 
   return (
     <g
@@ -107,41 +114,43 @@ export function Piece({
           : undefined,
       }}
     >
-      {needsGradient && (
+      {useGlassGradient && (
         <defs>
-          {metallic ? (
-            <>
-              <radialGradient id={`${gId}f`} cx="30%" cy="30%" r="70%">
-                <stop offset="0%" stopColor={metallic.highlight} />
-                <stop offset="30%" stopColor={metallic.light} />
-                <stop offset="70%" stopColor={metallic.mid} />
-                <stop offset="100%" stopColor={metallic.dark} />
-              </radialGradient>
-              <radialGradient id={`${gId}h`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
-                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-              </radialGradient>
-              <radialGradient id={`${gId}r`} cx="50%" cy="30%" r="50%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.5)" />
-                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-              </radialGradient>
-            </>
-          ) : (
-            <>
-              <radialGradient id={`${gId}f`} cx="35%" cy="35%" r="65%">
-                <stop offset="0%" stopColor={lightColor} />
-                <stop offset="100%" stopColor={darkColor} />
-              </radialGradient>
-              <radialGradient id={`${gId}h`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.75)" />
-                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-              </radialGradient>
-              <radialGradient id={`${gId}r`} cx="50%" cy="30%" r="50%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.35)" />
-                <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-              </radialGradient>
-            </>
-          )}
+          <radialGradient id={`${gId}f`} cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor={lightColor} />
+            <stop offset="100%" stopColor={darkColor} />
+          </radialGradient>
+          <radialGradient id={`${gId}h`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.75)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+          <radialGradient id={`${gId}r`} cx="50%" cy="30%" r="50%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.35)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+        </defs>
+      )}
+      {useMetallicGradient && metallic && (
+        <defs>
+          {/* Linear gradient for brushed-metal band effect */}
+          <linearGradient id={`${gId}f`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor={metallic.dark} />
+            <stop offset="25%" stopColor={metallic.bandLight} />
+            <stop offset="50%" stopColor={metallic.mid} />
+            <stop offset="75%" stopColor={metallic.bandDark} />
+            <stop offset="100%" stopColor={metallic.light} />
+          </linearGradient>
+          {/* Sharp specular highlight */}
+          <radialGradient id={`${gId}h`} cx="35%" cy="30%" r="35%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+            <stop offset="60%" stopColor="rgba(255,255,255,0.3)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+          {/* Edge reflection */}
+          <radialGradient id={`${gId}r`} cx="65%" cy="70%" r="40%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
         </defs>
       )}
       {/* Piece shadow */}
@@ -156,14 +165,25 @@ export function Piece({
         cx={0}
         cy={0}
         r={pieceRadius}
-        fill={needsGradient ? `url(#${gId}f)` : pieceColor}
-        stroke={needsGradient ? 'none' : (isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff'))}
-        strokeWidth={needsGradient ? 0 : 1.5}
+        fill={(useGlassGradient || useMetallicGradient) ? `url(#${gId}f)` : pieceColor}
+        stroke={(useGlassGradient || useMetallicGradient) ? 'none' : (isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff'))}
+        strokeWidth={(useGlassGradient || useMetallicGradient) ? 0 : 1.5}
       />
-      {/* Glass marble / metallic shine effects */}
-      {needsGradient && (
+      {/* Metallic rim stroke in glass mode */}
+      {useMetallicGradient && metallic && (
+        <circle
+          cx={0}
+          cy={0}
+          r={pieceRadius - 0.5}
+          fill="none"
+          stroke={metallic.rim}
+          strokeWidth={1}
+          opacity={0.6}
+        />
+      )}
+      {/* Glass marble effects (non-metallic) */}
+      {useGlassGradient && (
         <>
-          {/* Specular highlight - top-left shine spot */}
           <ellipse
             cx={-pieceRadius * 0.3}
             cy={-pieceRadius * 0.3}
@@ -171,7 +191,6 @@ export function Piece({
             ry={pieceRadius * 0.25}
             fill={`url(#${gId}h)`}
           />
-          {/* Bottom rim reflection */}
           <ellipse
             cx={pieceRadius * 0.1}
             cy={pieceRadius * 0.3}
@@ -180,6 +199,50 @@ export function Piece({
             fill={`url(#${gId}r)`}
           />
         </>
+      )}
+      {/* Metallic glass effects - sharper highlight + edge reflection */}
+      {useMetallicGradient && (
+        <>
+          <ellipse
+            cx={-pieceRadius * 0.25}
+            cy={-pieceRadius * 0.25}
+            rx={pieceRadius * 0.3}
+            ry={pieceRadius * 0.2}
+            fill={`url(#${gId}h)`}
+          />
+          <ellipse
+            cx={pieceRadius * 0.15}
+            cy={pieceRadius * 0.25}
+            rx={pieceRadius * 0.3}
+            ry={pieceRadius * 0.12}
+            fill={`url(#${gId}r)`}
+          />
+        </>
+      )}
+      {/* Flat metallic mode: solid color + twinkle star */}
+      {metallic && !glassPieces && (
+        <g className="metallic-twinkle" style={{ animationDelay: `${twinkleDelay}s` }}>
+          <line
+            x1={-pieceRadius * 0.25} y1={0}
+            x2={pieceRadius * 0.25} y2={0}
+            stroke="white" strokeWidth={1.2} strokeLinecap="round"
+          />
+          <line
+            x1={0} y1={-pieceRadius * 0.25}
+            x2={0} y2={pieceRadius * 0.25}
+            stroke="white" strokeWidth={1.2} strokeLinecap="round"
+          />
+          <line
+            x1={-pieceRadius * 0.15} y1={-pieceRadius * 0.15}
+            x2={pieceRadius * 0.15} y2={pieceRadius * 0.15}
+            stroke="white" strokeWidth={0.8} strokeLinecap="round"
+          />
+          <line
+            x1={pieceRadius * 0.15} y1={-pieceRadius * 0.15}
+            x2={-pieceRadius * 0.15} y2={pieceRadius * 0.15}
+            stroke="white" strokeWidth={0.8} strokeLinecap="round"
+          />
+        </g>
       )}
       {/* Highlight for current player's pieces - 6 spinning segments outside border */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
