@@ -671,10 +671,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = woodenBoard
-              ? (darkMode ? '#2a1a0a' : '#5a4020')
+              ? (darkMode ? '#6a5030' : '#b89060')
               : (darkMode ? '#3a3a3a' : '#e2e2e2');
           } else {
-            fill = woodenBoard ? (darkMode ? '#3a2510' : '#6e4a28') : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            fill = woodenBoard ? (darkMode ? '#5a4020' : '#a07848') : (darkMode ? '#2a2a2a' : '#f8f8f8');
           }
 
           return (
