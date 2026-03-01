@@ -489,24 +489,24 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
         <g>
           <defs>
             <linearGradient id="wood-base" x1="0%" y1="0%" x2="100%" y2="10%">
-              <stop offset="0%" stopColor={darkMode ? '#4a3010' : '#a07030'} />
-              <stop offset="30%" stopColor={darkMode ? '#5a3e16' : '#b08040'} />
-              <stop offset="70%" stopColor={darkMode ? '#4a3010' : '#906528'} />
-              <stop offset="100%" stopColor={darkMode ? '#3a280e' : '#805820'} />
+              <stop offset="0%" stopColor={darkMode ? '#4a3018' : '#8b6038'} />
+              <stop offset="30%" stopColor={darkMode ? '#584020' : '#9a6d42'} />
+              <stop offset="70%" stopColor={darkMode ? '#4a3018' : '#7d5530'} />
+              <stop offset="100%" stopColor={darkMode ? '#3a2810' : '#6e4a28'} />
             </linearGradient>
             <clipPath id="wood-clip">
               <circle cx={0} cy={0} r={boardRadius} />
             </clipPath>
             <filter id="wood-grain-filter" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
-              {/* Stretched noise for directional grain */}
-              <feTurbulence type="fractalNoise" baseFrequency="0.005 0.06" numOctaves="4" seed="8" result="noise"/>
+              {/* Stretched noise for directional grain — low frequency, few octaves for broad gentle variation */}
+              <feTurbulence type="fractalNoise" baseFrequency="0.003 0.025" numOctaves="2" seed="8" result="noise"/>
               {/* Desaturate to grayscale to prevent rainbow artifacts */}
               <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
-              {/* High contrast to create distinct grain bands */}
+              {/* Low contrast for subtle grain */}
               <feComponentTransfer in="grayNoise" result="grain">
-                <feFuncR type="linear" slope={darkMode ? 1.5 : 1.8} intercept={darkMode ? -0.3 : -0.35}/>
-                <feFuncG type="linear" slope={darkMode ? 1.5 : 1.8} intercept={darkMode ? -0.3 : -0.35}/>
-                <feFuncB type="linear" slope={darkMode ? 1.5 : 1.8} intercept={darkMode ? -0.3 : -0.35}/>
+                <feFuncR type="linear" slope={darkMode ? 0.6 : 0.7} intercept={darkMode ? 0.15 : 0.1}/>
+                <feFuncG type="linear" slope={darkMode ? 0.6 : 0.7} intercept={darkMode ? 0.15 : 0.1}/>
+                <feFuncB type="linear" slope={darkMode ? 0.6 : 0.7} intercept={darkMode ? 0.15 : 0.1}/>
                 <feFuncA type="linear" slope="0" intercept="1"/>
               </feComponentTransfer>
               <feBlend mode="soft-light" in="SourceGraphic" in2="grain"/>
@@ -558,12 +558,12 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           {/* Beveled edge - lighter inner ring + darker outer ring */}
           <circle cx={0} cy={0} r={boardRadius - 1.5}
             fill="none"
-            stroke={darkMode ? '#6a4a18' : '#a07030'}
+            stroke={darkMode ? '#5a4020' : '#9a6d42'}
             strokeWidth={1.5}
           />
           <circle cx={0} cy={0} r={boardRadius}
             fill="none"
-            stroke={darkMode ? '#1a1008' : '#3a2008'}
+            stroke={darkMode ? '#1a1008' : '#3a2510'}
             strokeWidth={2}
           />
         </g>
