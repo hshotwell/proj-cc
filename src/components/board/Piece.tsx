@@ -120,8 +120,8 @@ export function Piece({
         cy={0}
         r={pieceRadius}
         fill={glassPieces ? `url(#${gId}f)` : pieceColor}
-        stroke={isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff')}
-        strokeWidth={1.5}
+        stroke={glassPieces ? 'none' : (isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff'))}
+        strokeWidth={glassPieces ? 0 : 1.5}
       />
       {/* Glass marble effects */}
       {glassPieces && (

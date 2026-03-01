@@ -570,7 +570,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       )}
 
       {/* Layer 0: Triangle fills between adjacent cells */}
-      <g>
+      <g filter={woodenBoard ? 'url(#wood-grain-filter)' : undefined}>
         {boardTriangles.map((tri) => {
           const points = tri.vertices.map((key) => {
             const pos = parseCoordKey(key);
@@ -582,13 +582,18 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           if (tri.playerOwners.length > 0 && gameState) {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
             if (woodenBoard) {
-              // Semi-transparent player tint over wood
+              // Blend player color toward wood base for an opaque wood-toned tint
+              const woodBase = darkMode ? [0x4a, 0x30, 0x18] : [0x8b, 0x60, 0x38];
               const n = colors.length;
               const avg = colors.reduce((acc, c) => {
                 const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
                 return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
               }, [0, 0, 0]);
-              fill = `rgba(${Math.round(avg[0])},${Math.round(avg[1])},${Math.round(avg[2])},${darkMode ? 0.45 : 0.4})`;
+              const strength = darkMode ? 0.35 : 0.3;
+              const br = Math.round(woodBase[0] + (avg[0] - woodBase[0]) * strength);
+              const bg = Math.round(woodBase[1] + (avg[1] - woodBase[1]) * strength);
+              const bb = Math.round(woodBase[2] + (avg[2] - woodBase[2]) * strength);
+              fill = `#${br.toString(16).padStart(2, '0')}${bg.toString(16).padStart(2, '0')}${bb.toString(16).padStart(2, '0')}`;
             } else if (darkMode) {
               // Blend colors then lighten to produce a visible opaque tint
               const lightened = colors.map((c) => lightenHex(c, 0.4));
@@ -616,10 +621,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = woodenBoard
-              ? (darkMode ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.08)')
+              ? (darkMode ? '#3e2a14' : '#7a5830')
               : (darkMode ? '#3a3a3a' : '#e2e2e2');
           } else {
-            fill = woodenBoard ? 'transparent' : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            fill = woodenBoard ? (darkMode ? '#4a3018' : '#8b6038') : (darkMode ? '#2a2a2a' : '#f8f8f8');
           }
 
           return (
@@ -651,7 +656,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       </g>
 
       {/* Layer 1: Background cells */}
-      <g>
+      <g filter={woodenBoard ? 'url(#wood-grain-filter)' : undefined}>
         {boardPositions.map((coord) => (
           <g
             key={coordKey(coord)}

@@ -49,10 +49,10 @@ export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = fa
         cy={y}
         r={size * 0.45}
         fill={woodenBoard
-          ? (darkMode ? 'rgba(106,80,48,0.6)' : 'rgba(184,144,104,0.55)')
+          ? (darkMode ? '#6a5030' : '#b89068')
           : '#e5e7eb'}
         stroke={woodenBoard
-          ? (darkMode ? 'rgba(74,56,32,0.7)' : 'rgba(122,96,64,0.65)')
+          ? (darkMode ? '#4a3820' : '#7a6040')
           : '#9ca3af'}
         strokeWidth={woodenBoard ? 1.2 : 1}
       />
