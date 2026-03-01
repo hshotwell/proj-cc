@@ -150,7 +150,7 @@ export function Piece({
         const highlightR = borderOuter + 1 + 1; // 1px gap + half of 2px stroke
         const circumference = 2 * Math.PI * highlightR;
         const segmentLen = circumference / 12;
-        const segmentColor = darkMode ? lightenColor(pieceColor, 0.4) : pieceColor;
+        const segmentColor = lightenColor(pieceColor, 0.4);
         return (
           <circle
             cx={0}
