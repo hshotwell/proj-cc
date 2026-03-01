@@ -588,7 +588,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
                 return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
               }, [0, 0, 0]);
-              fill = `rgba(${Math.round(avg[0])},${Math.round(avg[1])},${Math.round(avg[2])},${darkMode ? 0.25 : 0.2})`;
+              fill = `rgba(${Math.round(avg[0])},${Math.round(avg[1])},${Math.round(avg[2])},${darkMode ? 0.45 : 0.4})`;
             } else if (darkMode) {
               // Blend colors then lighten to produce a visible opaque tint
               const lightened = colors.map((c) => lightenHex(c, 0.4));
