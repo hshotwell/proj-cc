@@ -494,10 +494,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               <stop offset="70%" stopColor={darkMode ? '#4a3018' : '#7d5530'} />
               <stop offset="100%" stopColor={darkMode ? '#3a2810' : '#6e4a28'} />
             </linearGradient>
-            <clipPath id="wood-clip">
-              <circle cx={0} cy={0} r={boardRadius} />
-            </clipPath>
-            <filter id="wood-grain-filter" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
+            <filter id="wood-grain-filter" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
               {/* Stretched noise for directional grain — spread out but visible */}
               <feTurbulence type="fractalNoise" baseFrequency="0.004 0.035" numOctaves="3" seed="8" result="noise"/>
               {/* Desaturate to grayscale to prevent rainbow artifacts */}
@@ -509,11 +506,13 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 <feFuncB type="linear" slope={darkMode ? 1.1 : 1.3} intercept={darkMode ? -0.1 : -0.15}/>
                 <feFuncA type="linear" slope="0" intercept="1"/>
               </feComponentTransfer>
-              <feBlend mode="soft-light" in="SourceGraphic" in2="grain"/>
+              <feBlend mode="soft-light" in="SourceGraphic" in2="grain" result="blended"/>
+              {/* Clip output to source shape so grain doesn't bleed into rectangular bounding box */}
+              <feComposite operator="in" in="blended" in2="SourceGraphic"/>
             </filter>
           </defs>
           {/* Wood base with grain texture */}
-          <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-base)" filter="url(#wood-grain-filter)" clipPath="url(#wood-clip)" />
+          <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-base)" filter="url(#wood-grain-filter)" />
           {/* Subtle radial grain lines suggesting linear grain direction */}
           {[0.15, 0.55, 1.05, 1.45, 1.95, 2.35, 2.85].map((angle, i) => (
             <line
