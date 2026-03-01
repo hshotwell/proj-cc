@@ -61,8 +61,12 @@ function generateDots(id: string, isFinal: boolean): ParticleDot[] {
   const count = isFinal ? 14 + Math.floor(rand() * 5) : 8 + Math.floor(rand() * 5);
   const dots: ParticleDot[] = [];
 
+  const angleStep = (Math.PI * 2) / count;
+  const jitterRange = angleStep * 0.3; // +-30% of the spacing as jitter
+
   for (let i = 0; i < count; i++) {
-    const angle = rand() * Math.PI * 2;
+    const baseAngle = angleStep * i;
+    const angle = baseAngle + (rand() * 2 - 1) * jitterRange;
     const radius = isFinal
       ? 10 + rand() * 6   // 10-16px
       : 6 + rand() * 4;   // 6-10px
@@ -70,7 +74,7 @@ function generateDots(id: string, isFinal: boolean): ParticleDot[] {
       ? 1.5 + rand() * 1.5 // 1.5-3px
       : 1 + rand() * 1;    // 1-2px
     const colorShift = (rand() * 2 - 1); // -1 to 1
-    const duration = 300 + rand() * 200;  // 300-500ms
+    const duration = 450 + rand() * 300;  // 450-750ms
 
     dots.push({ angle, radius, size, colorShift, duration });
   }

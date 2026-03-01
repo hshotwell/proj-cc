@@ -147,7 +147,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       if (!hopEffect || !animateMoves || !gameState) return;
       const pos = cubeToPixel(animationPath[animationStep], HEX_SIZE);
       const isFinal = animationStep === animationPath.length - 1;
-      const playerColor = getPlayerColorFromState(gameState.currentPlayer, gameState);
+      // Look up the player from the board at the animating piece's coord
+      // (gameState.currentPlayer may already be the next player in auto-confirm mode)
+      const pieceContent = gameState.board.get(coordKey(animatingPiece));
+      const player = pieceContent?.type === 'piece' ? pieceContent.player : gameState.currentPlayer;
+      const playerColor = getPlayerColorFromState(player, gameState);
       setHopParticles((prev) => [
         ...prev,
         {
@@ -195,7 +199,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
     if (hopParticles.length === 0) return;
     const timer = setInterval(() => {
       const now = Date.now();
-      setHopParticles((prev) => prev.filter((p) => now - p.createdAt < 600));
+      setHopParticles((prev) => prev.filter((p) => now - p.createdAt < 900));
     }, 100);
     return () => clearInterval(timer);
   }, [hopParticles.length]);
@@ -624,7 +628,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
                 return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
               }, [0, 0, 0]);
-              const strength = darkMode ? 0.7 : 0.65;
+              const strength = darkMode ? 0.85 : 0.8;
               const br = Math.round(woodBase[0] + (avg[0] - woodBase[0]) * strength);
               const bg = Math.round(woodBase[1] + (avg[1] - woodBase[1]) * strength);
               const bb = Math.round(woodBase[2] + (avg[2] - woodBase[2]) * strength);
