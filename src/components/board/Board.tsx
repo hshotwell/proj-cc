@@ -498,15 +498,15 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               <circle cx={0} cy={0} r={boardRadius} />
             </clipPath>
             <filter id="wood-grain-filter" x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
-              {/* Stretched noise for directional grain — low frequency, few octaves for broad gentle variation */}
-              <feTurbulence type="fractalNoise" baseFrequency="0.003 0.025" numOctaves="2" seed="8" result="noise"/>
+              {/* Stretched noise for directional grain — spread out but visible */}
+              <feTurbulence type="fractalNoise" baseFrequency="0.004 0.035" numOctaves="3" seed="8" result="noise"/>
               {/* Desaturate to grayscale to prevent rainbow artifacts */}
               <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
-              {/* Low contrast for subtle grain */}
+              {/* Moderate contrast for visible but not overpowering grain */}
               <feComponentTransfer in="grayNoise" result="grain">
-                <feFuncR type="linear" slope={darkMode ? 0.6 : 0.7} intercept={darkMode ? 0.15 : 0.1}/>
-                <feFuncG type="linear" slope={darkMode ? 0.6 : 0.7} intercept={darkMode ? 0.15 : 0.1}/>
-                <feFuncB type="linear" slope={darkMode ? 0.6 : 0.7} intercept={darkMode ? 0.15 : 0.1}/>
+                <feFuncR type="linear" slope={darkMode ? 1.1 : 1.3} intercept={darkMode ? -0.1 : -0.15}/>
+                <feFuncG type="linear" slope={darkMode ? 1.1 : 1.3} intercept={darkMode ? -0.1 : -0.15}/>
+                <feFuncB type="linear" slope={darkMode ? 1.1 : 1.3} intercept={darkMode ? -0.1 : -0.15}/>
                 <feFuncA type="linear" slope="0" intercept="1"/>
               </feComponentTransfer>
               <feBlend mode="soft-light" in="SourceGraphic" in2="grain"/>
@@ -581,7 +581,15 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           let fill: string;
           if (tri.playerOwners.length > 0 && gameState) {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
-            if (darkMode) {
+            if (woodenBoard) {
+              // Semi-transparent player tint over wood
+              const n = colors.length;
+              const avg = colors.reduce((acc, c) => {
+                const [r, g, b] = c.replace('#', '').match(/.{2}/g)!.map(h => parseInt(h, 16));
+                return [acc[0] + r / n, acc[1] + g / n, acc[2] + b / n];
+              }, [0, 0, 0]);
+              fill = `rgba(${Math.round(avg[0])},${Math.round(avg[1])},${Math.round(avg[2])},${darkMode ? 0.25 : 0.2})`;
+            } else if (darkMode) {
               // Blend colors then lighten to produce a visible opaque tint
               const lightened = colors.map((c) => lightenHex(c, 0.4));
               const n = lightened.length;
@@ -607,9 +615,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               fill = `#${br.toString(16).padStart(2, '0')}${bg.toString(16).padStart(2, '0')}${bb.toString(16).padStart(2, '0')}`;
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
-            fill = darkMode ? '#3a3a3a' : '#e2e2e2';
+            fill = woodenBoard
+              ? (darkMode ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.08)')
+              : (darkMode ? '#3a3a3a' : '#e2e2e2');
           } else {
-            fill = darkMode ? '#2a2a2a' : '#f8f8f8';
+            fill = woodenBoard ? 'transparent' : (darkMode ? '#2a2a2a' : '#f8f8f8');
           }
 
           return (
@@ -617,7 +627,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               key={`tri-${tri.vertices.join('-')}`}
               points={points}
               fill={fill}
-              stroke={showTriangleLines ? (darkMode ? '#888' : 'black') : fill}
+              stroke={showTriangleLines ? (woodenBoard ? (darkMode ? '#5a4020' : '#6e5030') : (darkMode ? '#888' : 'black')) : fill}
               strokeWidth={showTriangleLines ? 0.5 : 0.5}
               strokeLinejoin="round"
             />
