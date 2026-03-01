@@ -561,7 +561,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               {/* Clip output to source shape so grain doesn't bleed into rectangular bounding box */}
               <feComposite operator="in" in="blended" in2="SourceGraphic"/>
             </filter>
-            {/* Subtle version: 30% grain blended with 70% original */}
+            {/* Subtle version: 50% grain blended with 50% original */}
             <filter id="wood-grain-subtle" x="-5%" y="-5%" width="110%" height="110%" colorInterpolationFilters="sRGB">
               <feTurbulence type="fractalNoise" baseFrequency="0.004 0.035" numOctaves="3" seed="8" result="noise"/>
               <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
@@ -572,9 +572,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 <feFuncA type="linear" slope="0" intercept="1"/>
               </feComponentTransfer>
               <feBlend mode="soft-light" in="SourceGraphic" in2="grain" result="blended"/>
-              {/* Mix 30% grain effect with 70% original source */}
-              <feColorMatrix type="matrix" in="SourceGraphic" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.7 0" result="srcFaded"/>
-              <feColorMatrix type="matrix" in="blended" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.3 0" result="grainFaded"/>
+              {/* Mix 50% grain effect with 50% original source */}
+              <feColorMatrix type="matrix" in="SourceGraphic" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.5 0" result="srcFaded"/>
+              <feColorMatrix type="matrix" in="blended" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.5 0" result="grainFaded"/>
               <feComposite operator="over" in="srcFaded" in2="grainFaded" result="mixed"/>
               <feComposite operator="in" in="mixed" in2="SourceGraphic"/>
             </filter>
@@ -688,10 +688,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
             }
           } else if (tri.zonePlayer !== null && !gameState?.activePlayers.includes(tri.zonePlayer)) {
             fill = woodenBoard
-              ? (darkMode ? '#6a5030' : '#b89060')
+              ? (darkMode ? 'rgba(30,30,30,0.55)' : 'rgba(60,60,60,0.45)')
               : (darkMode ? '#3a3a3a' : '#e2e2e2');
           } else {
-            fill = woodenBoard ? (darkMode ? '#5a4020' : '#a07848') : (darkMode ? '#2a2a2a' : '#f8f8f8');
+            fill = woodenBoard ? (darkMode ? 'rgba(50,50,50,0.4)' : 'rgba(120,120,120,0.3)') : (darkMode ? '#2a2a2a' : '#f8f8f8');
           }
 
           return (
