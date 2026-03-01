@@ -68,6 +68,7 @@ export const getSettings = query({
         showPlayerProgress: false,
         darkMode: false,
         woodenBoard: false,
+        glassPieces: false,
       };
     }
 
@@ -82,6 +83,7 @@ export const getSettings = query({
       showPlayerProgress: settings.showPlayerProgress,
       darkMode: settings.darkMode ?? false,
       woodenBoard: settings.woodenBoard ?? false,
+      glassPieces: settings.glassPieces ?? false,
     };
   },
 });
@@ -99,6 +101,7 @@ export const saveSettings = mutation({
     showPlayerProgress: v.boolean(),
     darkMode: v.optional(v.boolean()),
     woodenBoard: v.optional(v.boolean()),
+    glassPieces: v.optional(v.boolean()),
   },
   handler: async (ctx, settings) => {
     const userId = await auth.getUserId(ctx);

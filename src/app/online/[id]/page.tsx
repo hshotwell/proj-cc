@@ -46,14 +46,19 @@ function OnlineGameOverDialog({ gameId }: { gameId: Id<"onlineGames"> }) {
 
   const { finishedPlayers, moveHistory } = gameState;
 
-  // Count per-player moves from history
-  const playerMoveCounts = new Map<number, number>();
-  for (const move of moveHistory) {
-    if (move.player !== undefined) {
-      playerMoveCounts.set(move.player, (playerMoveCounts.get(move.player) ?? 0) + 1);
+  // Count distinct turns (by turnNumber) each player took
+  const playerTurnCounts = new Map<number, number>();
+  const seenTurns = new Map<number, Set<number>>();
+  for (const m of moveHistory) {
+    if (m.player !== undefined && m.turnNumber !== undefined) {
+      if (!seenTurns.has(m.player)) seenTurns.set(m.player, new Set());
+      seenTurns.get(m.player)!.add(m.turnNumber);
     }
   }
-  const firstPlayerMoves = finishedPlayers[0] ? (playerMoveCounts.get(finishedPlayers[0].player) ?? 0) : 0;
+  for (const [player, turns] of seenTurns) {
+    playerTurnCounts.set(player, turns.size);
+  }
+  const firstPlayerTurns = finishedPlayers[0] ? (playerTurnCounts.get(finishedPlayers[0].player) ?? 0) : 0;
 
   const myUserId = user?.id;
   const rematchRequestedBy = onlineGame.rematchRequestedBy as string | undefined;
@@ -82,8 +87,7 @@ function OnlineGameOverDialog({ gameId }: { gameId: Id<"onlineGames"> }) {
             {finishedPlayers.map((fp, i) => {
               const color = getPlayerColorFromState(fp.player, gameState);
               const name = getPlayerDisplayNameFromState(fp.player, gameState);
-              const thisPlayerMoves = playerMoveCounts.get(fp.player) ?? 0;
-              const extra = thisPlayerMoves - firstPlayerMoves;
+              const extra = Math.max(1, (playerTurnCounts.get(fp.player) ?? 0) - firstPlayerTurns);
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                   <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>
@@ -95,7 +99,7 @@ function OnlineGameOverDialog({ gameId }: { gameId: Id<"onlineGames"> }) {
                     {name}
                   </span>
                   {i > 0 && (
-                    <span className="text-xs text-gray-400">+{extra} moves</span>
+                    <span className="text-xs text-gray-400">+{extra} {extra === 1 ? 'turn' : 'turns'}</span>
                   )}
                 </div>
               );

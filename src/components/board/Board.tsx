@@ -49,7 +49,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       confirmMove,
       undoLastMove,
     } = useGameStore();
-  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard } = useSettingsStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard, glassPieces } = useSettingsStore();
 
   // Track hovered cell for coordinate display
   const [hoveredCell, setHoveredCell] = useState<CubeCoord | null>(null);
@@ -496,22 +496,81 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           </defs>
           {/* Wood base */}
           <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-grain)" />
-          {/* Concentric grain rings */}
-          {Array.from({ length: 12 }, (_, i) => (
-            <circle
-              key={`ring-${i}`}
-              cx={0} cy={0}
-              r={boardRadius * (0.15 + i * 0.075)}
-              fill="none"
-              stroke={darkMode ? 'rgba(139,105,20,0.12)' : 'rgba(101,67,33,0.15)'}
-              strokeWidth={0.5 + (i % 3) * 0.5}
-            />
+          {/* Varied grain rings with organic spacing */}
+          {Array.from({ length: 18 }, (_, i) => {
+            const seed = (i * 7 + 3) % 18;
+            const baseR = 0.08 + i * 0.052;
+            const jitter = ((seed % 5) - 2) * 0.008;
+            const r = boardRadius * Math.min(baseR + jitter, 0.98);
+            const thickness = 0.3 + (seed % 4) * 0.3;
+            const opacity = darkMode ? 0.08 + (seed % 3) * 0.04 : 0.08 + (seed % 3) * 0.05;
+            const isElliptical = seed % 4 === 0;
+            return isElliptical ? (
+              <ellipse
+                key={`ring-${i}`}
+                cx={0} cy={0}
+                rx={r} ry={r * (0.93 + (seed % 3) * 0.03)}
+                fill="none"
+                stroke={darkMode ? `rgba(139,105,20,${opacity})` : `rgba(101,67,33,${opacity})`}
+                strokeWidth={thickness}
+              />
+            ) : (
+              <circle
+                key={`ring-${i}`}
+                cx={0} cy={0}
+                r={r}
+                fill="none"
+                stroke={darkMode ? `rgba(139,105,20,${opacity})` : `rgba(101,67,33,${opacity})`}
+                strokeWidth={thickness}
+              />
+            );
+          })}
+          {/* Wood knots - tight concentric circles off-center */}
+          {[
+            { x: boardRadius * -0.35, y: boardRadius * 0.25, scale: 0.08 },
+            { x: boardRadius * 0.4, y: boardRadius * -0.3, scale: 0.06 },
+            { x: boardRadius * 0.15, y: boardRadius * 0.55, scale: 0.05 },
+          ].map((knot, ki) => (
+            <g key={`knot-${ki}`}>
+              {[0.9, 0.65, 0.4, 0.2].map((s, ri) => (
+                <ellipse
+                  key={ri}
+                  cx={knot.x}
+                  cy={knot.y}
+                  rx={boardRadius * knot.scale * s}
+                  ry={boardRadius * knot.scale * s * 0.75}
+                  fill="none"
+                  stroke={darkMode ? `rgba(90,65,15,${0.15 + ri * 0.05})` : `rgba(80,50,20,${0.12 + ri * 0.04})`}
+                  strokeWidth={0.6}
+                />
+              ))}
+            </g>
           ))}
-          {/* Board edge */}
+          {/* Subtle radial grain lines */}
+          {Array.from({ length: 8 }, (_, i) => {
+            const angle = (i * Math.PI) / 4 + 0.15;
+            return (
+              <line
+                key={`grain-${i}`}
+                x1={Math.cos(angle) * boardRadius * 0.1}
+                y1={Math.sin(angle) * boardRadius * 0.1}
+                x2={Math.cos(angle) * boardRadius * 0.95}
+                y2={Math.sin(angle) * boardRadius * 0.95}
+                stroke={darkMode ? 'rgba(139,105,20,0.05)' : 'rgba(101,67,33,0.05)'}
+                strokeWidth={0.8}
+              />
+            );
+          })}
+          {/* Beveled edge - lighter inner ring + darker outer ring */}
+          <circle cx={0} cy={0} r={boardRadius - 1.5}
+            fill="none"
+            stroke={darkMode ? '#7a5a1e' : '#c49040'}
+            strokeWidth={1.5}
+          />
           <circle cx={0} cy={0} r={boardRadius}
             fill="none"
-            stroke={darkMode ? '#2a1a08' : '#5c3a10'}
-            strokeWidth={2.5}
+            stroke={darkMode ? '#2a1a08' : '#4a2a08'}
+            strokeWidth={2}
           />
         </g>
       )}
@@ -789,6 +848,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 isAnimating={isThisAnimating}
                 isLastMoved={isLastMoved}
                 darkMode={darkMode}
+                glassPieces={glassPieces}
               />
             </g>
           );

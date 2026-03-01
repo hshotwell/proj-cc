@@ -32,6 +32,7 @@ export default defineSchema({
     showPlayerProgress: v.boolean(),
     darkMode: v.optional(v.boolean()),
     woodenBoard: v.optional(v.boolean()),
+    glassPieces: v.optional(v.boolean()),
   }).index("by_userId", ["userId"]),
 
   boardLayouts: defineTable({

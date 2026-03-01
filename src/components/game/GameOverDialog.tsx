@@ -32,7 +32,19 @@ export function GameOverDialog() {
 
   const { finishedPlayers, activePlayers, moveHistory } = gameState;
 
-  const firstFinishMoveCount = finishedPlayers[0]?.moveCount ?? 0;
+  // Count distinct turns (by turnNumber) each player took
+  const playerTurnCounts = new Map<PlayerIndex, number>();
+  const seenTurns = new Map<PlayerIndex, Set<number>>();
+  for (const m of moveHistory) {
+    if (m.player !== undefined && m.turnNumber !== undefined) {
+      if (!seenTurns.has(m.player)) seenTurns.set(m.player, new Set());
+      seenTurns.get(m.player)!.add(m.turnNumber);
+    }
+  }
+  for (const [player, turns] of seenTurns) {
+    playerTurnCounts.set(player, turns.size);
+  }
+  const firstPlayerTurns = finishedPlayers[0] ? (playerTurnCounts.get(finishedPlayers[0].player) ?? 0) : 0;
 
   const handleWatchReplay = () => {
     if (!gameId) return;
@@ -50,20 +62,10 @@ export function GameOverDialog() {
             {finishedPlayers.map((fp, i) => {
               const color = getPlayerColorFromState(fp.player, gameState);
               const name = getPlayerDisplayNameFromState(fp.player, gameState);
-              // Count distinct turns (not individual hops) this player took after first finish
-              let extra = 0;
-              if (i > 0) {
-                const movesAfterFirst = moveHistory.slice(firstFinishMoveCount);
-                let lastPlayer: PlayerIndex | undefined;
-                for (const m of movesAfterFirst) {
-                  if (m.player === fp.player && m.player !== lastPlayer) {
-                    extra++;
-                  }
-                  lastPlayer = m.player;
-                }
-                // Ensure at least +1 for anyone who finished after first
-                if (extra === 0) extra = 1;
-              }
+              // Additional turns this player took beyond the first finisher
+              const extra = i > 0
+                ? Math.max(1, (playerTurnCounts.get(fp.player) ?? 0) - firstPlayerTurns)
+                : 0;
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                   <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>

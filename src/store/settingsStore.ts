@@ -23,6 +23,7 @@ interface SettingsStore {
   showPlayerProgress: boolean;
   darkMode: boolean;
   woodenBoard: boolean;
+  glassPieces: boolean;
 
   // Sync state
   isSyncing: boolean;
@@ -45,6 +46,7 @@ interface SettingsStore {
   toggleShowPlayerProgress: () => void;
   toggleDarkMode: () => void;
   toggleWoodenBoard: () => void;
+  toggleGlassPieces: () => void;
 
   // Sync actions
   syncFromCloud: () => Promise<void>;
@@ -65,6 +67,7 @@ function getSyncableSettings(state: SettingsStore): SyncableSettings {
     showPlayerProgress: state.showPlayerProgress,
     darkMode: state.darkMode,
     woodenBoard: state.woodenBoard,
+    glassPieces: state.glassPieces,
   };
 }
 
@@ -84,6 +87,7 @@ export const useSettingsStore = create<SettingsStore>()(
       showPlayerProgress: true,
       darkMode: false,
       woodenBoard: false,
+      glassPieces: false,
 
       // Sync state
       isSyncing: false,
@@ -144,6 +148,10 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       toggleWoodenBoard: () => {
         set((state) => ({ woodenBoard: !state.woodenBoard }));
+        get().syncToCloud();
+      },
+      toggleGlassPieces: () => {
+        set((state) => ({ glassPieces: !state.glassPieces }));
         get().syncToCloud();
       },
 
@@ -207,6 +215,7 @@ export const useSettingsStore = create<SettingsStore>()(
         showPlayerProgress: state.showPlayerProgress,
         darkMode: state.darkMode,
         woodenBoard: state.woodenBoard,
+        glassPieces: state.glassPieces,
       }),
     }
   )

@@ -13,6 +13,7 @@ export interface SyncableSettings {
   showPlayerProgress: boolean;
   darkMode: boolean;
   woodenBoard: boolean;
+  glassPieces: boolean;
 }
 
 // Storage provider interface for settings

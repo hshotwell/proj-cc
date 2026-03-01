@@ -32,6 +32,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     showPlayerProgress,
     darkMode,
     woodenBoard,
+    glassPieces,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -42,6 +43,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleShowPlayerProgress,
     toggleDarkMode,
     toggleWoodenBoard,
+    toggleGlassPieces,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
@@ -216,6 +218,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 description={woodenBoard ? 'Classic wood finish' : 'Standard flat board'}
                 checked={woodenBoard}
                 onChange={toggleWoodenBoard}
+              />
+              <ToggleOption
+                label="Glass pieces"
+                description={glassPieces ? 'Shiny glass marbles' : 'Flat colored pieces'}
+                checked={glassPieces}
+                onChange={toggleGlassPieces}
               />
               <ToggleOption
                 label="Show coordinates"

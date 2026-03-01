@@ -34,6 +34,7 @@ export const localSettingsStorage: SettingsStorageProvider = {
         showPlayerProgress: data.state?.showPlayerProgress ?? false,
         darkMode: data.state?.darkMode ?? false,
         woodenBoard: data.state?.woodenBoard ?? false,
+        glassPieces: data.state?.glassPieces ?? false,
       };
     } catch {
       return null;

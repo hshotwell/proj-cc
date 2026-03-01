@@ -19,6 +19,7 @@ interface PieceProps {
   // Highlight this piece as the last moved piece for its player
   isLastMoved?: boolean;
   darkMode?: boolean;
+  glassPieces?: boolean;
 }
 
 // Lighten a hex color by mixing with white
@@ -63,6 +64,7 @@ export function Piece({
   isAnimating,
   isLastMoved,
   darkMode,
+  glassPieces,
 }: PieceProps) {
   // Use displayCoord for visual position if provided, otherwise use actual coord
   const renderCoord = displayCoord ?? coord;
@@ -72,6 +74,11 @@ export function Piece({
 
   // Piece radius is larger than board cell (0.45) so pieces stand out
   const pieceRadius = size * 0.58;
+
+  // Glass marble gradient IDs (unique per piece coordinate)
+  const gId = glassPieces ? `mb${coord.q}_${coord.r}` : '';
+  const lightColor = glassPieces ? lightenColor(pieceColor, 0.35) : '';
+  const darkColor = glassPieces ? darkenColor(pieceColor, 0.25) : '';
 
   return (
     <g
@@ -84,6 +91,22 @@ export function Piece({
           : undefined,
       }}
     >
+      {glassPieces && (
+        <defs>
+          <radialGradient id={`${gId}f`} cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor={lightColor} />
+            <stop offset="100%" stopColor={darkColor} />
+          </radialGradient>
+          <radialGradient id={`${gId}h`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.75)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+          <radialGradient id={`${gId}r`} cx="50%" cy="30%" r="50%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.35)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </radialGradient>
+        </defs>
+      )}
       {/* Piece shadow */}
       <circle
         cx={1}
@@ -96,10 +119,31 @@ export function Piece({
         cx={0}
         cy={0}
         r={pieceRadius}
-        fill={pieceColor}
+        fill={glassPieces ? `url(#${gId}f)` : pieceColor}
         stroke={isSelected ? (darkMode ? '#fff' : '#000') : (darkMode ? '#000' : '#fff')}
         strokeWidth={1.5}
       />
+      {/* Glass marble effects */}
+      {glassPieces && (
+        <>
+          {/* Specular highlight - top-left shine spot */}
+          <ellipse
+            cx={-pieceRadius * 0.3}
+            cy={-pieceRadius * 0.3}
+            rx={pieceRadius * 0.35}
+            ry={pieceRadius * 0.25}
+            fill={`url(#${gId}h)`}
+          />
+          {/* Bottom rim reflection */}
+          <ellipse
+            cx={pieceRadius * 0.1}
+            cy={pieceRadius * 0.3}
+            rx={pieceRadius * 0.4}
+            ry={pieceRadius * 0.15}
+            fill={`url(#${gId}r)`}
+          />
+        </>
+      )}
       {/* Highlight for current player's pieces - 6 spinning segments outside border */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
         const borderOuter = pieceRadius + 0.75; // half of 1.5 strokeWidth
