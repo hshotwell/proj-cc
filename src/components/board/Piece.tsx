@@ -27,8 +27,8 @@ const METALLIC_COLORS: Record<string, {
   light: string; mid: string; dark: string; rim: string;
   bandLight: string; bandDark: string;
 }> = {
-  '#c0c0c0': { light: '#e8e8e8', mid: '#c0c0c0', dark: '#606060', rim: '#909090', bandLight: '#f8f8f8', bandDark: '#888888' }, // Silver
-  '#ffd700': { light: '#ffe566', mid: '#ffd700', dark: '#996800', rim: '#cc9900', bandLight: '#fff0a0', bandDark: '#b8860b' }, // Gold
+  '#c0c0c0': { light: '#d0d0d0', mid: '#a8a8a8', dark: '#505050', rim: '#707070', bandLight: '#e0e0e0', bandDark: '#686868' }, // Silver
+  '#ffd700': { light: '#f0c800', mid: '#d4a800', dark: '#7a5800', rim: '#a07000', bandLight: '#ffe050', bandDark: '#9a7000' }, // Gold
 };
 
 function isMetallic(hex: string): boolean {
@@ -100,8 +100,10 @@ export function Piece({
   const useGlassGradient = glassPieces && !metallic;
   const useMetallicGradient = glassPieces && !!metallic;
 
-  // Deterministic twinkle delay per piece so they don't all sync
-  const twinkleDelay = ((coord.q * 7 + coord.r * 13) % 11) * 0.7;
+  // Deterministic pseudo-random values per piece for staggered effects
+  const seed = Math.abs(coord.q * 7 + coord.r * 13);
+  const seed2 = Math.abs(coord.q * 11 + coord.r * 3);
+  const seed3 = Math.abs(coord.q * 5 + coord.r * 17);
 
   return (
     <g
@@ -132,25 +134,18 @@ export function Piece({
       )}
       {useMetallicGradient && metallic && (
         <defs>
-          {/* Linear gradient for brushed-metal band effect */}
+          {/* Linear gradient for brushed-metal band effect — darker tones */}
           <linearGradient id={`${gId}f`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor={metallic.dark} />
-            <stop offset="25%" stopColor={metallic.bandLight} />
-            <stop offset="50%" stopColor={metallic.mid} />
-            <stop offset="75%" stopColor={metallic.bandDark} />
-            <stop offset="100%" stopColor={metallic.light} />
+            <stop offset="20%" stopColor={metallic.bandLight} />
+            <stop offset="45%" stopColor={metallic.mid} />
+            <stop offset="70%" stopColor={metallic.bandDark} />
+            <stop offset="85%" stopColor={metallic.mid} />
+            <stop offset="100%" stopColor={metallic.dark} />
           </linearGradient>
-          {/* Sharp specular highlight */}
-          <radialGradient id={`${gId}h`} cx="35%" cy="30%" r="35%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-            <stop offset="60%" stopColor="rgba(255,255,255,0.3)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
-          {/* Edge reflection */}
-          <radialGradient id={`${gId}r`} cx="65%" cy="70%" r="40%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
+          <clipPath id={`${gId}clip`}>
+            <circle cx={0} cy={0} r={pieceRadius} />
+          </clipPath>
         </defs>
       )}
       {/* Piece shadow */}
@@ -200,50 +195,71 @@ export function Piece({
           />
         </>
       )}
-      {/* Metallic glass effects - sharper highlight + edge reflection */}
-      {useMetallicGradient && (
-        <>
-          <ellipse
-            cx={-pieceRadius * 0.25}
-            cy={-pieceRadius * 0.25}
-            rx={pieceRadius * 0.3}
-            ry={pieceRadius * 0.2}
-            fill={`url(#${gId}h)`}
-          />
-          <ellipse
-            cx={pieceRadius * 0.15}
-            cy={pieceRadius * 0.25}
-            rx={pieceRadius * 0.3}
-            ry={pieceRadius * 0.12}
-            fill={`url(#${gId}r)`}
-          />
-        </>
-      )}
-      {/* Flat metallic mode: solid color + twinkle star */}
-      {metallic && !glassPieces && (
-        <g className="metallic-twinkle" style={{ animationDelay: `${twinkleDelay}s` }}>
-          <line
-            x1={-pieceRadius * 0.25} y1={0}
-            x2={pieceRadius * 0.25} y2={0}
-            stroke="white" strokeWidth={1.2} strokeLinecap="round"
-          />
-          <line
-            x1={0} y1={-pieceRadius * 0.25}
-            x2={0} y2={pieceRadius * 0.25}
-            stroke="white" strokeWidth={1.2} strokeLinecap="round"
-          />
-          <line
-            x1={-pieceRadius * 0.15} y1={-pieceRadius * 0.15}
-            x2={pieceRadius * 0.15} y2={pieceRadius * 0.15}
-            stroke="white" strokeWidth={0.8} strokeLinecap="round"
-          />
-          <line
-            x1={pieceRadius * 0.15} y1={-pieceRadius * 0.15}
-            x2={-pieceRadius * 0.15} y2={pieceRadius * 0.15}
-            stroke="white" strokeWidth={0.8} strokeLinecap="round"
-          />
-        </g>
-      )}
+      {/* Metallic effects — twinkles + sheen (both glass and flat modes) */}
+      {metallic && (() => {
+        const r = pieceRadius;
+        // Twinkle positions offset from center
+        const twinkles = [
+          { cx: -r * 0.3, cy: -r * 0.2, s: 0.8, delay: (seed % 7) * 1.2 + 3, dur: 5 + (seed % 3) },
+          { cx: r * 0.25, cy: -r * 0.35, s: 0.6, delay: (seed2 % 9) * 0.9 + 5, dur: 6 + (seed2 % 3) },
+          { cx: r * 0.1, cy: r * 0.3, s: 0.7, delay: (seed3 % 8) * 1.1 + 7, dur: 7 + (seed3 % 2) },
+        ];
+        const sheenDelay = (seed % 5) * 2.5 + 4;
+        const sheenDur = 9 + (seed2 % 4);
+        // Need clip for sheen — reuse glass clip or define inline
+        const clipId = useMetallicGradient ? `${gId}clip` : `${gId}fclip`;
+        return (
+          <>
+            {/* Clip path for flat mode */}
+            {!useMetallicGradient && (
+              <defs>
+                <clipPath id={clipId}>
+                  <circle cx={0} cy={0} r={r} />
+                </clipPath>
+              </defs>
+            )}
+            {/* Twinkle stars at offset positions */}
+            {twinkles.map((t, i) => (
+              <g
+                key={i}
+                className="metallic-twinkle"
+                style={{
+                  '--twinkle-delay': `${t.delay}s`,
+                  '--twinkle-dur': `${t.dur}s`,
+                  transformOrigin: `${t.cx}px ${t.cy}px`,
+                } as React.CSSProperties}
+              >
+                <line
+                  x1={t.cx - r * 0.2 * t.s} y1={t.cy}
+                  x2={t.cx + r * 0.2 * t.s} y2={t.cy}
+                  stroke="white" strokeWidth={1} strokeLinecap="round"
+                />
+                <line
+                  x1={t.cx} y1={t.cy - r * 0.2 * t.s}
+                  x2={t.cx} y2={t.cy + r * 0.2 * t.s}
+                  stroke="white" strokeWidth={1} strokeLinecap="round"
+                />
+              </g>
+            ))}
+            {/* Sheen line sweep — clipped to piece circle */}
+            <g clipPath={`url(#${clipId})`}>
+              <line
+                className="metallic-sheen"
+                x1={0} y1={-r * 1.2}
+                x2={0} y2={r * 1.2}
+                stroke="rgba(255,255,255,0.6)"
+                strokeWidth={r * 0.4}
+                strokeLinecap="round"
+                style={{
+                  '--sheen-delay': `${sheenDelay}s`,
+                  '--sheen-dur': `${sheenDur}s`,
+                  '--sheen-r': `${r}`,
+                } as React.CSSProperties}
+              />
+            </g>
+          </>
+        );
+      })()}
       {/* Highlight for current player's pieces - 6 spinning segments outside border */}
       {isCurrentPlayer && !isSelected && !isAnimating && (() => {
         const borderOuter = pieceRadius + 0.75; // half of 1.5 strokeWidth
