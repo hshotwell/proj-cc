@@ -488,79 +488,56 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       {woodenBoard && (
         <g>
           <defs>
-            <radialGradient id="wood-grain" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor={darkMode ? '#6b4c1e' : '#d4a056'} />
-              <stop offset="70%" stopColor={darkMode ? '#4a3412' : '#b8873a'} />
-              <stop offset="100%" stopColor={darkMode ? '#3d2b0f' : '#8B6914'} />
-            </radialGradient>
+            <linearGradient id="wood-base" x1="0%" y1="0%" x2="100%" y2="10%">
+              <stop offset="0%" stopColor={darkMode ? '#5a3e16' : '#c49040'} />
+              <stop offset="30%" stopColor={darkMode ? '#6b4c1e' : '#d4a056'} />
+              <stop offset="70%" stopColor={darkMode ? '#5a3e16' : '#b8873a'} />
+              <stop offset="100%" stopColor={darkMode ? '#4a3412' : '#a87830'} />
+            </linearGradient>
+            <filter id="wood-grain-filter" colorInterpolationFilters="sRGB">
+              {/* Stretched noise for directional grain */}
+              <feTurbulence type="fractalNoise" baseFrequency="0.005 0.06" numOctaves="4" seed="8" result="noise"/>
+              {/* High contrast to create distinct grain bands */}
+              <feComponentTransfer in="noise" result="grain">
+                <feFuncR type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
+                <feFuncG type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
+                <feFuncB type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
+                <feFuncA type="linear" slope="0" intercept="1"/>
+              </feComponentTransfer>
+              <feBlend mode="soft-light" in="SourceGraphic" in2="grain"/>
+            </filter>
           </defs>
-          {/* Wood base */}
-          <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-grain)" />
-          {/* Varied grain rings with organic spacing */}
-          {Array.from({ length: 18 }, (_, i) => {
-            const seed = (i * 7 + 3) % 18;
-            const baseR = 0.08 + i * 0.052;
-            const jitter = ((seed % 5) - 2) * 0.008;
-            const r = boardRadius * Math.min(baseR + jitter, 0.98);
-            const thickness = 0.3 + (seed % 4) * 0.3;
-            const opacity = darkMode ? 0.08 + (seed % 3) * 0.04 : 0.08 + (seed % 3) * 0.05;
-            const isElliptical = seed % 4 === 0;
-            return isElliptical ? (
-              <ellipse
-                key={`ring-${i}`}
-                cx={0} cy={0}
-                rx={r} ry={r * (0.93 + (seed % 3) * 0.03)}
-                fill="none"
-                stroke={darkMode ? `rgba(139,105,20,${opacity})` : `rgba(101,67,33,${opacity})`}
-                strokeWidth={thickness}
-              />
-            ) : (
-              <circle
-                key={`ring-${i}`}
-                cx={0} cy={0}
-                r={r}
-                fill="none"
-                stroke={darkMode ? `rgba(139,105,20,${opacity})` : `rgba(101,67,33,${opacity})`}
-                strokeWidth={thickness}
-              />
-            );
-          })}
-          {/* Wood knots - tight concentric circles off-center */}
+          {/* Wood base with grain texture */}
+          <circle cx={0} cy={0} r={boardRadius} fill="url(#wood-base)" filter="url(#wood-grain-filter)" />
+          {/* Wood knots */}
           {[
-            { x: boardRadius * -0.35, y: boardRadius * 0.25, scale: 0.08 },
-            { x: boardRadius * 0.4, y: boardRadius * -0.3, scale: 0.06 },
-            { x: boardRadius * 0.15, y: boardRadius * 0.55, scale: 0.05 },
+            { x: boardRadius * -0.3, y: boardRadius * 0.2, scale: 0.1 },
+            { x: boardRadius * 0.35, y: boardRadius * -0.25, scale: 0.07 },
+            { x: boardRadius * 0.1, y: boardRadius * 0.5, scale: 0.06 },
           ].map((knot, ki) => (
             <g key={`knot-${ki}`}>
-              {[0.9, 0.65, 0.4, 0.2].map((s, ri) => (
+              {[1, 0.75, 0.5, 0.3, 0.15].map((s, ri) => (
                 <ellipse
                   key={ri}
                   cx={knot.x}
                   cy={knot.y}
                   rx={boardRadius * knot.scale * s}
-                  ry={boardRadius * knot.scale * s * 0.75}
+                  ry={boardRadius * knot.scale * s * 0.7}
                   fill="none"
-                  stroke={darkMode ? `rgba(90,65,15,${0.15 + ri * 0.05})` : `rgba(80,50,20,${0.12 + ri * 0.04})`}
-                  strokeWidth={0.6}
+                  stroke={darkMode ? `rgba(90,65,15,${0.12 + ri * 0.06})` : `rgba(80,50,20,${0.1 + ri * 0.05})`}
+                  strokeWidth={0.8}
                 />
               ))}
+              {/* Darker center fill for knot */}
+              <ellipse
+                cx={knot.x}
+                cy={knot.y}
+                rx={boardRadius * knot.scale * 0.12}
+                ry={boardRadius * knot.scale * 0.08}
+                fill={darkMode ? 'rgba(60,40,10,0.3)' : 'rgba(80,50,20,0.2)'}
+              />
             </g>
           ))}
-          {/* Subtle radial grain lines */}
-          {Array.from({ length: 8 }, (_, i) => {
-            const angle = (i * Math.PI) / 4 + 0.15;
-            return (
-              <line
-                key={`grain-${i}`}
-                x1={Math.cos(angle) * boardRadius * 0.1}
-                y1={Math.sin(angle) * boardRadius * 0.1}
-                x2={Math.cos(angle) * boardRadius * 0.95}
-                y2={Math.sin(angle) * boardRadius * 0.95}
-                stroke={darkMode ? 'rgba(139,105,20,0.05)' : 'rgba(101,67,33,0.05)'}
-                strokeWidth={0.8}
-              />
-            );
-          })}
           {/* Beveled edge - lighter inner ring + darker outer ring */}
           <circle cx={0} cy={0} r={boardRadius - 1.5}
             fill="none"

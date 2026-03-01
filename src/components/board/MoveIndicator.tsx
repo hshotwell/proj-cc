@@ -32,6 +32,7 @@ export function MoveIndicator({ coord, onClick, size = 18, playerColor = '#22c55
           strokeDasharray="5 3"
           opacity={0.85}
           className="selection-dash"
+          style={{ transformOrigin: `${x}px ${y}px` }}
         />
       </g>
     );
