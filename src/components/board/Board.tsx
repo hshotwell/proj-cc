@@ -489,10 +489,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
         <g>
           <defs>
             <linearGradient id="wood-base" x1="0%" y1="0%" x2="100%" y2="10%">
-              <stop offset="0%" stopColor={darkMode ? '#5a3e16' : '#c49040'} />
-              <stop offset="30%" stopColor={darkMode ? '#6b4c1e' : '#d4a056'} />
-              <stop offset="70%" stopColor={darkMode ? '#5a3e16' : '#b8873a'} />
-              <stop offset="100%" stopColor={darkMode ? '#4a3412' : '#a87830'} />
+              <stop offset="0%" stopColor={darkMode ? '#4a3010' : '#a07030'} />
+              <stop offset="30%" stopColor={darkMode ? '#5a3e16' : '#b08040'} />
+              <stop offset="70%" stopColor={darkMode ? '#4a3010' : '#906528'} />
+              <stop offset="100%" stopColor={darkMode ? '#3a280e' : '#805820'} />
             </linearGradient>
             <clipPath id="wood-clip">
               <circle cx={0} cy={0} r={boardRadius} />
@@ -504,9 +504,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise"/>
               {/* High contrast to create distinct grain bands */}
               <feComponentTransfer in="grayNoise" result="grain">
-                <feFuncR type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
-                <feFuncG type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
-                <feFuncB type="linear" slope={darkMode ? 2.5 : 3} intercept={darkMode ? -0.5 : -0.7}/>
+                <feFuncR type="linear" slope={darkMode ? 1.5 : 1.8} intercept={darkMode ? -0.3 : -0.35}/>
+                <feFuncG type="linear" slope={darkMode ? 1.5 : 1.8} intercept={darkMode ? -0.3 : -0.35}/>
+                <feFuncB type="linear" slope={darkMode ? 1.5 : 1.8} intercept={darkMode ? -0.3 : -0.35}/>
                 <feFuncA type="linear" slope="0" intercept="1"/>
               </feComponentTransfer>
               <feBlend mode="soft-light" in="SourceGraphic" in2="grain"/>
@@ -558,12 +558,12 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           {/* Beveled edge - lighter inner ring + darker outer ring */}
           <circle cx={0} cy={0} r={boardRadius - 1.5}
             fill="none"
-            stroke={darkMode ? '#7a5a1e' : '#c49040'}
+            stroke={darkMode ? '#6a4a18' : '#a07030'}
             strokeWidth={1.5}
           />
           <circle cx={0} cy={0} r={boardRadius}
             fill="none"
-            stroke={darkMode ? '#2a1a08' : '#4a2a08'}
+            stroke={darkMode ? '#1a1008' : '#3a2008'}
             strokeWidth={2}
           />
         </g>
@@ -658,6 +658,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               playerColors={gameState?.playerColors}
               customGoalPositions={gameState?.customGoalPositions}
               darkMode={darkMode}
+              woodenBoard={woodenBoard}
             />
           </g>
         ))}

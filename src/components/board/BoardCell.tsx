@@ -14,9 +14,10 @@ interface BoardCellProps {
   playerColors?: ColorMapping;
   customGoalPositions?: Partial<Record<PlayerIndex, string[]>>;
   darkMode?: boolean;
+  woodenBoard?: boolean;
 }
 
-export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = false, playerColors, customGoalPositions, darkMode = false }: BoardCellProps) {
+export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = false, playerColors, customGoalPositions, darkMode = false, woodenBoard = false }: BoardCellProps) {
   const { x, y } = cubeToPixel(coord, size);
   const coordKeyStr = `${coord.q},${coord.r}`;
 
@@ -42,14 +43,18 @@ export function BoardCell({ coord, size = 18, activePlayers, isCustomLayout = fa
 
   return (
     <g>
-      {/* Solid grey background to cover triangle lines */}
+      {/* Solid background to cover triangle lines */}
       <circle
         cx={x}
         cy={y}
         r={size * 0.45}
-        fill="#e5e7eb"
-        stroke="#9ca3af"
-        strokeWidth={1}
+        fill={woodenBoard
+          ? (darkMode ? '#3e2a0e' : '#7a5828')
+          : '#e5e7eb'}
+        stroke={woodenBoard
+          ? (darkMode ? '#2a1a08' : '#5a4018')
+          : '#9ca3af'}
+        strokeWidth={woodenBoard ? 1.2 : 1}
       />
       {/* Goal ring — colored stroke only, no fill */}
       {goalColor && (
