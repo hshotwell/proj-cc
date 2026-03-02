@@ -12,6 +12,8 @@ import { PLAYER_COLORS, EXTRA_COLORS } from '@/game/constants';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 
 const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
+const DEFAULT_COLORS = Object.values(PLAYER_COLORS);
+const METALLIC_COLORS_LIST = EXTRA_COLORS;
 
 const PLAYER_COUNT_OPTIONS = [
   { count: 2, label: '2 Players' },
@@ -391,7 +393,7 @@ function LobbyContent() {
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Color</h2>
             <div className="flex gap-2 flex-wrap items-center">
-              {AVAILABLE_COLORS.map((color) => {
+              {DEFAULT_COLORS.map((color) => {
                 const isTaken = takenColors.includes(color);
                 const isSelected = mySlot.color === color;
                 return (
@@ -410,10 +412,31 @@ function LobbyContent() {
                   />
                 );
               })}
+            </div>
+            <div className="flex gap-2 flex-wrap items-center mt-2">
               <ColorPicker
                 value={mySlot.color}
                 onChange={(color) => void handleColorSelect(color)}
               />
+              {METALLIC_COLORS_LIST.map((color) => {
+                const isTaken = takenColors.includes(color);
+                const isSelected = mySlot.color === color;
+                return (
+                  <button
+                    key={color}
+                    disabled={isTaken}
+                    onClick={() => void handleColorSelect(color)}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
+                      isSelected
+                        ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                        : isTaken
+                          ? 'border-gray-300 opacity-40 cursor-not-allowed'
+                          : 'border-white shadow hover:scale-110'
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                );
+              })}
             </div>
           </div>
         )}

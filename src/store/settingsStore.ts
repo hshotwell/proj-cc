@@ -89,8 +89,8 @@ export const useSettingsStore = create<SettingsStore>()(
       autoConfirm: false,
       showPlayerProgress: true,
       darkMode: false,
-      woodenBoard: false,
-      glassPieces: false,
+      woodenBoard: true,
+      glassPieces: true,
       hopEffect: false,
 
       // Sync state

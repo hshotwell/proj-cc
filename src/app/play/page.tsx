@@ -12,7 +12,8 @@ import { ColorPicker } from '@/components/ui/ColorPicker';
 import { hasEvolvedGenome } from '@/game/training/persistence';
 
 // All available colors for selection
-const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
+const DEFAULT_COLORS = Object.values(PLAYER_COLORS);
+const METALLIC_COLORS_LIST = EXTRA_COLORS;
 
 const PLAYER_COUNT_OPTIONS: { count: PlayerCount; description: string }[] = [
   { count: 2, description: 'Head to head' },
@@ -267,9 +268,9 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Color selection row */}
+        {/* Default color selection row */}
         <div className="flex gap-2 flex-wrap items-center">
-          {AVAILABLE_COLORS.map((color) => {
+          {DEFAULT_COLORS.map((color) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
             return (
@@ -289,6 +290,9 @@ export default function PlayPage() {
               />
             );
           })}
+        </div>
+        {/* Metallic color selection row */}
+        <div className="flex gap-2 flex-wrap items-center">
           <ColorPicker
             value={currentColor}
             onChange={(newColor) => {
@@ -297,6 +301,26 @@ export default function PlayPage() {
               }
             }}
           />
+          {METALLIC_COLORS_LIST.map((color) => {
+            const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
+            const isTaken = isColorUsedByOther(color, playerIndex);
+            return (
+              <button
+                key={color}
+                onClick={() => handleColorSelectSafe(playerIndex, color)}
+                disabled={isTaken}
+                className={`w-7 h-7 rounded-full border-2 transition-all ${
+                  isCurrentColor
+                    ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                    : isTaken
+                    ? 'border-gray-300 opacity-40 cursor-not-allowed'
+                    : 'border-white shadow hover:scale-110'
+                }`}
+                style={{ backgroundColor: color }}
+                title={isTaken ? 'Color already in use' : `Select ${color}`}
+              />
+            );
+          })}
         </div>
       </div>
     );

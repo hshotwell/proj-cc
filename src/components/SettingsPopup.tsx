@@ -234,9 +234,9 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleWoodenBoard}
               />
               <ToggleOption
-                label="Glass pieces"
-                description={glassPieces ? 'Shiny glass marbles' : 'Flat colored pieces'}
-                checked={glassPieces}
+                label="Simplified pieces"
+                description={glassPieces ? 'Realistic glass marbles' : 'Flat colored pieces'}
+                checked={!glassPieces}
                 onChange={toggleGlassPieces}
               />
               <ToggleOption

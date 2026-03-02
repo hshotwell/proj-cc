@@ -27,8 +27,9 @@ const METALLIC_COLORS: Record<string, {
   light: string; mid: string; dark: string; rim: string;
   bandLight: string; bandDark: string;
 }> = {
-  '#c0c0c0': { light: '#d0d0d0', mid: '#a8a8a8', dark: '#505050', rim: '#707070', bandLight: '#e0e0e0', bandDark: '#686868' }, // Silver
-  '#ffd700': { light: '#f0c800', mid: '#d4a800', dark: '#7a5800', rim: '#a07000', bandLight: '#ffe050', bandDark: '#9a7000' }, // Gold
+  '#b87333': { light: '#d08848', mid: '#a06028', dark: '#5a3018', rim: '#704020', bandLight: '#d89858', bandDark: '#6a3818' }, // Copper
+  '#c0c0c0': { light: '#c8c8c8', mid: '#989898', dark: '#404040', rim: '#606060', bandLight: '#d8d8d8', bandDark: '#585858' }, // Silver
+  '#ffd700': { light: '#e8b800', mid: '#c09000', dark: '#604800', rim: '#806000', bandLight: '#f0c820', bandDark: '#785808' }, // Gold
 };
 
 function isMetallic(hex: string): boolean {
@@ -204,9 +205,6 @@ export function Piece({
           { cx: r * 0.25, cy: -r * 0.35, s: 0.6, delay: (seed2 % 9) * 0.9 + 5, dur: 6 + (seed2 % 3) },
           { cx: r * 0.1, cy: r * 0.3, s: 0.7, delay: (seed3 % 8) * 1.1 + 7, dur: 7 + (seed3 % 2) },
         ];
-        const sheenDelay = (seed % 5) * 2.5 + 4;
-        const sheenDur = 9 + (seed2 % 4);
-        // Need clip for sheen — reuse glass clip or define inline
         const clipId = useMetallicGradient ? `${gId}clip` : `${gId}fclip`;
         return (
           <>
@@ -241,20 +239,16 @@ export function Piece({
                 />
               </g>
             ))}
-            {/* Sheen line sweep — clipped to piece circle */}
+            {/* Sheen line sweep — synchronized across all pieces, clipped to circle */}
             <g clipPath={`url(#${clipId})`}>
               <line
                 className="metallic-sheen"
-                x1={0} y1={-r * 1.2}
-                x2={0} y2={r * 1.2}
+                x1={0} y1={-r * 1.4}
+                x2={0} y2={r * 1.4}
                 stroke="rgba(255,255,255,0.6)"
-                strokeWidth={r * 0.4}
+                strokeWidth={r * 0.35}
                 strokeLinecap="round"
-                style={{
-                  '--sheen-delay': `${sheenDelay}s`,
-                  '--sheen-dur': `${sheenDur}s`,
-                  '--sheen-r': `${r}`,
-                } as React.CSSProperties}
+                style={{ '--sheen-r': `${r}` } as React.CSSProperties}
               />
             </g>
           </>
