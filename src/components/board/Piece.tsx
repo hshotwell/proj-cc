@@ -239,7 +239,7 @@ export function Piece({
                 />
               </g>
             ))}
-            {/* Sheen band sweep — wide gradient with soft edges, clipped to circle */}
+            {/* Sheen band sweep — two staggered bands so one rests while the other sweeps */}
             <g clipPath={`url(#${clipId})`}>
               <defs>
                 <linearGradient id={`${clipId}sh`} x1="0" y1="0" x2="1" y2="0">
@@ -259,6 +259,15 @@ export function Piece({
                 height={r * 2.8}
                 fill={`url(#${clipId}sh)`}
                 style={{ '--sheen-r': `${r}` } as React.CSSProperties}
+              />
+              <rect
+                className="metallic-sheen"
+                x={-r * 0.75}
+                y={-r * 1.4}
+                width={r * 1.5}
+                height={r * 2.8}
+                fill={`url(#${clipId}sh)`}
+                style={{ '--sheen-r': `${r}`, animationDelay: '1.5s' } as React.CSSProperties}
               />
             </g>
           </>
