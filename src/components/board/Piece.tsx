@@ -26,10 +26,12 @@ interface PieceProps {
 const METALLIC_COLORS: Record<string, {
   light: string; mid: string; dark: string; rim: string;
   bandLight: string; bandDark: string;
+  // Radial gradient stops for glass/realistic mode (Option B: dark core)
+  radial: [string, string, string, string];
 }> = {
-  '#b87333': { light: '#d08848', mid: '#a06028', dark: '#5a3018', rim: '#704020', bandLight: '#d89858', bandDark: '#6a3818' }, // Copper
-  '#c0c0c0': { light: '#c8c8c8', mid: '#989898', dark: '#404040', rim: '#606060', bandLight: '#d8d8d8', bandDark: '#585858' }, // Silver
-  '#ffd700': { light: '#e8b800', mid: '#c09000', dark: '#604800', rim: '#806000', bandLight: '#f0c820', bandDark: '#785808' }, // Gold
+  '#b87333': { light: '#d08848', mid: '#a06028', dark: '#5a3018', rim: '#704020', bandLight: '#d89858', bandDark: '#6a3818', radial: ['#e0a060', '#b87333', '#6a3818', '#3a1808'] }, // Copper
+  '#c0c0c0': { light: '#c8c8c8', mid: '#989898', dark: '#404040', rim: '#606060', bandLight: '#d8d8d8', bandDark: '#585858', radial: ['#e8e8e8', '#b0b0b0', '#606060', '#303030'] }, // Silver
+  '#ffd700': { light: '#e8b800', mid: '#c09000', dark: '#604800', rim: '#806000', bandLight: '#f0c820', bandDark: '#785808', radial: ['#ffe060', '#d4a800', '#8a6000', '#503000'] }, // Gold
 };
 
 function isMetallic(hex: string): boolean {
@@ -135,15 +137,13 @@ export function Piece({
       )}
       {useMetallicGradient && metallic && (
         <defs>
-          {/* Linear gradient for brushed-metal band effect — darker tones */}
-          <linearGradient id={`${gId}f`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={metallic.dark} />
-            <stop offset="20%" stopColor={metallic.bandLight} />
-            <stop offset="45%" stopColor={metallic.mid} />
-            <stop offset="70%" stopColor={metallic.bandDark} />
-            <stop offset="85%" stopColor={metallic.mid} />
-            <stop offset="100%" stopColor={metallic.dark} />
-          </linearGradient>
+          {/* Radial gradient — bright highlight, dark edges (Option B) */}
+          <radialGradient id={`${gId}f`} cx="40%" cy="35%" r="60%">
+            <stop offset="0%" stopColor={metallic.radial[0]} />
+            <stop offset="40%" stopColor={metallic.radial[1]} />
+            <stop offset="75%" stopColor={metallic.radial[2]} />
+            <stop offset="100%" stopColor={metallic.radial[3]} />
+          </radialGradient>
           <clipPath id={`${gId}clip`}>
             <circle cx={0} cy={0} r={pieceRadius} />
           </clipPath>

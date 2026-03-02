@@ -14,86 +14,6 @@ import { hasEvolvedGenome } from '@/game/training/persistence';
 // All available colors for selection
 const DEFAULT_COLORS = Object.values(PLAYER_COLORS);
 
-// Preview of different metallic rendering approaches for gold
-function MetallicPreview() {
-  const r = 16; // piece radius
-  const s = 44; // svg size
-  const cx = s / 2;
-  const cy = s / 2;
-
-  const approaches = [
-    {
-      label: 'A: Linear band',
-      gradient: (id: string) => (
-        <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#604800" />
-          <stop offset="20%" stopColor="#f0c820" />
-          <stop offset="45%" stopColor="#c09000" />
-          <stop offset="70%" stopColor="#785808" />
-          <stop offset="85%" stopColor="#c09000" />
-          <stop offset="100%" stopColor="#604800" />
-        </linearGradient>
-      ),
-    },
-    {
-      label: 'B: Radial dark core',
-      gradient: (id: string) => (
-        <radialGradient id={id} cx="40%" cy="35%" r="60%">
-          <stop offset="0%" stopColor="#ffe060" />
-          <stop offset="40%" stopColor="#d4a800" />
-          <stop offset="75%" stopColor="#8a6000" />
-          <stop offset="100%" stopColor="#503000" />
-        </radialGradient>
-      ),
-    },
-    {
-      label: 'C: Hard highlight',
-      gradient: (id: string) => (
-        <radialGradient id={id} cx="30%" cy="30%" r="65%">
-          <stop offset="0%" stopColor="#fff8d0" />
-          <stop offset="15%" stopColor="#ffd700" />
-          <stop offset="50%" stopColor="#a07800" />
-          <stop offset="100%" stopColor="#504000" />
-        </radialGradient>
-      ),
-    },
-    {
-      label: 'D: Dual band',
-      gradient: (id: string) => (
-        <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#8a6800" />
-          <stop offset="15%" stopColor="#ffd040" />
-          <stop offset="35%" stopColor="#a08000" />
-          <stop offset="55%" stopColor="#ffc820" />
-          <stop offset="75%" stopColor="#907000" />
-          <stop offset="100%" stopColor="#604000" />
-        </linearGradient>
-      ),
-    },
-  ];
-
-  return (
-    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-3">
-      <div className="text-xs font-medium text-amber-800 mb-2">Metallic style preview (gold)</div>
-      <div className="flex gap-4 items-end">
-        {approaches.map((a) => {
-          const id = `preview-${a.label.charAt(0)}`;
-          return (
-            <div key={a.label} className="flex flex-col items-center gap-1">
-              <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
-                <defs>{a.gradient(id)}</defs>
-                <circle cx={cx + 0.5} cy={cy + 1} r={r} fill="rgba(0,0,0,0.2)" />
-                <circle cx={cx} cy={cy} r={r} fill={`url(#${id})`} />
-                <circle cx={cx} cy={cy} r={r - 0.5} fill="none" stroke="#806000" strokeWidth={0.8} opacity={0.5} />
-              </svg>
-              <span className="text-[10px] text-gray-600 whitespace-nowrap">{a.label}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 const METALLIC_COLORS_LIST = EXTRA_COLORS;
 
 const PLAYER_COUNT_OPTIONS: { count: PlayerCount; description: string }[] = [
@@ -403,7 +323,6 @@ export default function PlayPage() {
             );
           })}
         </div>
-        <MetallicPreview />
       </div>
     );
   };
