@@ -426,7 +426,7 @@ function LobbyContent() {
                     key={color}
                     disabled={isTaken}
                     onClick={() => void handleColorSelect(color)}
-                    className={`w-7 h-7 rounded-full border-2 transition-all ${
+                    className={`w-7 h-7 rounded-full border-2 transition-all metallic-swatch ${
                       isSelected
                         ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                         : isTaken
