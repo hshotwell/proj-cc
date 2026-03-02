@@ -136,25 +136,29 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
   pointer-events: none;
 }
 
-/* Metallic sheen - diagonal line sweeps back and forth, always visible */
+/* Metallic sheen - sits at one edge, sweeps across, fades at far edge */
 @keyframes metallic-sheen {
   0% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -2.5px));
-    opacity: 0.2;
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -1.2px));
+    opacity: 0;
   }
-  50% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 2.5px));
-    opacity: 0.5;
+  5%, 55% {
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -1.2px));
+    opacity: 1;
   }
-  100% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -2.5px));
-    opacity: 0.2;
+  85% {
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 3px));
+    opacity: 1;
+  }
+  92%, 100% {
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 3px));
+    opacity: 0;
   }
 }
 
 .metallic-sheen {
   animation: metallic-sheen 6s ease-in-out infinite;
-  opacity: 0.2;
+  opacity: 0;
   pointer-events: none;
 }
 

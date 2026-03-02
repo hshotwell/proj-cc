@@ -239,15 +239,24 @@ export function Piece({
                 />
               </g>
             ))}
-            {/* Sheen line sweep — synchronized across all pieces, clipped to circle */}
+            {/* Sheen band sweep — gradient with soft edges, clipped to circle */}
             <g clipPath={`url(#${clipId})`}>
-              <line
+              <defs>
+                <linearGradient id={`${clipId}sh`} x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="white" stopOpacity={0} />
+                  <stop offset="25%" stopColor="white" stopOpacity={0.25} />
+                  <stop offset="50%" stopColor="white" stopOpacity={0.6} />
+                  <stop offset="75%" stopColor="white" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="white" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <rect
                 className="metallic-sheen"
-                x1={0} y1={-r * 1.4}
-                x2={0} y2={r * 1.4}
-                stroke="rgba(255,255,255,0.6)"
-                strokeWidth={r * 0.35}
-                strokeLinecap="round"
+                x={-r * 0.5}
+                y={-r * 1.4}
+                width={r * 1.0}
+                height={r * 2.8}
+                fill={`url(#${clipId}sh)`}
                 style={{ '--sheen-r': `${r}` } as React.CSSProperties}
               />
             </g>
