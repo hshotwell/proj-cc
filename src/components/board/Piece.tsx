@@ -239,35 +239,43 @@ export function Piece({
                 />
               </g>
             ))}
-            {/* Sheen band sweep — two staggered bands so one rests while the other sweeps */}
+            {/* Static sheen glow at corner + animated narrow sweep */}
             <g clipPath={`url(#${clipId})`}>
               <defs>
                 <linearGradient id={`${clipId}sh`} x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="white" stopOpacity={0} />
-                  <stop offset="20%" stopColor="white" stopOpacity={0.15} />
-                  <stop offset="45%" stopColor="white" stopOpacity={0.5} />
-                  <stop offset="55%" stopColor="white" stopOpacity={0.5} />
-                  <stop offset="80%" stopColor="white" stopOpacity={0.15} />
+                  <stop offset="20%" stopColor="white" stopOpacity={0.1} />
+                  <stop offset="45%" stopColor="white" stopOpacity={0.4} />
+                  <stop offset="55%" stopColor="white" stopOpacity={0.4} />
+                  <stop offset="80%" stopColor="white" stopOpacity={0.1} />
+                  <stop offset="100%" stopColor="white" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id={`${clipId}sh2`} x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="white" stopOpacity={0} />
+                  <stop offset="30%" stopColor="white" stopOpacity={0.35} />
+                  <stop offset="50%" stopColor="white" stopOpacity={0.7} />
+                  <stop offset="70%" stopColor="white" stopOpacity={0.35} />
                   <stop offset="100%" stopColor="white" stopOpacity={0} />
                 </linearGradient>
               </defs>
+              {/* Static glow — always visible at corner */}
               <rect
-                className="metallic-sheen"
                 x={-r * 0.75}
                 y={-r * 1.4}
                 width={r * 1.5}
                 height={r * 2.8}
                 fill={`url(#${clipId}sh)`}
-                style={{ '--sheen-r': `${r}` } as React.CSSProperties}
+                style={{ transform: `rotate(45deg) translateX(${-r * 0.6}px)` }}
               />
+              {/* Animated narrow sweep */}
               <rect
                 className="metallic-sheen"
-                x={-r * 0.75}
+                x={-r * 0.3}
                 y={-r * 1.4}
-                width={r * 1.5}
+                width={r * 0.6}
                 height={r * 2.8}
-                fill={`url(#${clipId}sh)`}
-                style={{ '--sheen-r': `${r}`, animationDelay: '1.5s' } as React.CSSProperties}
+                fill={`url(#${clipId}sh2)`}
+                style={{ '--sheen-r': `${r}` } as React.CSSProperties}
               />
             </g>
           </>
