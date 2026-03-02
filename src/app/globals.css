@@ -136,29 +136,18 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
   pointer-events: none;
 }
 
-/* Metallic sheen - rests visibly on piece, sweeps across, fades at far edge */
+/* Metallic sheen - continuous sweep, clip circle hides at both ends */
 @keyframes metallic-sheen {
   0% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -0.6px));
-    opacity: 0;
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -2.5px));
   }
-  6%, 40% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -0.6px));
-    opacity: 1;
-  }
-  75% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 3px));
-    opacity: 1;
-  }
-  83%, 100% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 3px));
-    opacity: 0;
+  100% {
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 2.5px));
   }
 }
 
 .metallic-sheen {
-  animation: metallic-sheen 4.5s ease-in-out infinite;
-  opacity: 0;
+  animation: metallic-sheen 4s linear infinite;
   pointer-events: none;
 }
 
