@@ -136,27 +136,25 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
   pointer-events: none;
 }
 
-/* Metallic sheen - diagonal line sweeps across at -45deg matching gradient */
+/* Metallic sheen - diagonal line sweeps back and forth, always visible */
 @keyframes metallic-sheen {
-  0%, 55%, 100% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -3px));
-    opacity: 0;
+  0% {
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -2.5px));
+    opacity: 0.2;
   }
-  60% {
-    opacity: 0.7;
+  50% {
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 2.5px));
+    opacity: 0.5;
   }
-  62% {
-    opacity: 0.8;
-  }
-  90% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 3px));
-    opacity: 0;
+  100% {
+    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -2.5px));
+    opacity: 0.2;
   }
 }
 
 .metallic-sheen {
-  animation: metallic-sheen 3s ease-in-out infinite;
-  opacity: 0;
+  animation: metallic-sheen 6s ease-in-out infinite;
+  opacity: 0.2;
   pointer-events: none;
 }
 
@@ -194,18 +192,18 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
 
 /* Metallic swatch twinkle dot — moves between positions */
 @keyframes swatch-twinkle {
-  0%, 18% { opacity: 0; top: 25%; left: 30%; }
+  0%, 18% { opacity: 0; top: var(--tw-y1, 25%); left: var(--tw-x1, 30%); }
   20% { opacity: 1; }
   24% { opacity: 0; }
-  38% { opacity: 0; top: 60%; left: 65%; }
+  38% { opacity: 0; top: var(--tw-y2, 60%); left: var(--tw-x2, 65%); }
   40% { opacity: 1; }
   44% { opacity: 0; }
-  58% { opacity: 0; top: 35%; left: 70%; }
+  58% { opacity: 0; top: var(--tw-y3, 35%); left: var(--tw-x3, 70%); }
   60% { opacity: 1; }
   64% { opacity: 0; }
-  78% { opacity: 0; top: 55%; left: 25%; }
+  78% { opacity: 0; top: var(--tw-y4, 55%); left: var(--tw-x4, 25%); }
   80% { opacity: 1; }
-  84%, 100% { opacity: 0; top: 25%; left: 30%; }
+  84%, 100% { opacity: 0; top: var(--tw-y1, 25%); left: var(--tw-x1, 30%); }
 }
 
 .metallic-swatch::before {
@@ -218,7 +216,8 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
   top: 25%;
   left: 30%;
   z-index: 1;
-  animation: swatch-twinkle 3s ease-in-out infinite;
+  animation: swatch-twinkle var(--tw-dur, 3s) ease-in-out infinite;
+  animation-delay: var(--tw-delay, 0s);
   opacity: 0;
   box-shadow: 0 0 3px 1px rgba(255,255,255,0.6);
 }
