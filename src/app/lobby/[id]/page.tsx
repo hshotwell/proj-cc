@@ -9,7 +9,7 @@ import type { Id } from '../../../../convex/_generated/dataModel';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { PLAYER_COLORS, EXTRA_COLORS, METALLIC_SWATCH_STYLES } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS, METALLIC_SWATCH_STYLES, getMetallicSwatchStyle } from '@/game/constants';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 
 const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
@@ -313,8 +313,8 @@ function LobbyContent() {
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-6 h-6 rounded-full border-2 border-white shadow"
-                    style={{ backgroundColor: player.color }}
+                    className={`w-6 h-6 rounded-full border-2 border-white shadow${getMetallicSwatchStyle(player.color) ? ' metallic-swatch' : ''}`}
+                    style={{ backgroundColor: player.color, ...getMetallicSwatchStyle(player.color) }}
                   />
                   <div>
                     {player.type === 'human' && (
