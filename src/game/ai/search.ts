@@ -13,7 +13,7 @@ import {
   computeRegressionPenaltyWithGenome,
   computeRepetitionPenaltyWithGenome,
 } from '../training/evaluate';
-import { computeStrategicScore, isEndgame } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove } from './endgame';
 
 // Track recent board states to detect loops at the game state level
@@ -451,6 +451,11 @@ function getTopMoves(
   const inEndgame = isEndgame(state, player);
   const inLateEndgame = isLateEndgame(state, player);
 
+  // Pre-compute opponent threats once for all moves (expensive, state-dependent only)
+  const threats = (difficulty !== 'easy' && (personality === 'defensive' || personality === 'generalist'))
+    ? findOpponentJumpThreats(state, player)
+    : undefined;
+
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
     const next = applyMove(state, move);
@@ -464,7 +469,7 @@ function getTopMoves(
 
     // Add strategic scoring (more important in endgame and for medium+ difficulty)
     if (difficulty !== 'easy') {
-      const strategic = computeStrategicScore(state, move, player, personality);
+      const strategic = computeStrategicScore(state, move, player, personality, threats);
       // Strategic score weight increases in endgame
       const strategicWeight = inEndgame ? 2.0 : 1.0;
       score += strategic.total * strategicWeight;

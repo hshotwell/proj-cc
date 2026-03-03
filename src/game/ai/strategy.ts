@@ -446,7 +446,8 @@ export function computeStrategicScore(
   state: GameState,
   move: Move,
   player: PlayerIndex,
-  personality: 'aggressive' | 'defensive' | 'generalist'
+  personality: 'aggressive' | 'defensive' | 'generalist',
+  cachedThreats?: Array<{ blockPosition: CubeCoord; threatLevel: number; opponentMove: Move }>
 ): StrategicScore {
   // Personality weights
   const weights = {
@@ -502,7 +503,7 @@ export function computeStrategicScore(
   // Check if this move blocks opponent jumps
   let blockingOpponentValue = 0;
   if (personality === 'defensive' || personality === 'generalist') {
-    const threats = findOpponentJumpThreats(state, player);
+    const threats = cachedThreats ?? findOpponentJumpThreats(state, player);
     for (const threat of threats.slice(0, 3)) { // Check top 3 threats
       if (coordKey(move.to) === coordKey(threat.blockPosition)) {
         blockingOpponentValue += threat.threatLevel;

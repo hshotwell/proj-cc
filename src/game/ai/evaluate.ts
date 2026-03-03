@@ -2,8 +2,8 @@ import type { GameState, PlayerIndex, CubeCoord } from '@/types/game';
 import type { AIPersonality, AIDifficulty } from '@/types/ai';
 import { getPlayerPieces } from '../setup';
 import { getGoalPositionsForState, countPiecesInGoal } from '../state';
-import { cubeDistance, centroid, coordKey } from '../coordinates';
-import { getAllValidMoves } from '../moves';
+import { cubeDistance, centroid, coordKey, cubeAdd } from '../coordinates';
+import { DIRECTIONS } from '../constants';
 import { computePlayerProgress } from '../progress';
 import { getWorstAssignmentCost } from '../pathfinding';
 import { loadEvolvedGenome } from '../training/persistence';
@@ -129,13 +129,22 @@ export function evaluatePosition(
     }
   }
 
-  // 6. Jump potential: count available jump moves (capped at 40)
+  // 6. Jump potential — cheap heuristic: count adjacent occupied cells per piece
+  // (proxy for jump opportunities without expensive BFS move generation)
   // DISABLED for custom layouts - causes random movement without progress
   let jumpPotentialScore = 0;
   if (weights.jumpPotential > 0 && !state.isCustomLayout) {
-    const allMoves = getAllValidMoves(state, player);
-    const jumpMoves = allMoves.filter((m) => m.isJump);
-    jumpPotentialScore = Math.min(jumpMoves.length * 2, 40);
+    let adjacentCount = 0;
+    for (const piece of pieces) {
+      for (const dir of DIRECTIONS) {
+        const neighbor = cubeAdd(piece, dir);
+        const content = state.board.get(coordKey(neighbor));
+        if (content?.type === 'piece') {
+          adjacentCount++;
+        }
+      }
+    }
+    jumpPotentialScore = Math.min(adjacentCount * 2, 40);
   }
 
   // Endgame focus: when nearing completion or after a player has already won,

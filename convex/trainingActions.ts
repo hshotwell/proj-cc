@@ -13,10 +13,12 @@ const SERVER_TRAINING_CONFIG = {
   mutationStrength: 0.3,
   eliteCount: 2,
   tournamentSize: 3,
-  maxMovesPerGame: 150,
+  maxMovesPerGame: 100,
 };
 
 const GAMES_PER_BATCH = 2;
+// Stop the batch early if we approach the Convex action time limit (2 min)
+const BATCH_TIME_LIMIT_MS = 90_000; // 90 seconds, leaving 30s buffer
 
 function buildMatchupSchedule(populationSize: number): [number, number][] {
   const schedule: [number, number][] = [];
@@ -75,8 +77,13 @@ export const runTrainingStep = internalAction({
 
     let gamesThisBatch = 0;
 
-    // Run games until batch limit or generation done
+    // Run games until batch limit, time limit, or generation done
     while (gamesThisBatch < GAMES_PER_BATCH && matchupIndex < matchupSchedule.length) {
+      // Time guard: stop early if approaching the action time limit
+      if (Date.now() - startTime > BATCH_TIME_LIMIT_MS) {
+        console.log(`[Training] Stopping batch early — approaching time limit (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+        break;
+      }
       const [i, j] = matchupSchedule[matchupIndex];
 
       // Alternate who goes first

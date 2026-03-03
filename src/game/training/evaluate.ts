@@ -2,8 +2,9 @@ import type { GameState, PlayerIndex, Move } from '@/types/game';
 import type { Genome } from '@/types/training';
 import { getPlayerPieces } from '../setup';
 import { getGoalPositionsForState, countPiecesInGoal, applyMove } from '../state';
-import { cubeDistance, centroid } from '../coordinates';
+import { cubeDistance, centroid, cubeAdd, coordKey } from '../coordinates';
 import { getAllValidMoves } from '../moves';
+import { DIRECTIONS } from '../constants';
 
 // Default genome: extracted from hard/generalist values
 export const DEFAULT_GENOME: Genome = {
@@ -74,13 +75,22 @@ export function evaluateWithGenome(
     }
   }
 
-  // 6. Jump potential
+  // 6. Jump potential — cheap heuristic: count adjacent occupied cells per piece
+  // (proxy for jump opportunities without expensive BFS)
   let jumpPotentialScore = 0;
   if (genome.jumpPotential > 0) {
-    const allMoves = getAllValidMoves(state, player);
-    const jumpMoves = allMoves.filter((m) => m.isJump);
+    let adjacentCount = 0;
+    for (const piece of pieces) {
+      for (const dir of DIRECTIONS) {
+        const neighbor = cubeAdd(piece, dir);
+        const content = state.board.get(coordKey(neighbor));
+        if (content?.type === 'piece') {
+          adjacentCount++;
+        }
+      }
+    }
     jumpPotentialScore = Math.min(
-      jumpMoves.length * genome.jumpPotentialMultiplier,
+      adjacentCount * genome.jumpPotentialMultiplier,
       genome.jumpPotentialCap
     );
   }
