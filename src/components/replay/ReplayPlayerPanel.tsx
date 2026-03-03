@@ -3,6 +3,7 @@
 import type { PlayerIndex, ColorMapping } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
+import { getMetallicSwatchStyle } from '@/game/constants';
 import { countPiecesInGoal } from '@/game/state';
 import { useReplayStore } from '@/store/replayStore';
 
@@ -23,13 +24,14 @@ function ReplayPlayerCard({ player, piecesInGoal, customColors, activePlayers, f
   const name = getPlayerDisplayName(player, activePlayers);
   const isFinished = finishRank !== undefined;
   const isAI = aiPlayers?.[player] != null;
+  const metallicStyle = getMetallicSwatchStyle(color);
 
   return (
     <div className={`p-3 rounded-lg border-2 border-transparent ${isFinished ? 'opacity-80' : ''}`}>
       <div className="flex items-center gap-2">
         <div
-          className="w-4 h-4 rounded-full"
-          style={{ backgroundColor: color }}
+          className={`w-4 h-4 rounded-full${metallicStyle ? ' metallic-swatch' : ''}`}
+          style={{ backgroundColor: color, ...metallicStyle }}
         />
         <span className="font-medium" style={{ color }}>
           {name}

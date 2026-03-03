@@ -4,6 +4,7 @@ import { useRef, useEffect } from 'react';
 import type { Move, PlayerIndex, ColorMapping } from '@/types/game';
 import { ACTIVE_PLAYERS } from '@/game/constants';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
+import { getMetallicSwatchStyle } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 
 function formatCoord(coord: { q: number; r: number }): string {
@@ -21,13 +22,14 @@ interface MoveEntryProps {
 function MoveEntry({ move, index, player, activePlayers, customColors }: MoveEntryProps) {
   const color = getPlayerColor(player, customColors);
   const name = getPlayerDisplayName(player, activePlayers);
+  const metallicStyle = getMetallicSwatchStyle(color);
 
   return (
     <div className="flex items-center gap-2 py-1 px-2 text-xs rounded hover:bg-gray-50">
       <span className="text-gray-400 w-6">{index + 1}.</span>
       <div
-        className="w-3 h-3 rounded-full flex-shrink-0"
-        style={{ backgroundColor: color }}
+        className={`w-3 h-3 rounded-full flex-shrink-0${metallicStyle ? ' metallic-swatch' : ''}`}
+        style={{ backgroundColor: color, ...metallicStyle }}
         title={name}
       />
       <span className="font-mono">

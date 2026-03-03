@@ -139,15 +139,16 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
 /* Metallic sheen - continuous sweep from off-screen to off-screen */
 @keyframes metallic-sheen {
   0% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * -2.5px));
+    transform: rotate(35deg) translateX(calc(var(--sheen-r) * -2.5px));
   }
   100% {
-    transform: rotate(45deg) translateX(calc(var(--sheen-r) * 2.5px));
+    transform: rotate(35deg) translateX(calc(var(--sheen-r) * 2.5px));
   }
 }
 
 .metallic-sheen {
-  animation: metallic-sheen 3s linear infinite;
+  animation: metallic-sheen var(--sheen-dur, 2.2s) linear infinite;
+  opacity: var(--sheen-opacity, 1);
   pointer-events: none;
 }
 

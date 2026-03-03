@@ -28,10 +28,12 @@ const METALLIC_COLORS: Record<string, {
   bandLight: string; bandDark: string;
   // Radial gradient stops for glass/realistic mode (Option B: dark core)
   radial: [string, string, string, string];
+  // Per-metal sheen/sparkle tuning
+  sheenDur: number; sheenOpacity: number; twinkleMult: number;
 }> = {
-  '#b87333': { light: '#d08848', mid: '#a06028', dark: '#5a3018', rim: '#704020', bandLight: '#d89858', bandDark: '#6a3818', radial: ['#e0a060', '#b87333', '#6a3818', '#3a1808'] }, // Copper
-  '#c0c0c0': { light: '#c8c8c8', mid: '#989898', dark: '#404040', rim: '#606060', bandLight: '#d8d8d8', bandDark: '#585858', radial: ['#e8e8e8', '#b0b0b0', '#606060', '#303030'] }, // Silver
-  '#ffd700': { light: '#e8b800', mid: '#c09000', dark: '#604800', rim: '#806000', bandLight: '#f0c820', bandDark: '#785808', radial: ['#ffe060', '#d4a800', '#8a6000', '#503000'] }, // Gold
+  '#b87333': { light: '#d08848', mid: '#a06028', dark: '#5a3018', rim: '#704020', bandLight: '#d89858', bandDark: '#6a3818', radial: ['#e0a060', '#b87333', '#6a3818', '#3a1808'], sheenDur: 3.5, sheenOpacity: 0.5, twinkleMult: 1.6 }, // Copper — slower, more transparent
+  '#c0c0c0': { light: '#c8c8c8', mid: '#989898', dark: '#404040', rim: '#606060', bandLight: '#d8d8d8', bandDark: '#585858', radial: ['#e8e8e8', '#b0b0b0', '#606060', '#303030'], sheenDur: 2.8, sheenOpacity: 0.8, twinkleMult: 1.3 }, // Silver — medium
+  '#ffd700': { light: '#e8b800', mid: '#c09000', dark: '#604800', rim: '#806000', bandLight: '#f0c820', bandDark: '#785808', radial: ['#ffe060', '#d4a800', '#8a6000', '#503000'], sheenDur: 2.2, sheenOpacity: 1, twinkleMult: 1 }, // Gold — fastest, full opacity
 };
 
 function isMetallic(hex: string): boolean {
@@ -199,11 +201,12 @@ export function Piece({
       {/* Metallic effects — twinkles + sheen (both glass and flat modes) */}
       {metallic && (() => {
         const r = pieceRadius;
-        // Twinkle positions offset from center
+        const tm = metallic.twinkleMult;
+        // Twinkle positions offset from center, scaled by per-metal multiplier
         const twinkles = [
-          { cx: -r * 0.3, cy: -r * 0.2, s: 0.8, delay: (seed % 7) * 1.2 + 3, dur: 5 + (seed % 3) },
-          { cx: r * 0.25, cy: -r * 0.35, s: 0.6, delay: (seed2 % 9) * 0.9 + 5, dur: 6 + (seed2 % 3) },
-          { cx: r * 0.1, cy: r * 0.3, s: 0.7, delay: (seed3 % 8) * 1.1 + 7, dur: 7 + (seed3 % 2) },
+          { cx: -r * 0.3, cy: -r * 0.2, s: 0.8, delay: (seed % 7) * 1.2 + 3, dur: (5 + (seed % 3)) * tm },
+          { cx: r * 0.25, cy: -r * 0.35, s: 0.6, delay: (seed2 % 9) * 0.9 + 5, dur: (6 + (seed2 % 3)) * tm },
+          { cx: r * 0.1, cy: r * 0.3, s: 0.7, delay: (seed3 % 8) * 1.1 + 7, dur: (7 + (seed3 % 2)) * tm },
         ];
         const clipId = useMetallicGradient ? `${gId}clip` : `${gId}fclip`;
         return (
@@ -244,17 +247,17 @@ export function Piece({
               <defs>
                 <linearGradient id={`${clipId}sh`} x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="white" stopOpacity={0} />
-                  <stop offset="20%" stopColor="white" stopOpacity={0.1} />
-                  <stop offset="45%" stopColor="white" stopOpacity={0.4} />
-                  <stop offset="55%" stopColor="white" stopOpacity={0.4} />
-                  <stop offset="80%" stopColor="white" stopOpacity={0.1} />
+                  <stop offset="20%" stopColor="white" stopOpacity={0.1 * metallic.sheenOpacity} />
+                  <stop offset="45%" stopColor="white" stopOpacity={0.4 * metallic.sheenOpacity} />
+                  <stop offset="55%" stopColor="white" stopOpacity={0.4 * metallic.sheenOpacity} />
+                  <stop offset="80%" stopColor="white" stopOpacity={0.1 * metallic.sheenOpacity} />
                   <stop offset="100%" stopColor="white" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id={`${clipId}sh2`} x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="white" stopOpacity={0} />
-                  <stop offset="30%" stopColor="white" stopOpacity={0.35} />
-                  <stop offset="50%" stopColor="white" stopOpacity={0.7} />
-                  <stop offset="70%" stopColor="white" stopOpacity={0.35} />
+                  <stop offset="30%" stopColor="white" stopOpacity={0.35 * metallic.sheenOpacity} />
+                  <stop offset="50%" stopColor="white" stopOpacity={0.7 * metallic.sheenOpacity} />
+                  <stop offset="70%" stopColor="white" stopOpacity={0.35 * metallic.sheenOpacity} />
                   <stop offset="100%" stopColor="white" stopOpacity={0} />
                 </linearGradient>
               </defs>
@@ -265,7 +268,7 @@ export function Piece({
                 width={r * 1.5}
                 height={r * 2.8}
                 fill={`url(#${clipId}sh)`}
-                style={{ transform: `rotate(45deg) translateX(${-r * 0.6}px)` }}
+                style={{ transform: `rotate(35deg) translateX(${-r * 0.6}px)` }}
               />
               {/* Animated narrow sweep */}
               <rect
@@ -275,7 +278,7 @@ export function Piece({
                 width={r * 0.6}
                 height={r * 2.8}
                 fill={`url(#${clipId}sh2)`}
-                style={{ '--sheen-r': `${r}` } as React.CSSProperties}
+                style={{ '--sheen-r': `${r}`, '--sheen-dur': `${metallic.sheenDur}s`, '--sheen-opacity': `${metallic.sheenOpacity}` } as React.CSSProperties}
               />
             </g>
           </>

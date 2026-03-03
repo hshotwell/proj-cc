@@ -3,6 +3,7 @@
 import { useRef, useEffect } from 'react';
 import type { Move, PlayerIndex, ColorMapping } from '@/types/game';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
+import { getMetallicSwatchStyle } from '@/game/constants';
 import { useReplayStore } from '@/store/replayStore';
 
 function formatCoord(coord: { q: number; r: number }): string {
@@ -23,6 +24,7 @@ interface ReplayMoveEntryProps {
 function ReplayMoveEntry({ move, index, player, activePlayers, customColors, isCurrent, isLongestHop, onClick }: ReplayMoveEntryProps) {
   const color = getPlayerColor(player, customColors);
   const name = getPlayerDisplayName(player, activePlayers);
+  const metallicStyle = getMetallicSwatchStyle(color);
 
   return (
     <div
@@ -33,8 +35,8 @@ function ReplayMoveEntry({ move, index, player, activePlayers, customColors, isC
     >
       <span className="text-gray-400 w-6">{index + 1}.</span>
       <div
-        className="w-3 h-3 rounded-full flex-shrink-0"
-        style={{ backgroundColor: color }}
+        className={`w-3 h-3 rounded-full flex-shrink-0${metallicStyle ? ' metallic-swatch' : ''}`}
+        style={{ backgroundColor: color, ...metallicStyle }}
         title={name}
       />
       <span className="font-mono flex-1">

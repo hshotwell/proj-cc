@@ -8,19 +8,12 @@ import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
-import { PLAYER_COLORS, EXTRA_COLORS } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS, METALLIC_SWATCH_STYLES } from '@/game/constants';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 
 const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
 const DEFAULT_COLORS = Object.values(PLAYER_COLORS);
 const METALLIC_COLORS_LIST = EXTRA_COLORS;
-
-// Per-swatch twinkle position and timing presets so each metal twinkles differently
-const SWATCH_TWINKLE_STYLES: React.CSSProperties[] = [
-  { '--tw-delay': '0s', '--tw-dur': '2.8s', '--tw-x1': '28%', '--tw-y1': '22%', '--tw-x2': '68%', '--tw-y2': '55%', '--tw-x3': '25%', '--tw-y3': '65%', '--tw-x4': '62%', '--tw-y4': '30%' } as React.CSSProperties,
-  { '--tw-delay': '0.9s', '--tw-dur': '3.3s', '--tw-x1': '65%', '--tw-y1': '30%', '--tw-x2': '30%', '--tw-y2': '60%', '--tw-x3': '60%', '--tw-y3': '68%', '--tw-x4': '35%', '--tw-y4': '25%' } as React.CSSProperties,
-  { '--tw-delay': '1.6s', '--tw-dur': '2.5s', '--tw-x1': '40%', '--tw-y1': '65%', '--tw-x2': '60%', '--tw-y2': '25%', '--tw-x3': '30%', '--tw-y3': '40%', '--tw-x4': '70%', '--tw-y4': '60%' } as React.CSSProperties,
-];
 
 const PLAYER_COUNT_OPTIONS = [
   { count: 2, label: '2 Players' },
@@ -440,7 +433,7 @@ function LobbyContent() {
                           ? 'border-gray-300 opacity-40 cursor-not-allowed'
                           : 'border-white shadow hover:scale-110'
                     }`}
-                    style={{ backgroundColor: color, ...SWATCH_TWINKLE_STYLES[idx] }}
+                    style={{ backgroundColor: color, ...METALLIC_SWATCH_STYLES[idx] }}
                   />
                 );
               })}

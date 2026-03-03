@@ -28,6 +28,24 @@ export const EXTRA_COLORS = [
   '#ffd700', // Gold
 ];
 
+// Check if a color is metallic
+export function isMetallicColor(hex: string): boolean {
+  return EXTRA_COLORS.some(c => c.toLowerCase() === hex.toLowerCase());
+}
+
+// Per-metal swatch twinkle CSS variable presets (indexed by EXTRA_COLORS order)
+export const METALLIC_SWATCH_STYLES: React.CSSProperties[] = [
+  { '--tw-delay': '0s', '--tw-dur': '4s', '--tw-x1': '28%', '--tw-y1': '22%', '--tw-x2': '68%', '--tw-y2': '55%', '--tw-x3': '25%', '--tw-y3': '65%', '--tw-x4': '62%', '--tw-y4': '30%' } as React.CSSProperties,
+  { '--tw-delay': '0.9s', '--tw-dur': '3.3s', '--tw-x1': '65%', '--tw-y1': '30%', '--tw-x2': '30%', '--tw-y2': '60%', '--tw-x3': '60%', '--tw-y3': '68%', '--tw-x4': '35%', '--tw-y4': '25%' } as React.CSSProperties,
+  { '--tw-delay': '1.6s', '--tw-dur': '2.5s', '--tw-x1': '40%', '--tw-y1': '65%', '--tw-x2': '60%', '--tw-y2': '25%', '--tw-x3': '30%', '--tw-y3': '40%', '--tw-x4': '70%', '--tw-y4': '60%' } as React.CSSProperties,
+];
+
+// Get the swatch style for a metallic color, or undefined if not metallic
+export function getMetallicSwatchStyle(hex: string): React.CSSProperties | undefined {
+  const idx = EXTRA_COLORS.findIndex(c => c.toLowerCase() === hex.toLowerCase());
+  return idx >= 0 ? METALLIC_SWATCH_STYLES[idx] : undefined;
+}
+
 // Light background colors for triangles
 export const TRIANGLE_COLORS: Record<TriangleIndex, string> = {
   0: '#fecaca', // Light red

@@ -3,6 +3,7 @@
 import type { PlayerIndex, ColorMapping } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
+import { getMetallicSwatchStyle } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
@@ -21,6 +22,7 @@ function PlayerCard({ player, isCurrentTurn, customColors, activePlayers, finish
   const name = getPlayerDisplayName(player, activePlayers);
   const isFinished = finishRank !== undefined;
   const isAI = aiPlayers?.[player] != null;
+  const metallicStyle = getMetallicSwatchStyle(color);
 
   return (
     <div
@@ -35,8 +37,8 @@ function PlayerCard({ player, isCurrentTurn, customColors, activePlayers, finish
     >
       <div className="flex items-center gap-2">
         <div
-          className="w-4 h-4 rounded-full"
-          style={{ backgroundColor: color }}
+          className={`w-4 h-4 rounded-full${metallicStyle ? ' metallic-swatch' : ''}`}
+          style={{ backgroundColor: color, ...metallicStyle }}
         />
         <span className="font-medium" style={{ color: isCurrentTurn ? color : '#374151' }}>
           {name}
