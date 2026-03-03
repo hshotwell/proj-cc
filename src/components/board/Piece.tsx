@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect } from 'react';
 import type { CubeCoord, PlayerIndex, ColorMapping } from '@/types/game';
 import { MOVE_ANIMATION_DURATION } from '@/game/constants';
 import { cubeToPixel } from '@/game/coordinates';
 import { getPlayerColor } from '@/game/colors';
+import { startSheenSync, METALLIC_SHEEN_KEY } from '@/game/sheenSync';
 
 interface PieceProps {
   coord: CubeCoord;
@@ -88,6 +90,9 @@ export function Piece({
   darkMode,
   glassPieces,
 }: PieceProps) {
+  // Start the global sheen sync loop (idempotent)
+  useEffect(() => { startSheenSync(); }, []);
+
   // Use displayCoord for visual position if provided, otherwise use actual coord
   const renderCoord = displayCoord ?? coord;
   const { x, y } = cubeToPixel(renderCoord, size);
@@ -100,6 +105,7 @@ export function Piece({
   // Gradient IDs (unique per piece coordinate)
   const gId = `mb${coord.q}_${coord.r}`;
   const metallic = isMetallic(baseColor) ? getMetallicInfo(baseColor) : null;
+  const sheenKey = metallic ? METALLIC_SHEEN_KEY[baseColor.toLowerCase()] : null;
   const lightColor = glassPieces ? lightenColor(pieceColor, 0.35) : '';
   const darkColor = glassPieces ? darkenColor(pieceColor, 0.25) : '';
   const useGlassGradient = glassPieces && !metallic;
@@ -270,7 +276,7 @@ export function Piece({
                 fill={`url(#${clipId}sh)`}
                 style={{ transform: `rotate(35deg) translateX(${-r * 0.6}px)` }}
               />
-              {/* Animated narrow sweep */}
+              {/* Animated narrow sweep — position driven by global JS sync */}
               <rect
                 className="metallic-sheen"
                 x={-r * 0.3}
@@ -278,7 +284,7 @@ export function Piece({
                 width={r * 0.6}
                 height={r * 2.8}
                 fill={`url(#${clipId}sh2)`}
-                style={{ '--sheen-r': `${r}`, '--sheen-dur': `${metallic.sheenDur}s`, '--sheen-opacity': `${metallic.sheenOpacity}` } as React.CSSProperties}
+                style={{ '--sheen-r': `${r}`, '--sheen-phase': `var(--sheen-phase-${sheenKey})`, '--sheen-opacity': `${metallic.sheenOpacity}` } as React.CSSProperties}
               />
             </g>
           </>
