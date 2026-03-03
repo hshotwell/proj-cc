@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping } from '@/types/game';
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
-import { PLAYER_COLORS, EXTRA_COLORS, ACTIVE_PLAYERS, METALLIC_SWATCH_STYLES } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS, ACTIVE_PLAYERS, METALLIC_SWATCH_STYLES, getMetallicSwatchStyle } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
@@ -182,8 +182,8 @@ export default function PlayPage() {
         {/* Top row: Color, Name, Human/AI toggle */}
         <div className="flex items-center gap-3">
           <div
-            className="w-10 h-10 rounded-full shadow flex-shrink-0 border-2 border-white"
-            style={{ backgroundColor: currentColor }}
+            className={`w-10 h-10 rounded-full shadow flex-shrink-0 border-2 border-white${getMetallicSwatchStyle(currentColor) ? ' metallic-swatch' : ''}`}
+            style={{ backgroundColor: currentColor, ...getMetallicSwatchStyle(currentColor) }}
           />
           <div className="flex-1 min-w-0">
             {isEditing ? (
