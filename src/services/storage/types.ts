@@ -15,6 +15,7 @@ export interface SyncableSettings {
   woodenBoard: boolean;
   glassPieces: boolean;
   hopEffect: boolean;
+  favoriteColor: string | null;
 }
 
 // Storage provider interface for settings

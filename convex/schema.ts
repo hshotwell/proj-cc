@@ -33,6 +33,7 @@ export default defineSchema({
     darkMode: v.optional(v.boolean()),
     woodenBoard: v.optional(v.boolean()),
     glassPieces: v.optional(v.boolean()),
+    favoriteColor: v.optional(v.string()),
   }).index("by_userId", ["userId"]),
 
   boardLayouts: defineTable({

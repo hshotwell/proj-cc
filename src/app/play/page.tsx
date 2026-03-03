@@ -7,6 +7,7 @@ import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMap
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
 import { PLAYER_COLORS, EXTRA_COLORS, ACTIVE_PLAYERS, METALLIC_SWATCH_STYLES } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { hasEvolvedGenome } from '@/game/training/persistence';
@@ -58,10 +59,17 @@ export default function PlayPage() {
 
   // Reset custom colors, names, and AI config when player count or layout changes
   useEffect(() => {
-    setCustomColors({});
+    const { favoriteColor } = useSettingsStore.getState();
+    const players = useCustomLayout ? layoutPlayers : ACTIVE_PLAYERS[selectedCount];
+    if (favoriteColor && players.length > 0) {
+      setCustomColors({ [players[0]]: favoriteColor });
+    } else {
+      setCustomColors({});
+    }
     setPlayerNames({});
     setAiConfig({});
     setTeamMode(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCount, selectedLayout?.id]);
 
   const handleColorSelect = (player: PlayerIndex, color: string) => {

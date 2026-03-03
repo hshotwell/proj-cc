@@ -8,10 +8,12 @@ import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { PLAYER_COLORS, EXTRA_COLORS, METALLIC_SWATCH_STYLES } from '@/game/constants';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 
 const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
+const SLOT_COLORS_SET = new Set(["#ef4444", "#3b82f6", "#22c55e", "#f97316", "#a855f7", "#facc15"]);
 const DEFAULT_COLORS = Object.values(PLAYER_COLORS);
 const METALLIC_COLORS_LIST = EXTRA_COLORS;
 
@@ -81,6 +83,37 @@ function LobbyContent() {
   const [aiDifficulty, setAiDifficulty] = useState<string>('medium');
   const [aiPersonality, setAiPersonality] = useState<string>('generalist');
   const [inviteSlot, setInviteSlot] = useState<number | null>(null);
+  const favColorApplied = useRef(false);
+
+  // Auto-select favorite color on lobby load
+  useEffect(() => {
+    if (!game || game.status !== 'lobby' || favColorApplied.current) return;
+    const { favoriteColor } = useSettingsStore.getState();
+    if (!favoriteColor) return;
+
+    const players = game.players as any[];
+    const mySlot = players.find((p: any) => p.userId === user?.id);
+    if (!mySlot) return;
+
+    // Only auto-select if current color is a default slot color
+    const isDefaultSlotColor = SLOT_COLORS_SET.has(mySlot.color);
+    if (!isDefaultSlotColor) return;
+
+    // Check favorite color isn't taken by another player
+    const takenByOther = players.some(
+      (p: any) => p.userId !== user?.id && p.color === favoriteColor
+    );
+    if (takenByOther) return;
+
+    // Already the favorite color
+    if (mySlot.color === favoriteColor) {
+      favColorApplied.current = true;
+      return;
+    }
+
+    favColorApplied.current = true;
+    void selectColor({ gameId, color: favoriteColor });
+  }, [game, user?.id, gameId, selectColor]);
 
   // Friends list for inviting (only query when host, skip until game loads)
   const isHost = game ? game.hostId === user?.id : false;

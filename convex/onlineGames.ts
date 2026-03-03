@@ -20,6 +20,27 @@ export const createLobby = mutation({
     const receiver = await ctx.db.get(receiverId);
     if (!receiver) throw new Error("Receiver not found");
 
+    // Look up favorite colors
+    const hostSettings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+    const receiverSettings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_userId", (q) => q.eq("userId", receiverId))
+      .first();
+
+    const hostFavColor = hostSettings?.favoriteColor || null;
+    const receiverFavColor = receiverSettings?.favoriteColor || null;
+
+    // Determine host color (favorite if set, otherwise default)
+    const hostColor = hostFavColor || SLOT_COLORS[0];
+    // Determine receiver color (favorite if set and not taken by host, otherwise default)
+    let receiverColor = SLOT_COLORS[1];
+    if (receiverFavColor && receiverFavColor !== hostColor) {
+      receiverColor = receiverFavColor;
+    }
+
     // Build initial player slots
     const players = [];
     for (let i = 0; i < playerCount; i++) {
@@ -29,7 +50,7 @@ export const createLobby = mutation({
           type: "human" as const,
           userId,
           username: host.username || host.name || "Host",
-          color: SLOT_COLORS[i],
+          color: hostColor,
           isReady: false,
         });
       } else if (i === 1) {
@@ -39,7 +60,7 @@ export const createLobby = mutation({
           type: "human" as const,
           userId: receiverId,
           username: receiver.username || receiver.name || "Guest",
-          color: SLOT_COLORS[i],
+          color: receiverColor,
           isReady: false,
         });
       } else {
@@ -182,6 +203,24 @@ export const inviteToLobby = mutation({
     const friend = await ctx.db.get(friendId);
     if (!friend) throw new Error("User not found");
 
+    // Look up friend's favorite color
+    const friendSettings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_userId", (q) => q.eq("userId", friendId))
+      .first();
+    const friendFavColor = friendSettings?.favoriteColor || null;
+
+    // Use favorite color if set and not taken by another player
+    let slotColor = players[slot].color;
+    if (friendFavColor) {
+      const colorTaken = players.some(
+        (p: any, i: number) => i !== slot && p.color === friendFavColor
+      );
+      if (!colorTaken) {
+        slotColor = friendFavColor;
+      }
+    }
+
     // Reserve the slot for the invited friend
     const updated = [...players];
     updated[slot] = {
@@ -189,7 +228,7 @@ export const inviteToLobby = mutation({
       type: "human" as const,
       userId: friendId,
       username: friend.username || friend.name || "Guest",
-      color: updated[slot].color,
+      color: slotColor,
       isReady: false,
     };
     await ctx.db.patch(gameId, { players: updated });

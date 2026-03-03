@@ -11,6 +11,8 @@ import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getSavedGamesList, deleteSavedGame } from '@/game/persistence';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
+import { PLAYER_COLORS, EXTRA_COLORS, METALLIC_SWATCH_STYLES } from '@/game/constants';
+import { ColorPicker } from '@/components/ui/ColorPicker';
 import type { SavedGameSummary } from '@/types/replay';
 import type { Id } from '../../../convex/_generated/dataModel';
 
@@ -20,7 +22,7 @@ function ProfileContent() {
   const { user } = useAuthStore();
   const { signOut } = useAuthActions();
   const router = useRouter();
-  const { darkMode, toggleDarkMode } = useSettingsStore();
+  const { darkMode, toggleDarkMode, favoriteColor, setFavoriteColor } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('profile');
 
@@ -108,6 +110,58 @@ function ProfileContent() {
                   </div>
                 </div>
               </label>
+
+              {/* Favorite Color */}
+              <div className="mt-6 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-sm font-medium text-gray-700">Favorite Color</div>
+                    <div className="text-xs text-gray-500">
+                      Auto-applied when joining games
+                    </div>
+                  </div>
+                  {favoriteColor && (
+                    <button
+                      onClick={() => setFavoriteColor(null)}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2 flex-wrap items-center">
+                  {Object.values(PLAYER_COLORS).map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setFavoriteColor(color)}
+                      className={`w-7 h-7 rounded-full border-2 transition-all ${
+                        favoriteColor?.toLowerCase() === color.toLowerCase()
+                          ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                          : 'border-white shadow hover:scale-110'
+                      }`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+                <div className="flex gap-2 flex-wrap items-center mt-2">
+                  <ColorPicker
+                    value={favoriteColor ?? '#888888'}
+                    onChange={(color) => setFavoriteColor(color)}
+                  />
+                  {EXTRA_COLORS.map((color, idx) => (
+                    <button
+                      key={color}
+                      onClick={() => setFavoriteColor(color)}
+                      className={`w-7 h-7 rounded-full border-2 transition-all metallic-swatch ${
+                        favoriteColor?.toLowerCase() === color.toLowerCase()
+                          ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                          : 'border-white shadow hover:scale-110'
+                      }`}
+                      style={{ backgroundColor: color, ...METALLIC_SWATCH_STYLES[idx] }}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Sign Out */}

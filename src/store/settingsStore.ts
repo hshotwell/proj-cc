@@ -25,6 +25,7 @@ interface SettingsStore {
   woodenBoard: boolean;
   glassPieces: boolean;
   hopEffect: boolean;
+  favoriteColor: string | null;
 
   // Sync state
   isSyncing: boolean;
@@ -49,6 +50,7 @@ interface SettingsStore {
   toggleWoodenBoard: () => void;
   toggleGlassPieces: () => void;
   toggleHopEffect: () => void;
+  setFavoriteColor: (color: string | null) => void;
 
   // Sync actions
   syncFromCloud: () => Promise<void>;
@@ -71,6 +73,7 @@ function getSyncableSettings(state: SettingsStore): SyncableSettings {
     woodenBoard: state.woodenBoard,
     glassPieces: state.glassPieces,
     hopEffect: state.hopEffect,
+    favoriteColor: state.favoriteColor,
   };
 }
 
@@ -92,6 +95,7 @@ export const useSettingsStore = create<SettingsStore>()(
       woodenBoard: true,
       glassPieces: true,
       hopEffect: false,
+      favoriteColor: null,
 
       // Sync state
       isSyncing: false,
@@ -162,6 +166,10 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({ hopEffect: !state.hopEffect }));
         get().syncToCloud();
       },
+      setFavoriteColor: (color) => {
+        set({ favoriteColor: color });
+        get().syncToCloud();
+      },
 
       // Sync from cloud (called on sign-in)
       syncFromCloud: async () => {
@@ -225,6 +233,7 @@ export const useSettingsStore = create<SettingsStore>()(
         woodenBoard: state.woodenBoard,
         glassPieces: state.glassPieces,
         hopEffect: state.hopEffect,
+        favoriteColor: state.favoriteColor,
       }),
     }
   )

@@ -69,6 +69,7 @@ export const getSettings = query({
         darkMode: false,
         woodenBoard: false,
         glassPieces: false,
+        favoriteColor: null,
       };
     }
 
@@ -84,6 +85,7 @@ export const getSettings = query({
       darkMode: settings.darkMode ?? false,
       woodenBoard: settings.woodenBoard ?? false,
       glassPieces: settings.glassPieces ?? false,
+      favoriteColor: settings.favoriteColor ?? null,
     };
   },
 });
@@ -102,10 +104,18 @@ export const saveSettings = mutation({
     darkMode: v.optional(v.boolean()),
     woodenBoard: v.optional(v.boolean()),
     glassPieces: v.optional(v.boolean()),
+    favoriteColor: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, settings) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
+
+    // Convert null favoriteColor to undefined for Convex schema compatibility
+    const { favoriteColor, ...rest } = settings;
+    const dbSettings = {
+      ...rest,
+      ...(favoriteColor != null ? { favoriteColor } : { favoriteColor: undefined }),
+    };
 
     const existing = await ctx.db
       .query("userSettings")
@@ -113,9 +123,9 @@ export const saveSettings = mutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, settings);
+      await ctx.db.patch(existing._id, dbSettings);
     } else {
-      await ctx.db.insert("userSettings", { userId, ...settings });
+      await ctx.db.insert("userSettings", { userId, ...dbSettings });
     }
 
     return { success: true };
