@@ -173,6 +173,7 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
   );
   background-size: 200% 100%;
   animation: swatch-sheen 3s ease-in-out infinite;
+  opacity: var(--sheen-opacity, 1);
 }
 
 /* Metallic swatch twinkle dot — moves between positions */
@@ -192,6 +193,29 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
 }
 
 .metallic-swatch::before {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: white;
+  border-radius: 50%;
+  top: 25%;
+  left: 30%;
+  z-index: 1;
+  animation: swatch-twinkle var(--tw-dur, 3s) ease-in-out infinite;
+  animation-delay: var(--tw-delay, 0s);
+  opacity: 0;
+  box-shadow: 0 0 3px 1px rgba(255,255,255,0.6);
+}
+
+/* Gem swatch — hex-shaped with twinkle dot, NO sheen */
+/* Pointy-top hex, inset ~7% on each side for even proportions */
+.gem-swatch {
+  position: relative;
+  clip-path: polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%);
+}
+
+.gem-swatch::before {
   content: '';
   position: absolute;
   width: 3px;

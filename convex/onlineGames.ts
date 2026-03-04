@@ -3,7 +3,7 @@ import { query, mutation } from "./_generated/server";
 import { auth } from "./auth";
 
 // Default colors for player slots
-const SLOT_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#f97316", "#a855f7", "#facc15"];
+const SLOT_COLORS = ["#ef4444", "#3b82f6", "#22d3ee", "#22c55e", "#facc15", "#a855f7"];
 
 export const createLobby = mutation({
   args: {

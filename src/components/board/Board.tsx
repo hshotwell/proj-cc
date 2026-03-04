@@ -744,6 +744,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
               customGoalPositions={gameState?.customGoalPositions}
               darkMode={darkMode}
               woodenBoard={woodenBoard}
+              glassPieces={glassPieces}
             />
           </g>
         ))}
@@ -823,19 +824,25 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
 
       {/* Layer 2e: Last Move Path (purely visual, doesn't block clicks) */}
-      {showLastMoves && !isReplayActive && lastMoveActualPath && lastMoveInfo && (
-        <g style={{ pointerEvents: 'none' }}>
-          <polyline
-            points={lastMoveActualPath.map(p => `${p.x},${p.y}`).join(' ')}
-            fill="none"
-            stroke={getPlayerColorFromState(lastMoveInfo.player, gameState)}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.8}
-          />
-        </g>
-      )}
+      {showLastMoves && !isReplayActive && lastMoveActualPath && lastMoveInfo && (() => {
+        const rawColor = getPlayerColorFromState(lastMoveInfo.player, gameState);
+        const cHex = rawColor.replace('#', '');
+        const lum = (parseInt(cHex.substring(0, 2), 16) + parseInt(cHex.substring(2, 4), 16) + parseInt(cHex.substring(4, 6), 16)) / 3;
+        const pathColor = lum > 200 && !darkMode ? '#b0b0b0' : rawColor;
+        return (
+          <g style={{ pointerEvents: 'none' }}>
+            <polyline
+              points={lastMoveActualPath.map(p => `${p.x},${p.y}`).join(' ')}
+              fill="none"
+              stroke={pathColor}
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.8}
+            />
+          </g>
+        );
+      })()}
 
       {/* Layer 2f: Walls */}
       <g>

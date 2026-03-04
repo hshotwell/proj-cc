@@ -3,7 +3,7 @@
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { countPiecesInGoal } from '@/game/state';
 import { computePlayerProgress } from '@/game/progress';
-import { getMetallicSwatchStyle } from '@/game/constants';
+import { getMetallicSwatchStyle, getGemSwatchStyle } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 
@@ -24,13 +24,14 @@ export function TurnIndicator() {
   const piecesInGoal = countPiecesInGoal(gameState, displayPlayer);
   const progress = computePlayerProgress(gameState, displayPlayer);
   const metallicStyle = getMetallicSwatchStyle(color);
+  const gemStyle = getGemSwatchStyle(color);
 
   return (
     <div className="p-4 rounded-lg shadow bg-white">
       <div className="flex items-center gap-3">
         <div
-          className={`w-6 h-6 rounded-full border-2 border-white shadow${metallicStyle ? ' metallic-swatch' : ''}`}
-          style={{ backgroundColor: color, ...metallicStyle }}
+          className={`w-6 h-6 shadow${gemStyle ? ' gem-swatch' : ` rounded-full border-2${color.toLowerCase() === '#ffffff' ? ' border-gray-400' : ' border-white'}`}${metallicStyle ? ' metallic-swatch' : ''}`}
+          style={{ backgroundColor: color, ...metallicStyle, ...gemStyle }}
         />
         <div>
           <div className="text-sm text-gray-500">Current Turn</div>

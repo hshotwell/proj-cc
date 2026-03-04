@@ -187,6 +187,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleShowPlayerProgress}
               />
               <ToggleOption
+                label="Show last moves"
+                description={showLastMoves ? "Showing each player's last move" : 'Last moves hidden'}
+                checked={showLastMoves}
+                onChange={toggleShowLastMoves}
+              />
+              <ToggleOption
                 label="Rotate board"
                 description={rotateBoard ? 'Board faces active player' : 'Board stays fixed'}
                 checked={rotateBoard}
@@ -216,12 +222,6 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleHopEffect}
               />
               <ToggleOption
-                label="Show last moves"
-                description={showLastMoves ? "Showing each player's last move" : 'Last moves hidden'}
-                checked={showLastMoves}
-                onChange={toggleShowLastMoves}
-              />
-              <ToggleOption
                 label="Triangle lines"
                 description={showTriangleLines ? 'Grid lines visible' : 'Grid lines hidden'}
                 checked={showTriangleLines}
@@ -239,6 +239,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 checked={!glassPieces}
                 onChange={toggleGlassPieces}
               />
+
               <ToggleOption
                 label="Dark mode"
                 description={darkMode ? 'Dark background' : 'Light background'}

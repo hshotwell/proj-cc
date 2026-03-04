@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping } from '@/types/game';
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
-import { PLAYER_COLORS, EXTRA_COLORS, ACTIVE_PLAYERS, METALLIC_SWATCH_STYLES, getMetallicSwatchStyle } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS_NO_GEMS, GEM_COLORS, ACTIVE_PLAYERS, getMetallicSwatchStyle, getGemSwatchStyle, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
@@ -13,9 +13,9 @@ import { ColorPicker } from '@/components/ui/ColorPicker';
 import { hasEvolvedGenome } from '@/game/training/persistence';
 
 // All available colors for selection
-const DEFAULT_COLORS = Object.values(PLAYER_COLORS);
+const DEFAULT_COLORS = COLOR_DISPLAY_ORDER;
 
-const METALLIC_COLORS_LIST = EXTRA_COLORS;
+const METALLIC_COLORS_LIST = EXTRA_COLORS_NO_GEMS;
 
 const PLAYER_COUNT_OPTIONS: { count: PlayerCount; description: string }[] = [
   { count: 2, description: 'Head to head' },
@@ -182,8 +182,8 @@ export default function PlayPage() {
         {/* Top row: Color, Name, Human/AI toggle */}
         <div className="flex items-center gap-3">
           <div
-            className={`w-10 h-10 rounded-full shadow flex-shrink-0 border-2 border-white${getMetallicSwatchStyle(currentColor) ? ' metallic-swatch' : ''}`}
-            style={{ backgroundColor: currentColor, ...getMetallicSwatchStyle(currentColor) }}
+            className={`w-10 h-10 shadow flex-shrink-0${getGemSwatchStyle(currentColor) ? ' gem-swatch' : ' rounded-full border-2'}${currentColor.toLowerCase() === '#ffffff' ? ' border-gray-400' : getGemSwatchStyle(currentColor) ? '' : ' border-white'}${getMetallicSwatchStyle(currentColor) ? ' metallic-swatch' : ''}`}
+            style={{ backgroundColor: currentColor, ...getMetallicSwatchStyle(currentColor), ...getGemSwatchStyle(currentColor) }}
           />
           <div className="flex-1 min-w-0">
             {isEditing ? (
@@ -295,12 +295,12 @@ export default function PlayPage() {
                     : 'border-white shadow hover:scale-110'
                 }`}
                 style={{ backgroundColor: color }}
-                title={isTaken ? 'Color already in use' : `Select ${color}`}
+                title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
               />
             );
           })}
         </div>
-        {/* Metallic color selection row */}
+        {/* Metallic + B&W color selection row */}
         <div className="flex gap-2 flex-wrap items-center">
           <ColorPicker
             value={currentColor}
@@ -310,24 +310,53 @@ export default function PlayPage() {
               }
             }}
           />
-          {METALLIC_COLORS_LIST.map((color, idx) => {
+          {METALLIC_COLORS_LIST.map((color) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
+            const metallicStyle = getMetallicSwatchStyle(color);
             return (
               <button
                 key={color}
                 onClick={() => handleColorSelectSafe(playerIndex, color)}
                 disabled={isTaken}
-                className={`w-7 h-7 rounded-full border-2 transition-all metallic-swatch ${
+                className={`w-7 h-7 rounded-full border-2 transition-all${metallicStyle ? ' metallic-swatch' : ''} ${
                   isCurrentColor
                     ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                     : isTaken
                     ? 'border-gray-300 opacity-40 cursor-not-allowed'
+                    : color.toLowerCase() === '#ffffff'
+                    ? 'border-gray-400 shadow hover:scale-110'
                     : 'border-white shadow hover:scale-110'
                 }`}
-                style={{ backgroundColor: color, ...METALLIC_SWATCH_STYLES[idx] }}
-                title={isTaken ? 'Color already in use' : `Select ${color}`}
+                style={{ backgroundColor: color, ...metallicStyle }}
+                title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
               />
+            );
+          })}
+        </div>
+        {/* Gem color selection row */}
+        <div className="flex gap-2 flex-wrap items-center">
+          {GEM_COLORS.map((color) => {
+            const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
+            const isTaken = isColorUsedByOther(color, playerIndex);
+            const gemStyle = getGemSwatchStyle(color);
+            return (
+              <div
+                key={color}
+                className={`w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isTaken && !isCurrentColor ? 'hover:scale-110' : ''}`}
+                style={{
+                  clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
+                  backgroundColor: isCurrentColor ? '#6b7280' : 'transparent',
+                }}
+              >
+                <button
+                  onClick={() => handleColorSelectSafe(playerIndex, color)}
+                  disabled={isTaken}
+                  className={`w-5 h-5 gem-swatch ${isTaken ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  style={{ backgroundColor: color, ...gemStyle }}
+                  title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
+                />
+              </div>
             );
           })}
         </div>

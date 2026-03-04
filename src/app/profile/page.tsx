@@ -11,7 +11,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getSavedGamesList, deleteSavedGame } from '@/game/persistence';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { PLAYER_COLORS, EXTRA_COLORS, METALLIC_SWATCH_STYLES, getMetallicSwatchStyle } from '@/game/constants';
+import { EXTRA_COLORS_NO_GEMS, GEM_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import type { SavedGameSummary } from '@/types/replay';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -117,8 +117,8 @@ function ProfileContent() {
                   <div className="flex items-center gap-2">
                     {favoriteColor && (
                       <div
-                        className={`w-5 h-5 rounded-full border border-gray-300 flex-shrink-0${getMetallicSwatchStyle(favoriteColor) ? ' metallic-swatch' : ''}`}
-                        style={{ backgroundColor: favoriteColor, ...getMetallicSwatchStyle(favoriteColor) }}
+                        className={`w-5 h-5 flex-shrink-0${getGemSwatchStyle(favoriteColor) ? ' gem-swatch' : ' rounded-full border border-gray-300'}${getMetallicSwatchStyle(favoriteColor) ? ' metallic-swatch' : ''}`}
+                        style={{ backgroundColor: favoriteColor, ...getMetallicSwatchStyle(favoriteColor), ...getGemSwatchStyle(favoriteColor) }}
                       />
                     )}
                     <div>
@@ -138,7 +138,7 @@ function ProfileContent() {
                   )}
                 </div>
                 <div className="flex gap-2 flex-wrap items-center">
-                  {Object.values(PLAYER_COLORS).map((color) => (
+                  {COLOR_DISPLAY_ORDER.map((color) => (
                     <button
                       key={color}
                       onClick={() => setFavoriteColor(color)}
@@ -148,6 +148,7 @@ function ProfileContent() {
                           : 'border-white shadow hover:scale-110'
                       }`}
                       style={{ backgroundColor: color }}
+                      title={`Select: ${getColorName(color)}`}
                     />
                   ))}
                 </div>
@@ -156,18 +157,47 @@ function ProfileContent() {
                     value={favoriteColor ?? '#888888'}
                     onChange={(color) => setFavoriteColor(color)}
                   />
-                  {EXTRA_COLORS.map((color, idx) => (
-                    <button
-                      key={color}
-                      onClick={() => setFavoriteColor(color)}
-                      className={`w-7 h-7 rounded-full border-2 transition-all metallic-swatch ${
-                        favoriteColor?.toLowerCase() === color.toLowerCase()
-                          ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
-                          : 'border-white shadow hover:scale-110'
-                      }`}
-                      style={{ backgroundColor: color, ...METALLIC_SWATCH_STYLES[idx] }}
-                    />
-                  ))}
+                  {EXTRA_COLORS_NO_GEMS.map((color) => {
+                    const metallicStyle = getMetallicSwatchStyle(color);
+                    return (
+                      <button
+                        key={color}
+                        onClick={() => setFavoriteColor(color)}
+                        className={`w-7 h-7 rounded-full border-2 transition-all${metallicStyle ? ' metallic-swatch' : ''} ${
+                          favoriteColor?.toLowerCase() === color.toLowerCase()
+                            ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                            : color.toLowerCase() === '#ffffff'
+                              ? 'border-gray-400 shadow hover:scale-110'
+                              : 'border-white shadow hover:scale-110'
+                        }`}
+                        style={{ backgroundColor: color, ...metallicStyle }}
+                        title={`Select: ${getColorName(color)}`}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2 flex-wrap items-center mt-2">
+                  {GEM_COLORS.map((color) => {
+                    const gemStyle = getGemSwatchStyle(color);
+                    const isSelected = favoriteColor?.toLowerCase() === color.toLowerCase();
+                    return (
+                      <div
+                        key={color}
+                        className={`w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isSelected ? 'hover:scale-110' : ''}`}
+                        style={{
+                          clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
+                          backgroundColor: isSelected ? '#6b7280' : 'transparent',
+                        }}
+                      >
+                        <button
+                          onClick={() => setFavoriteColor(color)}
+                          className="w-5 h-5 gem-swatch"
+                          style={{ backgroundColor: color, ...gemStyle }}
+                          title={`Select: ${getColorName(color)}`}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

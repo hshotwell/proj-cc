@@ -9,13 +9,13 @@ import type { Id } from '../../../../convex/_generated/dataModel';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { PLAYER_COLORS, EXTRA_COLORS, METALLIC_SWATCH_STYLES, getMetallicSwatchStyle } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS_NO_GEMS, GEM_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 
-const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS];
-const SLOT_COLORS_SET = new Set(["#ef4444", "#3b82f6", "#22c55e", "#f97316", "#a855f7", "#facc15"]);
-const DEFAULT_COLORS = Object.values(PLAYER_COLORS);
-const METALLIC_COLORS_LIST = EXTRA_COLORS;
+const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS_NO_GEMS, ...GEM_COLORS];
+const SLOT_COLORS_SET = new Set(["#ef4444", "#3b82f6", "#22d3ee", "#22c55e", "#facc15", "#a855f7"]);
+const DEFAULT_COLORS = COLOR_DISPLAY_ORDER;
+const METALLIC_COLORS_LIST = EXTRA_COLORS_NO_GEMS;
 
 const PLAYER_COUNT_OPTIONS = [
   { count: 2, label: '2 Players' },
@@ -313,8 +313,8 @@ function LobbyContent() {
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-6 h-6 rounded-full border-2 border-white shadow${getMetallicSwatchStyle(player.color) ? ' metallic-swatch' : ''}`}
-                    style={{ backgroundColor: player.color, ...getMetallicSwatchStyle(player.color) }}
+                    className={`w-6 h-6 shadow${getGemSwatchStyle(player.color) ? ' gem-swatch' : ' rounded-full border-2 border-white'}${getMetallicSwatchStyle(player.color) ? ' metallic-swatch' : ''}`}
+                    style={{ backgroundColor: player.color, ...getMetallicSwatchStyle(player.color), ...getGemSwatchStyle(player.color) }}
                   />
                   <div>
                     {player.type === 'human' && (
@@ -442,6 +442,7 @@ function LobbyContent() {
                           : 'border-white shadow hover:scale-110'
                     }`}
                     style={{ backgroundColor: color }}
+                    title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
                   />
                 );
               })}
@@ -451,23 +452,52 @@ function LobbyContent() {
                 value={mySlot.color}
                 onChange={(color) => void handleColorSelect(color)}
               />
-              {METALLIC_COLORS_LIST.map((color, idx) => {
+              {METALLIC_COLORS_LIST.map((color) => {
                 const isTaken = takenColors.includes(color);
                 const isSelected = mySlot.color === color;
+                const metallicStyle = getMetallicSwatchStyle(color);
                 return (
                   <button
                     key={color}
                     disabled={isTaken}
                     onClick={() => void handleColorSelect(color)}
-                    className={`w-7 h-7 rounded-full border-2 transition-all metallic-swatch ${
+                    className={`w-7 h-7 rounded-full border-2 transition-all${metallicStyle ? ' metallic-swatch' : ''} ${
                       isSelected
                         ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                         : isTaken
                           ? 'border-gray-300 opacity-40 cursor-not-allowed'
-                          : 'border-white shadow hover:scale-110'
+                          : color.toLowerCase() === '#ffffff'
+                            ? 'border-gray-400 shadow hover:scale-110'
+                            : 'border-white shadow hover:scale-110'
                     }`}
-                    style={{ backgroundColor: color, ...METALLIC_SWATCH_STYLES[idx] }}
+                    style={{ backgroundColor: color, ...metallicStyle }}
+                    title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
                   />
+                );
+              })}
+            </div>
+            <div className="flex gap-2 flex-wrap items-center mt-2">
+              {GEM_COLORS.map((color) => {
+                const isTaken = takenColors.includes(color);
+                const isSelected = mySlot.color === color;
+                const gemStyle = getGemSwatchStyle(color);
+                return (
+                  <div
+                    key={color}
+                    className={`w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isTaken && !isSelected ? 'hover:scale-110' : ''}`}
+                    style={{
+                      clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
+                      backgroundColor: isSelected ? '#6b7280' : 'transparent',
+                    }}
+                  >
+                    <button
+                      disabled={isTaken}
+                      onClick={() => void handleColorSelect(color)}
+                      className={`w-5 h-5 gem-swatch ${isTaken ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      style={{ backgroundColor: color, ...gemStyle }}
+                      title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
+                    />
+                  </div>
                 );
               })}
             </div>
