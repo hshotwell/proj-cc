@@ -62,7 +62,25 @@ export default function PlayPage() {
     const { favoriteColor } = useSettingsStore.getState();
     const players = useCustomLayout ? layoutPlayers : ACTIVE_PLAYERS[selectedCount];
     if (favoriteColor && players.length > 0) {
-      setCustomColors({ [players[0]]: favoriteColor });
+      const newColors: ColorMapping = { [players[0]]: favoriteColor };
+      // Resolve conflicts: if any player's default is already taken, assign them a free color
+      const takenColors = new Set([favoriteColor.toLowerCase()]);
+      for (const p of players) {
+        if (p === players[0]) continue;
+        const defaultColor = PLAYER_COLORS[p];
+        if (takenColors.has(defaultColor.toLowerCase())) {
+          const freeColor = Object.values(PLAYER_COLORS).find(
+            c => !takenColors.has(c.toLowerCase())
+          );
+          if (freeColor) {
+            newColors[p] = freeColor;
+            takenColors.add(freeColor.toLowerCase());
+          }
+        } else {
+          takenColors.add(defaultColor.toLowerCase());
+        }
+      }
+      setCustomColors(newColors);
     } else {
       setCustomColors({});
     }

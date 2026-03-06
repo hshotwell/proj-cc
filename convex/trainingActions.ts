@@ -31,7 +31,7 @@ function buildMatchupSchedule(populationSize: number): [number, number][] {
 }
 
 /**
- * Main training step — called by cron every 2 minutes.
+ * Main training step — called by cron every 30 minutes.
  * Runs a batch of headless games, then saves progress.
  */
 export const runTrainingStep = internalAction({
