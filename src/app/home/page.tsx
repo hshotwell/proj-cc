@@ -28,12 +28,9 @@ const STAR_TRIANGLES = [
 export default function HomePage() {
   const { user, isAuthenticated, isLoading } = useAuthStore();
 
-  // Check if guest
-  const isGuest = typeof window !== 'undefined' && localStorage.getItem('sternhalma-guest') === 'true';
-
   return (
     <div className="min-h-screen bg-white flex items-center justify-center relative">
-      {/* User header — auth UI temporarily hidden
+      {/* User header */}
       <div className="absolute top-4 right-4 flex items-center gap-3">
         {isLoading ? (
           <div className="w-6 h-6 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
@@ -44,16 +41,6 @@ export default function HomePage() {
           >
             {user.username || user.name || user.email}
           </Link>
-        ) : isGuest ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">Playing as Guest</span>
-            <Link
-              href="/auth/signin"
-              className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
-            >
-              Create Account
-            </Link>
-          </div>
         ) : (
           <Link
             href="/auth/signin"
@@ -63,7 +50,6 @@ export default function HomePage() {
           </Link>
         )}
       </div>
-      */}
 
       <style>{`
         @keyframes colorRotate {
