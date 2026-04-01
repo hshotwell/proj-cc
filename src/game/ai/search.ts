@@ -15,7 +15,7 @@ import {
 } from '../training/evaluate';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove } from './endgame';
-import { getOpeningMove, getMovesForOpening } from './openingBook';
+import { getOpeningMove } from './openingBook';
 
 // Track recent board states to detect loops at the game state level
 const recentBoardStates = new Map<string, number>(); // hash -> count
@@ -889,14 +889,13 @@ export function findBestMove(
   state: GameState,
   difficulty: AIDifficulty,
   personality: AIPersonality,
-  openingId?: string | null
+  openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null
 ): Move | null {
   const player = state.currentPlayer;
 
   // PRIORITY 0: Opening book — play textbook lines in the early game
-  if (!state.isCustomLayout && openingId && openingId !== 'none') {
+  if (!state.isCustomLayout && openingMoves && openingMoves.length > 0) {
     const maxOpeningMoves = difficulty === 'easy' ? 2 : difficulty === 'medium' ? 4 : 11;
-    const openingMoves = getMovesForOpening(openingId);
     const bookMove = getOpeningMove(state, player, openingMoves, maxOpeningMoves);
     if (bookMove) {
       // Deviate if a significantly better alternative exists (1-ply check)

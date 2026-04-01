@@ -28,7 +28,7 @@ export interface WorkerRequest {
   state: SerializedGameState;
   difficulty: AIDifficulty;
   personality: AIPersonality;
-  openingId?: string | null;
+  openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null;
 }
 
 export interface WorkerResponse {

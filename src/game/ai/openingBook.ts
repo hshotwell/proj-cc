@@ -14,6 +14,26 @@ export interface OpeningLine {
   moves: OpeningMove[]; // Player-0 canonical coordinates
 }
 
+// ── AI-internal standard opening (not shown to players) ─────────────────────
+
+const STANDARD_MOVES: OpeningMove[] = [
+  { from: { q: 1, r: -5, s: 4 }, to: { q: 1, r: -4, s: 3 } },
+  { from: { q: 3, r: -7, s: 4 }, to: { q: 1, r: -3, s: 2 } },
+  { from: { q: 4, r: -6, s: 2 }, to: { q: 0, r: -2, s: 2 } },
+  { from: { q: 2, r: -5, s: 3 }, to: { q: 0, r: -1, s: 1 } },
+];
+
+function mirrorCoord(c: CubeCoord): CubeCoord {
+  return { q: c.s, r: c.r, s: c.q };
+}
+
+function mirrorOpeningMove(m: OpeningMove): OpeningMove {
+  return { from: mirrorCoord(m.from), to: mirrorCoord(m.to) };
+}
+
+export const AI_STANDARD_MOVES = STANDARD_MOVES;
+export const AI_STANDARD_MIRROR_MOVES = STANDARD_MOVES.map(mirrorOpeningMove);
+
 // ── Coordinate rotation ─────────────────────────────────────────────────────
 // CCW 60° rotation formula: (q, r, s) → (-r, -s, -q)
 // Since s = -q - r, this simplifies to: new_q = -r, new_r = q+r, new_s = -q

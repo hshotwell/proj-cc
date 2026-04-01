@@ -11,6 +11,7 @@ import type { WorkerResponse } from '@/game/ai/workerClient';
 import { getValidMoves } from '@/game/moves';
 import { coordKey } from '@/game/coordinates';
 import { useOpeningStore } from '@/store/openingStore';
+import { AI_STANDARD_MOVES, AI_STANDARD_MIRROR_MOVES, getMovesForOpening } from '@/game/ai/openingBook';
 
 export function useAITurn(enabled: boolean = true) {
   const {
@@ -22,6 +23,8 @@ export function useAITurn(enabled: boolean = true) {
   const thinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerRef = useRef<Worker | null>(null);
+  // AI opening variant: picked once per game (standard or mirrored)
+  const openingVariantRef = useRef<'standard' | 'standard-mirror' | null>(null);
   const prevTurnRef = useRef<number>(Infinity);
 
   // Create / tear-down the worker once on mount
@@ -113,21 +116,34 @@ export function useAITurn(enabled: boolean = true) {
         }, 50);
       };
 
-      prevTurnRef.current = current.gameState.turnNumber;
+      // Pick opening variant once per game; reset when turn number decreases (new game)
+      const turn = current.gameState.turnNumber;
+      if (openingVariantRef.current === null || turn < prevTurnRef.current) {
+        openingVariantRef.current = Math.random() < 0.5 ? 'standard' : 'standard-mirror';
+      }
+      prevTurnRef.current = turn;
 
-      // Use a custom opening tagged for the current game mode if one exists
+      // Resolve opening moves to pass directly to the worker.
+      // For non-normal modes, pick a random custom opening tagged for that mode.
+      // For normal mode, use the AI-internal standard opening (first 4 moves).
       const variant = current.gameState.playerPieceTypes?.[current.gameState.currentPlayer] ?? 'normal';
       const { customOpenings } = useOpeningStore.getState();
       const matching = customOpenings.filter((o) => (o.gameMode ?? 'normal') === variant);
-      const openingId: string | null = matching.length > 0
-        ? matching[Math.floor(Math.random() * matching.length)].id
-        : null;
+      let openingMoves;
+      if (matching.length > 0) {
+        const chosen = matching[Math.floor(Math.random() * matching.length)];
+        openingMoves = getMovesForOpening(chosen.id, customOpenings);
+      } else if (variant === 'normal') {
+        openingMoves = openingVariantRef.current === 'standard-mirror'
+          ? AI_STANDARD_MIRROR_MOVES
+          : AI_STANDARD_MOVES;
+      }
 
       worker.postMessage({
         state: serialized,
         difficulty: currentAI.difficulty,
         personality: currentAI.personality,
-        openingId,
+        openingMoves,
       });
     }, AI_THINK_DELAY);
 
