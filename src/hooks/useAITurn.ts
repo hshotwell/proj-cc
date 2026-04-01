@@ -22,8 +22,6 @@ export function useAITurn(enabled: boolean = true) {
   const thinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  // Opening variant: picked once per game, 50% standard / 50% mirrored
-  const openingVariantRef = useRef<string | null>(null);
   const prevTurnRef = useRef<number>(Infinity);
 
   // Create / tear-down the worker once on mount
@@ -115,23 +113,15 @@ export function useAITurn(enabled: boolean = true) {
         }, 50);
       };
 
-      // Pick opening variant once per game; reset when turn number decreases (new game)
-      const turn = current.gameState.turnNumber;
-      if (openingVariantRef.current === null || turn < prevTurnRef.current) {
-        openingVariantRef.current = Math.random() < 0.5 ? 'standard' : 'standard-mirror';
-      }
-      prevTurnRef.current = turn;
+      prevTurnRef.current = current.gameState.turnNumber;
 
-      // For non-normal modes, use a custom opening tagged for that mode if one exists
+      // Use a custom opening tagged for the current game mode if one exists
       const variant = current.gameState.playerPieceTypes?.[current.gameState.currentPlayer] ?? 'normal';
-      let openingId: string | null;
-      if (variant === 'normal') {
-        openingId = openingVariantRef.current;
-      } else {
-        const { customOpenings } = useOpeningStore.getState();
-        const matching = customOpenings.filter((o) => (o.gameMode ?? 'normal') === variant);
-        openingId = matching.length > 0 ? matching[Math.floor(Math.random() * matching.length)].id : null;
-      }
+      const { customOpenings } = useOpeningStore.getState();
+      const matching = customOpenings.filter((o) => (o.gameMode ?? 'normal') === variant);
+      const openingId: string | null = matching.length > 0
+        ? matching[Math.floor(Math.random() * matching.length)].id
+        : null;
 
       worker.postMessage({
         state: serialized,

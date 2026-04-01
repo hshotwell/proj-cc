@@ -377,7 +377,6 @@ export default function OpeningsPage() {
   // All selectable openings for the favored opening dropdown
   const favoredOptions = [
     { id: 'none', name: 'None' },
-    { id: 'standard', name: 'Standard' },
     ...customOpenings.map((o) => ({ id: o.id, name: o.name })),
   ];
 

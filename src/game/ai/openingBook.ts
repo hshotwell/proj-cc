@@ -48,32 +48,6 @@ function transformMove(move: OpeningMove, player: PlayerIndex): OpeningMove {
   };
 }
 
-// ── Mirror (left/right reflection): swap q and s ─────────────────────────────
-// Reflects the board left↔right: (q, r, s) → (s, r, q)
-function mirrorCoord(c: CubeCoord): CubeCoord {
-  return { q: c.s, r: c.r, s: c.q };
-}
-
-function mirrorOpeningMove(m: OpeningMove): OpeningMove {
-  return { from: mirrorCoord(m.from), to: mirrorCoord(m.to) };
-}
-
-// ── Built-in opening lines ───────────────────────────────────────────────────
-// All coordinates are in player-0's canonical space.
-
-const STANDARD_MOVES: OpeningMove[] = [
-  { from: { q: 1, r: -5, s: 4 }, to: { q: 1, r: -4, s: 3 } },
-  { from: { q: 3, r: -7, s: 4 }, to: { q: 1, r: -3, s: 2 } },
-  { from: { q: 4, r: -6, s: 2 }, to: { q: 0, r: -2, s: 2 } },
-  { from: { q: 2, r: -5, s: 3 }, to: { q: 0, r: -1, s: 1 } },
-  { from: { q: 0, r: -2, s: 2 }, to: { q: -1, r: -1, s: 2 } },
-  { from: { q: 4, r: -8, s: 4 }, to: { q: 0, r: 0, s: 0 } },
-  { from: { q: 2, r: -6, s: 4 }, to: { q: -2, r: 0, s: 2 } },
-  { from: { q: 4, r: -7, s: 3 }, to: { q: 2, r: -3, s: 1 } },
-  { from: { q: 3, r: -6, s: 3 }, to: { q: -1, r: 0, s: 1 } },
-  { from: { q: 4, r: -5, s: 1 }, to: { q: 0, r: -3, s: 3 } },
-  { from: { q: 3, r: -5, s: 2 }, to: { q: 2, r: -4, s: 2 } },
-];
 
 export const OPENING_LINES: OpeningLine[] = [
   {
@@ -81,18 +55,6 @@ export const OPENING_LINES: OpeningLine[] = [
     name: 'None',
     description: 'No opening book — AI evaluates from the first move',
     moves: [],
-  },
-  {
-    id: 'standard',
-    name: 'Standard',
-    description: 'Default opening — advances inner pieces into strong central positions',
-    moves: STANDARD_MOVES,
-  },
-  {
-    id: 'standard-mirror',
-    name: 'Standard (Mirror)',
-    description: 'Mirrored version of the standard opening — leads with the left flank',
-    moves: STANDARD_MOVES.map(mirrorOpeningMove),
   },
 ];
 
