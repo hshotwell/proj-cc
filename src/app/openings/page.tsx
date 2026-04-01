@@ -267,13 +267,15 @@ function EditorPanel({ initial, onSave, onCancel }: EditorPanelProps) {
                     <span className="font-mono text-xs text-gray-700">
                       {i + 1}. ({m.from.q},{m.from.r}) &rarr; ({m.to.q},{m.to.r})
                     </span>
-                    <button
-                      onClick={() => handleRemoveMove(i)}
-                      className="ml-2 text-red-500 hover:text-red-700 font-medium"
-                      title="Remove move"
-                    >
-                      &times;
-                    </button>
+                    {i === state.moves.length - 1 && (
+                      <button
+                        onClick={() => handleRemoveMove(i)}
+                        className="ml-2 text-red-500 hover:text-red-700 font-medium"
+                        title="Remove last move"
+                      >
+                        &times;
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
