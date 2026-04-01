@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { api } from '../../../../convex/_generated/api';
