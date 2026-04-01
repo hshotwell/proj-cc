@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping } from '@/types/game';
+import type { CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping, PieceVariant } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { createGame, createGameFromLayout } from '@/game/setup';
 import { getValidMoves } from '@/game/moves';
@@ -16,6 +16,7 @@ import { useSettingsStore } from './settingsStore';
 interface GameStore {
   // State
   gameState: GameState | null;
+  currentLayout: BoardLayout | null;
   selectedPiece: CubeCoord | null;
   validMovesForSelected: Move[];
   gameId: string | null;
@@ -33,10 +34,12 @@ interface GameStore {
   pendingServerSubmission: boolean;
   // Online: animation is playing and submission should happen after it finishes
   pendingAnimationSubmission: boolean;
+  // Whether the current animation is a swap (both pieces arc simultaneously)
+  isSwapAnimation: boolean;
 
   // Actions
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => string;
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => string;
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
   selectPiece: (coord: CubeCoord) => void;
   makeMove: (to: CubeCoord, animate?: boolean) => boolean;
   clearSelection: () => void;
@@ -58,6 +61,7 @@ function generateGameId(): string {
 export const useGameStore = create<GameStore>((set, get) => ({
   // Initial state
   gameState: null,
+  currentLayout: null,
   selectedPiece: null,
   validMovesForSelected: [],
   gameId: null,
@@ -70,10 +74,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   animationStep: 0,
   pendingServerSubmission: false,
   pendingAnimationSubmission: false,
+  isSwapAnimation: false,
 
   // Start a new game with the specified number of players
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => {
-    const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers, playerNames, teamMode);
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => {
+    const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers, playerNames, teamMode, playerPieceTypes);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
     clearStateHistory();
@@ -82,6 +87,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     recordBoardState(gameState);
     set({
       gameState,
+      currentLayout: null,
       gameId,
       selectedPiece: null,
       validMovesForSelected: [],
@@ -94,8 +100,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   // Start a game from a custom board layout
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean) => {
-    const gameState = createGameFromLayout(layout, playerColors, aiPlayers, playerNames, teamMode);
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => {
+    const gameState = createGameFromLayout(layout, playerColors, aiPlayers, playerNames, teamMode, playerPieceTypes);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
     clearStateHistory();
@@ -104,6 +110,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     recordBoardState(gameState);
     set({
       gameState,
+      currentLayout: layout,
       gameId,
       selectedPiece: null,
       validMovesForSelected: [],
@@ -222,6 +229,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         animatingPiece: isAnimatingMove ? to : null,
         animationPath: path,
         animationStep: 0,
+        isSwapAnimation: !!(isAnimatingMove && move.isSwap),
         // Delay server submission until animation finishes
         pendingServerSubmission: !isAnimatingMove,
         pendingAnimationSubmission: !!isAnimatingMove,
@@ -239,6 +247,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         animatingPiece: animate && path && path.length > 1 ? to : null,
         animationPath: path,
         animationStep: 0,
+        isSwapAnimation: !!(animate && path && path.length > 1 && move.isSwap),
       });
     }
 
@@ -369,27 +378,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return true;
   },
 
-  // Reset the game (start over with same player count)
+  // Reset the game (start over with same setup, keep gameId so URL stays valid)
   resetGame: () => {
-    const { gameState } = get();
+    const { gameState, currentLayout } = get();
     if (!gameState) return;
 
-    const newGameState = createGame(
-      gameState.playerCount,
-      undefined,
-      gameState.playerColors,
-      gameState.aiPlayers,
-      gameState.playerNames,
-      gameState.teamMode
-    );
-    const gameId = generateGameId();
+    const newGameState = gameState.isCustomLayout && currentLayout
+      ? createGameFromLayout(
+          currentLayout,
+          gameState.playerColors,
+          gameState.aiPlayers,
+          gameState.playerNames,
+          gameState.teamMode,
+          gameState.playerPieceTypes
+        )
+      : createGame(
+          gameState.playerCount,
+          undefined,
+          gameState.playerColors,
+          gameState.aiPlayers,
+          gameState.playerNames,
+          gameState.teamMode,
+          gameState.playerPieceTypes
+        );
     // Clear AI tracking state for new game
     clearStateHistory();
     clearPathfindingCache();
     recordBoardState(newGameState);
     set({
       gameState: newGameState,
-      gameId,
       selectedPiece: null,
       validMovesForSelected: [],
       pendingConfirmation: false,
@@ -446,6 +463,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animatingPiece: null,
       animationPath: null,
       animationStep: 0,
+      isSwapAnimation: false,
       // If auto-confirm was waiting for animation, trigger submission now
       ...(pendingAnimationSubmission ? {
         pendingServerSubmission: true,

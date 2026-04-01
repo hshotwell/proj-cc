@@ -80,7 +80,7 @@ export default function ReplaysPage() {
                     <div className="flex items-center gap-3">
                       {game.longestHop > 0 && (
                         <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                          {game.longestHop}-jump hop
+                          ✶ {Math.round(game.longestHop)}%
                         </span>
                       )}
                       <button

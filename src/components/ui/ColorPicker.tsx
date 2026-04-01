@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { areTooSimilar } from '@/game/colors';
 
 interface ColorPickerProps {
   value: string;
   onChange: (color: string) => void;
   disabled?: boolean;
+  blockedColors?: string[];
 }
 
 // Convert HSL to hex
@@ -49,21 +51,24 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
   return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
-export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
+export function ColorPicker({ value, onChange, disabled, blockedColors }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { h: initialH, s: initialS } = hexToHsl(value);
   const [hue, setHue] = useState(initialH);
-  const [saturation, setSaturation] = useState(Math.max(initialS, 50)); // Minimum 50% saturation
+  const [saturation, setSaturation] = useState(Math.max(initialS, 50));
 
   const hueRingRef = useRef<HTMLDivElement>(null);
   const satSliderRef = useRef<HTMLDivElement>(null);
 
-  const updateColor = useCallback((newHue: number, newSat: number) => {
-    // Keep lightness at 50% for vibrant colors, enforce minimum saturation
-    const clampedSat = Math.max(50, Math.min(100, newSat));
-    const hex = hslToHex(newHue, clampedSat, 50);
-    onChange(hex);
-  }, [onChange]);
+  // Sync picker state to the committed value each time the picker opens
+  useEffect(() => {
+    if (isOpen) {
+      const { h, s } = hexToHsl(value);
+      setHue(h);
+      setSaturation(Math.max(s, 50));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleHueChange = useCallback((clientX: number, clientY: number) => {
     if (!hueRingRef.current) return;
@@ -73,8 +78,7 @@ export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
     const angle = Math.atan2(clientY - centerY, clientX - centerX);
     const newHue = ((angle * 180 / Math.PI) + 90 + 360) % 360;
     setHue(newHue);
-    updateColor(newHue, saturation);
-  }, [saturation, updateColor]);
+  }, []);
 
   const handleSaturationChange = useCallback((clientX: number) => {
     if (!satSliderRef.current) return;
@@ -83,8 +87,7 @@ export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
     // Map to 50-100% saturation range (no grays)
     const newSat = 50 + (x / rect.width) * 50;
     setSaturation(newSat);
-    updateColor(hue, newSat);
-  }, [hue, updateColor]);
+  }, []);
 
   const handleHueMouseDown = (e: React.MouseEvent) => {
     if (disabled) return;
@@ -114,9 +117,14 @@ export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
+  // Current color shown in the picker (local state — not committed until Done)
+  const clampedSat = Math.max(50, Math.min(100, saturation));
+  const currentPickerColor = hslToHex(hue, clampedSat, 50);
+  const isTooClose = blockedColors != null && blockedColors.some((b) => areTooSimilar(currentPickerColor, b));
+
   // Calculate indicator position on hue ring
   const hueAngle = (hue - 90) * (Math.PI / 180);
-  const ringRadius = 44; // Half of the ring size minus some padding
+  const ringRadius = 44;
   const hueX = Math.cos(hueAngle) * ringRadius;
   const hueY = Math.sin(hueAngle) * ringRadius;
 
@@ -144,7 +152,7 @@ export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
       {/* Dropdown picker */}
       {isOpen && !disabled && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — closes without saving */}
           <div
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
@@ -169,7 +177,7 @@ export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
               {/* Current color preview in center */}
               <div
                 className="absolute inset-6 rounded-full shadow-inner"
-                style={{ backgroundColor: value, pointerEvents: 'none' }}
+                style={{ backgroundColor: currentPickerColor, pointerEvents: 'none' }}
               />
               {/* Hue indicator */}
               <div
@@ -198,7 +206,7 @@ export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
                 <div
                   className="absolute w-4 h-4 rounded-full border-2 border-white shadow-md -top-0"
                   style={{
-                    backgroundColor: value,
+                    backgroundColor: currentPickerColor,
                     left: `calc(${satPosition}% - 8px)`,
                     pointerEvents: 'none',
                   }}
@@ -206,11 +214,19 @@ export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
               </div>
             </div>
 
-            {/* Done button */}
+            {/* Similarity warning */}
+            {isTooClose && (
+              <p className="mt-2 text-xs text-red-600 text-center">Too similar to another player&apos;s color</p>
+            )}
+
+            {/* Done button — commits the color */}
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
-              className="mt-3 w-full py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500"
+              onClick={() => { if (!isTooClose) { onChange(currentPickerColor); setIsOpen(false); } }}
+              disabled={isTooClose}
+              className={`mt-2 w-full py-1.5 text-sm font-medium text-white rounded-lg ${
+                isTooClose ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'
+              }`}
             >
               Done
             </button>

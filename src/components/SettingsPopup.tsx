@@ -34,6 +34,8 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     woodenBoard,
     glassPieces,
     hopEffect,
+    usePlayerOpening,
+    hexCells,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -46,23 +48,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleWoodenBoard,
     toggleGlassPieces,
     toggleHopEffect,
+    toggleUsePlayerOpening,
+    toggleHexCells,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
   const { goToStart } = useReplayStore();
-
-  // Listen for Esc key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        toggleSettingsMenu();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleSettingsMenu]);
 
   // Reset to main tab when opening
   useEffect(() => {
@@ -204,6 +195,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 checked={showCoordinates}
                 onChange={toggleShowCoordinates}
               />
+              <ToggleOption
+                label="Use favored opening"
+                description={usePlayerOpening ? 'Auto-plays your saved opening at game start' : 'Play opening moves manually'}
+                checked={usePlayerOpening}
+                onChange={toggleUsePlayerOpening}
+              />
             </div>
           )}
 
@@ -240,6 +237,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 onChange={toggleGlassPieces}
               />
 
+              <ToggleOption
+                label="Hex cells"
+                description={hexCells ? 'Cells shown as hexagon tiles' : 'Cells shown as circles'}
+                checked={hexCells}
+                onChange={toggleHexCells}
+              />
               <ToggleOption
                 label="Dark mode"
                 description={darkMode ? 'Dark background' : 'Light background'}

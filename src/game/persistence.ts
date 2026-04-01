@@ -1,6 +1,6 @@
 import type { GameState, PlayerIndex, Move, CubeCoord } from '@/types/game';
 import type { SavedGameSummary, SavedGameData } from '@/types/replay';
-import { normalizeMoveHistory, findLongestHop } from './replay';
+import { normalizeMoveHistory, reconstructGameStates, findBestHopGain } from './replay';
 import {
   localGameStorage,
   cloudGameStorage,
@@ -27,8 +27,31 @@ function serializeMove(move: Move): Move {
 
 export function saveCompletedGame(gameId: string, finalState: GameState): SavedGameSummary {
   const normalizedMoves = normalizeMoveHistory(finalState.moveHistory, finalState.activePlayers);
-  const longestHopResult = findLongestHop(normalizedMoves);
   const dateSaved = Date.now();
+
+  // Build a temporary SavedGameData to reconstruct states for % gain computation
+  const tempSavedGame = {
+    id: gameId,
+    initialConfig: {
+      playerCount: finalState.playerCount,
+      activePlayers: finalState.activePlayers,
+      playerColors: finalState.playerColors,
+      aiPlayers: finalState.aiPlayers,
+      ...(finalState.isCustomLayout ? {
+        isCustomLayout: true,
+        customCells: Array.from(finalState.board.keys()),
+        customStartingPositions: finalState.startingPositions,
+        customGoalPositions: finalState.customGoalPositions,
+        customWalls: Array.from(finalState.board.entries())
+          .filter(([_, c]) => c.type === 'wall').map(([k]) => k),
+      } : {}),
+    },
+    moves: normalizedMoves,
+    finishedPlayers: finalState.finishedPlayers,
+    dateSaved,
+  } as Parameters<typeof reconstructGameStates>[0];
+  const states = reconstructGameStates(tempSavedGame);
+  const longestHopGain = findBestHopGain(normalizedMoves, states);
 
   const summary: SavedGameSummary = {
     id: gameId,
@@ -39,7 +62,7 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
     totalMoves: normalizedMoves.length,
     // turnNumber is incremented after the final move, so subtract 1 for actual turns played
     totalTurns: Math.max(1, finalState.turnNumber - 1),
-    longestHop: longestHopResult?.jumpLength ?? 0,
+    longestHop: longestHopGain,
     ...(finalState.playerColors ? { playerColors: { ...finalState.playerColors } } : {}),
     ...(finalState.aiPlayers ? { aiPlayers: { ...finalState.aiPlayers } } : {}),
     ...(finalState.teamMode ? { teamMode: true } : {}),

@@ -3,6 +3,7 @@ import type { SavedGameData } from '@/types/replay';
 import { cubeEquals } from './coordinates';
 import { createGame, createGameFromLayout } from './setup';
 import { applyMove } from './state';
+import { computePlayerProgress } from './progress';
 
 /**
  * Merge consecutive chain-jump hops into single moves.
@@ -107,6 +108,7 @@ export function reconstructGameStates(savedGame: SavedGameData): GameState[] {
 /**
  * Find the move with the longest jumpPath.
  * Returns null if no jumps exist.
+ * @deprecated Prefer findBestHopGain for new code.
  */
 export function findLongestHop(moves: Move[]): { moveIndex: number; jumpLength: number } | null {
   let best: { moveIndex: number; jumpLength: number } | null = null;
@@ -119,6 +121,52 @@ export function findLongestHop(moves: Move[]): { moveIndex: number; jumpLength: 
         best = { moveIndex: i, jumpLength: len };
       }
     }
+  }
+
+  return best;
+}
+
+/**
+ * For each player, find the jump move with the highest % progress gain.
+ * Returns a Set of move indices — one entry per player who made at least one
+ * positive-gain jump. Requires the reconstructed states array (length = moves.length + 1).
+ */
+export function findLongestHopIndices(moves: Move[], states: GameState[]): Set<number> {
+  const bestByPlayer = new Map<PlayerIndex, { index: number; gain: number }>();
+
+  for (let i = 0; i < moves.length; i++) {
+    const move = moves[i];
+    if (!move.isJump || move.player === undefined) continue;
+    if (i + 1 >= states.length) continue;
+
+    const gain = computePlayerProgress(states[i + 1], move.player) -
+                 computePlayerProgress(states[i],     move.player);
+    if (gain <= 0) continue;
+
+    const current = bestByPlayer.get(move.player);
+    if (!current || gain > current.gain) {
+      bestByPlayer.set(move.player, { index: i, gain });
+    }
+  }
+
+  return new Set(Array.from(bestByPlayer.values()).map(v => v.index));
+}
+
+/**
+ * Return the single largest % progress gain from any jump move across all players.
+ * Returns 0 if no improving jumps are found.
+ */
+export function findBestHopGain(moves: Move[], states: GameState[]): number {
+  let best = 0;
+
+  for (let i = 0; i < moves.length; i++) {
+    const move = moves[i];
+    if (!move.isJump || move.player === undefined) continue;
+    if (i + 1 >= states.length) continue;
+
+    const gain = computePlayerProgress(states[i + 1], move.player) -
+                 computePlayerProgress(states[i],     move.player);
+    if (gain > best) best = gain;
   }
 
   return best;

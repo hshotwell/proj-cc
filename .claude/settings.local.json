@@ -48,7 +48,22 @@
       "Bash(git -C /home/henry/code/proj-cc push)",
       "Bash(git commit:*)",
       "Bash(npx convex logs:*)",
-      "Bash(npx convex dev:*)"
+      "Bash(npx convex dev:*)",
+      "Bash(git -C /home/henry/code/proj-cc diff src/game/ai/search.ts)",
+      "Bash(git -C /home/henry/code/proj-cc add src/game/ai/search.ts)",
+      "Bash(git -C /home/henry/code/proj-cc push origin main)",
+      "Bash(git -C /home/henry/code/proj-cc add src/components/board/Piece.tsx src/components/game/GameOverDialog.tsx src/game/ai/search.ts src/game/ai/strategy.ts src/game/constants.ts tests/game/ai.test.ts tests/game/moves.test.ts tests/game/replay.test.ts)",
+      "Bash(timeout 10 npx convex run:*)",
+      "Bash(brew upgrade:*)",
+      "Bash(done)",
+      "Bash(npx convex deploy:*)",
+      "WebFetch(domain:as1.ftcdn.net)",
+      "Bash(npx eslint:*)",
+      "WebFetch(domain:www.pngwing.com)",
+      "WebFetch(domain:w7.pngwing.com)",
+      "WebFetch(domain:gyazo.com)",
+      "WebFetch(domain:i.gyazo.com)",
+      "WebFetch(domain:static.wikia.nocookie.net)"
     ]
   }
 }

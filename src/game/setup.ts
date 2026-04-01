@@ -7,6 +7,7 @@ import type {
   BoardLayout,
   ColorMapping,
   PlayerNameMapping,
+  PieceVariant,
 } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { ACTIVE_PLAYERS } from './constants';
@@ -52,7 +53,8 @@ export function createGame(
   playerColors?: ColorMapping,
   aiPlayers?: AIPlayerMap,
   playerNames?: PlayerNameMapping,
-  teamMode?: boolean
+  teamMode?: boolean,
+  playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>
 ): GameState {
   // Use selectedPlayers if provided, otherwise fall back to defaults
   const activePlayers = selectedPlayers ?? (ACTIVE_PLAYERS[playerCount] as PlayerIndex[]);
@@ -79,6 +81,7 @@ export function createGame(
     aiPlayers,
     startingPositions,
     ...(teamMode ? { teamMode } : {}),
+    ...(playerPieceTypes ? { playerPieceTypes } : {}),
   };
 }
 
@@ -88,7 +91,8 @@ export function createGameFromLayout(
   playerColors?: ColorMapping,
   aiPlayers?: AIPlayerMap,
   playerNames?: PlayerNameMapping,
-  teamMode?: boolean
+  teamMode?: boolean,
+  playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>
 ): GameState {
   const board = new Map<string, CellContent>();
 
@@ -117,6 +121,16 @@ export function createGameFromLayout(
     }
   }
 
+  // Load powerups from layout
+  const powerups = layout.powerups && Object.keys(layout.powerups).length > 0
+    ? new Map(Object.entries(layout.powerups)) as Map<string, PieceVariant>
+    : undefined;
+
+  // Load per-piece starting specialties into pieceVariants
+  const pieceVariants = layout.pieceSpecialties && Object.keys(layout.pieceSpecialties).length > 0
+    ? new Map(Object.entries(layout.pieceSpecialties)) as Map<string, PieceVariant>
+    : undefined;
+
   // Determine player count based on active players
   const playerCount = (activePlayers.length <= 2 ? 2 :
     activePlayers.length === 3 ? 3 :
@@ -138,6 +152,9 @@ export function createGameFromLayout(
     playerNames,
     aiPlayers,
     ...(teamMode ? { teamMode } : {}),
+    ...(playerPieceTypes ? { playerPieceTypes } : {}),
+    ...(powerups ? { powerups } : {}),
+    ...(pieceVariants ? { pieceVariants } : {}),
   };
 }
 
@@ -157,6 +174,9 @@ export function cloneGameState(state: GameState): GameState {
     isCustomLayout: state.isCustomLayout,
     customGoalPositions: state.customGoalPositions ? { ...state.customGoalPositions } : undefined,
     teamMode: state.teamMode,
+    pieceVariants: state.pieceVariants ? new Map(state.pieceVariants) : undefined,
+    powerups: state.powerups ? new Map(state.powerups) : undefined,
+    pendingPowerups: state.pendingPowerups ? new Map(state.pendingPowerups) : undefined,
   };
 }
 

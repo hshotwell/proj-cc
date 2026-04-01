@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PlayerIndex } from '@/types/game';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 import { isGameFullyOver, OPPOSITE_PLAYER } from '@/game/state';
 import { saveCompletedGame } from '@/game/persistence';
 import { useGameStore } from '@/store/gameStore';
@@ -86,10 +87,7 @@ export function GameOverDialog() {
                       return (
                         <span key={p} className="flex items-center gap-1">
                           {j > 0 && <span className="text-gray-400 mx-1">&</span>}
-                          <div
-                            className="w-4 h-4 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: color }}
-                          />
+                          <ColorSwatch color={color} className="w-4 h-4 flex-shrink-0" />
                           <span className="font-semibold" style={{ color }}>{name}</span>
                         </span>
                       );
@@ -107,10 +105,7 @@ export function GameOverDialog() {
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                   <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>
-                  <div
-                    className="w-5 h-5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
+                  <ColorSwatch color={color} className="w-5 h-5 flex-shrink-0" />
                   <span className="font-semibold flex-1" style={{ color }}>
                     {name}
                   </span>

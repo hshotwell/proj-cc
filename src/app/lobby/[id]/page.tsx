@@ -9,13 +9,17 @@ import type { Id } from '../../../../convex/_generated/dataModel';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { PLAYER_COLORS, EXTRA_COLORS_NO_GEMS, GEM_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
+import { PLAYER_COLORS, EXTRA_COLORS_NO_GEMS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
+import { FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { ColorPicker } from '@/components/ui/ColorPicker';
+import { areTooSimilar } from '@/game/colors';
 
-const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...EXTRA_COLORS_NO_GEMS, ...GEM_COLORS];
+const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...NEUTRAL_COLORS, ...EXTRA_COLORS_NO_GEMS, ...GEM_COLORS, ...ROW4_DISPLAY_ORDER, ...ROW5_DISPLAY_ORDER];
 const SLOT_COLORS_SET = new Set(["#ef4444", "#3b82f6", "#22d3ee", "#22c55e", "#facc15", "#a855f7"]);
 const DEFAULT_COLORS = COLOR_DISPLAY_ORDER;
-const METALLIC_COLORS_LIST = EXTRA_COLORS_NO_GEMS;
+const METALLIC_COLORS_LIST = ROW3_DISPLAY_ORDER;
+const FLOWER_COLORS_LIST = ROW4_DISPLAY_ORDER;
+const EGG_COLORS_LIST = ROW5_DISPLAY_ORDER;
 
 const PLAYER_COUNT_OPTIONS = [
   { count: 2, label: '2 Players' },
@@ -312,10 +316,28 @@ function LobbyContent() {
                 className="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-200"
               >
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 shadow${getGemSwatchStyle(player.color) ? ' gem-swatch' : ' rounded-full border-2 border-white'}${getMetallicSwatchStyle(player.color) ? ' metallic-swatch' : ''}`}
-                    style={{ backgroundColor: player.color, ...getMetallicSwatchStyle(player.color), ...getGemSwatchStyle(player.color) }}
-                  />
+                  {(() => {
+                    const c = player.color as string;
+                    const isRainbow = c === 'rainbow';
+                    const isOpal = c === 'opal';
+                    const gemSwatch = getGemSwatchStyle(c);
+                    const metallicSwatch = getMetallicSwatchStyle(c);
+                    const gemBg = getGemSimpleBackground(c);
+                    const isGemShape = !!(gemSwatch || isOpal);
+                    const bgStyle: React.CSSProperties = isRainbow
+                      ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
+                      : isOpal
+                      ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)', ...gemSwatch }
+                      : gemBg
+                      ? { background: gemBg, ...gemSwatch }
+                      : { backgroundColor: c, ...metallicSwatch };
+                    return (
+                      <div
+                        className={`w-6 h-6 shadow${isGemShape ? ' gem-swatch' : ' rounded-full'}${!isGemShape && !metallicSwatch && !isRainbow ? ' border-2 border-white' : ''}${metallicSwatch ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''}${isOpal ? ' opal-swatch' : ''}`}
+                        style={bgStyle}
+                      />
+                    );
+                  })()}
                   <div>
                     {player.type === 'human' && (
                       <span className="text-sm font-medium text-gray-900">
@@ -427,7 +449,7 @@ function LobbyContent() {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Color</h2>
             <div className="flex gap-2 flex-wrap items-center">
               {DEFAULT_COLORS.map((color) => {
-                const isTaken = takenColors.includes(color);
+                const isTaken = takenColors.some((c) => areTooSimilar(c, color));
                 const isSelected = mySlot.color === color;
                 return (
                   <button
@@ -442,62 +464,158 @@ function LobbyContent() {
                           : 'border-white shadow hover:scale-110'
                     }`}
                     style={{ backgroundColor: color }}
-                    title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
+                    title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
                   />
                 );
               })}
-            </div>
-            <div className="flex gap-2 flex-wrap items-center mt-2">
-              <ColorPicker
-                value={mySlot.color}
-                onChange={(color) => void handleColorSelect(color)}
-              />
-              {METALLIC_COLORS_LIST.map((color) => {
-                const isTaken = takenColors.includes(color);
+              {NEUTRAL_COLORS.map((color) => {
+                const isTaken = takenColors.some((c) => areTooSimilar(c, color));
                 const isSelected = mySlot.color === color;
-                const metallicStyle = getMetallicSwatchStyle(color);
                 return (
                   <button
                     key={color}
                     disabled={isTaken}
                     onClick={() => void handleColorSelect(color)}
-                    className={`w-7 h-7 rounded-full border-2 transition-all${metallicStyle ? ' metallic-swatch' : ''} ${
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${
                       isSelected
                         ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                         : isTaken
                           ? 'border-gray-300 opacity-40 cursor-not-allowed'
-                          : color.toLowerCase() === '#ffffff'
+                          : color === '#ffffff'
                             ? 'border-gray-400 shadow hover:scale-110'
                             : 'border-white shadow hover:scale-110'
                     }`}
-                    style={{ backgroundColor: color, ...metallicStyle }}
-                    title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
+                    style={{ backgroundColor: color }}
+                    title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
                   />
+                );
+              })}
+              <ColorPicker
+                value={mySlot.color}
+                onChange={(color) => {
+                  if (!takenColors.some((b) => areTooSimilar(color, b))) {
+                    void handleColorSelect(color);
+                  }
+                }}
+                blockedColors={takenColors}
+              />
+            </div>
+            <div className="flex gap-2 flex-wrap items-center mt-2">
+              {METALLIC_COLORS_LIST.map((color, idx) => {
+                if (color === null) return <div key={`blank-${idx}`} className="w-7 h-7 flex-shrink-0" />;
+                const isTaken = takenColors.some((c) => areTooSimilar(c, color));
+                const isSelected = mySlot.color === color;
+                const metallicStyle = getMetallicSwatchStyle(color);
+                const isRainbow = color === 'rainbow';
+                const bgStyle = isRainbow
+                  ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
+                  : { backgroundColor: color, ...metallicStyle };
+                return (
+                  <button
+                    key={color}
+                    disabled={isTaken}
+                    onClick={() => void handleColorSelect(color)}
+                    className={`w-7 h-7 rounded-full transition-all${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
+                      isSelected
+                        ? 'border-2 border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                        : isTaken
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'shadow hover:scale-110'
+                    }`}
+                    style={bgStyle}
+                    title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
+                  >
+                    {metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />}
+                  </button>
                 );
               })}
             </div>
             <div className="flex gap-2 flex-wrap items-center mt-2">
               {GEM_COLORS.map((color) => {
-                const isTaken = takenColors.includes(color);
+                const isTaken = takenColors.some((c) => areTooSimilar(c, color));
                 const isSelected = mySlot.color === color;
                 const gemStyle = getGemSwatchStyle(color);
+                const isOpal = color === 'opal';
+                const opalBg = isOpal ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)' } : undefined;
                 return (
                   <div
                     key={color}
-                    className={`w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isTaken && !isSelected ? 'hover:scale-110' : ''}`}
-                    style={{
-                      clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
-                      backgroundColor: isSelected ? '#6b7280' : 'transparent',
-                    }}
+                    className={`relative w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isTaken && !isSelected ? 'hover:scale-110' : ''}`}
                   >
+                    <div
+                      className="absolute"
+                      style={{
+                        width: '32px', height: '32px', top: '-2px', left: '-2px',
+                        clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
+                        backgroundColor: isSelected ? '#9ca3af' : 'transparent',
+                      }}
+                    />
+                    <div
+                      className="absolute"
+                      style={{
+                        inset: '1px',
+                        clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
+                        backgroundColor: isSelected ? 'white' : 'transparent',
+                      }}
+                    />
                     <button
                       disabled={isTaken}
                       onClick={() => void handleColorSelect(color)}
-                      className={`w-5 h-5 gem-swatch ${isTaken ? 'opacity-40 cursor-not-allowed' : ''}`}
-                      style={{ backgroundColor: color, ...gemStyle }}
-                      title={isTaken ? 'Color already in use' : `Select: ${getColorName(color)}`}
-                    />
+                      className={`relative z-10 w-6 h-6 gem-swatch${isOpal ? ' opal-swatch' : ''} ${isTaken ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      style={isOpal ? { ...gemStyle, ...opalBg } : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
+                      title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
+                    >
+                      {gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />}
+                    </button>
                   </div>
+                );
+              })}
+            </div>
+            {/* Row 4: flowers */}
+            <div className="flex gap-2 flex-wrap items-center mt-2">
+              {FLOWER_COLORS_LIST.map((color) => {
+                const isTaken = takenColors.some((c) => areTooSimilar(c, color));
+                const isSelected = mySlot.color === color;
+                return (
+                  <button
+                    key={color}
+                    disabled={isTaken}
+                    onClick={() => void handleColorSelect(color)}
+                    className={`w-7 h-7 transition-all flex items-center justify-center ${
+                      isSelected
+                        ? 'ring-2 ring-gray-400 rounded-full'
+                        : isTaken
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'hover:scale-110'
+                    }`}
+                    title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
+                  >
+                    <FlowerSwatch color={color} className="w-full h-full" />
+                  </button>
+                );
+              })}
+            </div>
+            {/* Row 5: eggs */}
+            <div className="flex gap-2 flex-wrap items-center mt-2">
+              {EGG_COLORS_LIST.map((color) => {
+                const isTaken = takenColors.some((c) => areTooSimilar(c, color));
+                const isSelected = mySlot.color === color;
+                return (
+                  <button
+                    key={color}
+                    disabled={isTaken}
+                    onClick={() => void handleColorSelect(color)}
+                    className={`w-7 h-7 transition-all flex items-center justify-center ${
+                      isSelected
+                        ? 'ring-2 ring-gray-400 rounded-full'
+                        : isTaken
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'hover:scale-110'
+                    }`}
+                    title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
+                  >
+                    <EggSwatch color={color} className="w-full h-full" />
+                  </button>
                 );
               })}
             </div>

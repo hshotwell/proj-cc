@@ -10,24 +10,32 @@ interface MoveIndicatorProps {
   playerColor?: string;
   isJump?: boolean;
   isSwap?: boolean;
+  hexCells?: boolean;
+  darkMode?: boolean;
 }
 
-export function MoveIndicator({ coord, onClick, size = 18, playerColor = '#22c55e', isJump = false, isSwap = false }: MoveIndicatorProps) {
+export function MoveIndicator({ coord, onClick, size = 18, playerColor = '#22c55e', isJump = false, isSwap = false, hexCells = false, darkMode = false }: MoveIndicatorProps) {
   const { x, y } = cubeToPixel(coord, size);
 
+  // In light mode, darken near-grey colors (e.g. silver) that would wash out (luminance > 185)
+  const isRainbowOrOpal = playerColor === 'rainbow' || playerColor === 'opal' || playerColor === 'bouquet';
+  const cleanHex = isRainbowOrOpal ? '808080' : playerColor.replace('#', '');
+  const lum = (parseInt(cleanHex.substring(0, 2), 16) + parseInt(cleanHex.substring(2, 4), 16) + parseInt(cleanHex.substring(4, 6), 16)) / 3;
+  const effectiveColor = isRainbowOrOpal ? '#ff0000' : (!darkMode && lum > 185
+    ? `#${[0, 2, 4].map(i => Math.round(parseInt(cleanHex.substring(i, i + 2), 16) * 0.55).toString(16).padStart(2, '0')).join('')}`
+    : playerColor);
+
   if (isSwap) {
-    // Spinning dashed circle in the current player's color around the opponent piece.
-    // Matches the selection-dash style but uses the player color for contrast.
     const pieceRadius = size * 0.58;
     const ringRadius = pieceRadius + size * 0.14;
-    return (
+    const inner = (
       <g onClick={onClick} style={{ cursor: 'pointer' }}>
         <circle
           cx={x}
           cy={y}
           r={ringRadius}
           fill="none"
-          stroke={playerColor}
+          stroke={effectiveColor}
           strokeWidth={2.5}
           strokeDasharray="5 3"
           opacity={0.85}
@@ -36,14 +44,15 @@ export function MoveIndicator({ coord, onClick, size = 18, playerColor = '#22c55
         />
       </g>
     );
+    return isRainbowOrOpal ? <g className="rainbow-ui-filter">{inner}</g> : inner;
   }
 
   // Jump moves are larger and more visible, step moves are smaller and more subtle
   const baseRadius = isJump ? size * 0.38 : size * 0.25;
   const ringRadius = isJump ? size * 0.48 : size * 0.35;
-  const opacity = isJump ? 0.4 : 0.25;
+  const opacity = isJump ? (hexCells ? 0.8 : 0.4) : (hexCells ? 0.55 : 0.25);
 
-  return (
+  const inner = (
     <g onClick={onClick} style={{ cursor: 'pointer' }}>
       {/* Pulsing outer ring - stationary position, pulses in size */}
       <circle
@@ -51,7 +60,7 @@ export function MoveIndicator({ coord, onClick, size = 18, playerColor = '#22c55
         cy={y}
         r={ringRadius}
         fill="none"
-        stroke={playerColor}
+        stroke={effectiveColor}
         strokeWidth={isJump ? 3 : 2}
         opacity={opacity}
         className="move-indicator-pulse"
@@ -62,9 +71,10 @@ export function MoveIndicator({ coord, onClick, size = 18, playerColor = '#22c55
         cx={x}
         cy={y}
         r={baseRadius}
-        fill={playerColor}
+        fill={effectiveColor}
         opacity={opacity + 0.15}
       />
     </g>
   );
+  return isRainbowOrOpal ? <g className="rainbow-ui-filter">{inner}</g> : inner;
 }

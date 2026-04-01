@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 import { AuthSync } from "@/components/auth/AuthProvider";
+import { GlobalShortcuts } from "@/components/GlobalShortcuts";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,6 +39,7 @@ export default function RootLayout({
       >
         <ConvexClientProvider>
           <AuthSync />
+          <GlobalShortcuts />
           {children}
         </ConvexClientProvider>
       </body>

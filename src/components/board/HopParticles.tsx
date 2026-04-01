@@ -21,10 +21,18 @@ interface ParticleDot {
 }
 
 function shiftColor(hex: string, shift: number): string {
-  const cleaned = hex.replace('#', '');
-  const r = parseInt(cleaned.substring(0, 2), 16);
-  const g = parseInt(cleaned.substring(2, 4), 16);
-  const b = parseInt(cleaned.substring(4, 6), 16);
+  let r: number, g: number, b: number;
+  const rgbMatch = hex.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+  if (rgbMatch) {
+    r = parseInt(rgbMatch[1], 10);
+    g = parseInt(rgbMatch[2], 10);
+    b = parseInt(rgbMatch[3], 10);
+  } else {
+    const cleaned = hex.replace('#', '');
+    r = parseInt(cleaned.substring(0, 2), 16);
+    g = parseInt(cleaned.substring(2, 4), 16);
+    b = parseInt(cleaned.substring(4, 6), 16);
+  }
 
   // shift > 0 = lighten (blend toward white), shift < 0 = darken (blend toward black)
   const factor = shift * 0.15; // +-15% max

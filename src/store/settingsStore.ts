@@ -26,6 +26,8 @@ interface SettingsStore {
   glassPieces: boolean;
   hopEffect: boolean;
   favoriteColor: string | null;
+  usePlayerOpening: boolean;
+  hexCells: boolean;
 
   // Sync state
   isSyncing: boolean;
@@ -51,6 +53,8 @@ interface SettingsStore {
   toggleGlassPieces: () => void;
   toggleHopEffect: () => void;
   setFavoriteColor: (color: string | null) => void;
+  toggleUsePlayerOpening: () => void;
+  toggleHexCells: () => void;
 
   // Sync actions
   syncFromCloud: () => Promise<void>;
@@ -96,6 +100,8 @@ export const useSettingsStore = create<SettingsStore>()(
       glassPieces: true,
       hopEffect: false,
       favoriteColor: null,
+      usePlayerOpening: false,
+      hexCells: false,
 
       // Sync state
       isSyncing: false,
@@ -170,6 +176,12 @@ export const useSettingsStore = create<SettingsStore>()(
         set({ favoriteColor: color });
         get().syncToCloud();
       },
+      toggleUsePlayerOpening: () => {
+        set((state) => ({ usePlayerOpening: !state.usePlayerOpening }));
+      },
+      toggleHexCells: () => {
+        set((state) => ({ hexCells: !state.hexCells }));
+      },
 
       // Sync from cloud (called on sign-in)
       syncFromCloud: async () => {
@@ -234,6 +246,8 @@ export const useSettingsStore = create<SettingsStore>()(
         glassPieces: state.glassPieces,
         hopEffect: state.hopEffect,
         favoriteColor: state.favoriteColor,
+        usePlayerOpening: state.usePlayerOpening,
+        hexCells: state.hexCells,
       }),
     }
   )

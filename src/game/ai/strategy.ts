@@ -12,7 +12,7 @@ import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
 import { coordKey, cubeDistance, centroid, cubeAdd } from '../coordinates';
 import { getGoalPositionsForState } from '../state';
 import { getPlayerPieces } from '../setup';
-import { getAllValidMoves, getValidMoves } from '../moves';
+import { getAllValidMoves, getValidMoves, canJumpOver } from '../moves';
 import { DIRECTIONS } from '../constants';
 
 /**
@@ -46,7 +46,7 @@ export function findBlockedJumpPotential(
 
     // Is there a friendly piece that could jump here?
     if (beforeContent?.type !== 'piece' || beforeContent.player !== player) continue;
-    if (middleContent?.type !== 'piece') continue; // Need something to jump over
+    if (!canJumpOver(state, middlePos, player)) continue; // Need something jumpable
 
     // Position after this piece (where they could continue to)
     const afterPos: CubeCoord = {

@@ -3,8 +3,8 @@
 import { useRef, useEffect } from 'react';
 import type { Move, PlayerIndex, ColorMapping } from '@/types/game';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { getMetallicSwatchStyle, getGemSwatchStyle } from '@/game/constants';
 import { useReplayStore } from '@/store/replayStore';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
 function formatCoord(coord: { q: number; r: number }): string {
   return `(${coord.q},${coord.r})`;
@@ -24,8 +24,6 @@ interface ReplayMoveEntryProps {
 function ReplayMoveEntry({ move, index, player, activePlayers, customColors, isCurrent, isLongestHop, onClick }: ReplayMoveEntryProps) {
   const color = getPlayerColor(player, customColors);
   const name = getPlayerDisplayName(player, activePlayers);
-  const metallicStyle = getMetallicSwatchStyle(color);
-  const gemStyle = getGemSwatchStyle(color);
 
   return (
     <div
@@ -35,11 +33,7 @@ function ReplayMoveEntry({ move, index, player, activePlayers, customColors, isC
       onClick={onClick}
     >
       <span className="text-gray-400 w-6">{index + 1}.</span>
-      <div
-        className={`w-3 h-3 flex-shrink-0${gemStyle ? ' gem-swatch' : ' rounded-full'}${metallicStyle ? ' metallic-swatch' : ''}`}
-        style={{ backgroundColor: color, ...metallicStyle, ...gemStyle }}
-        title={name}
-      />
+      <ColorSwatch color={color} className="w-3 h-3 flex-shrink-0" title={name} />
       <span className="font-mono flex-1">
         {formatCoord(move.from)} → {formatCoord(move.to)}
       </span>
@@ -52,16 +46,14 @@ function ReplayMoveEntry({ move, index, player, activePlayers, customColors, isC
         <span className="text-amber-600 font-medium">swap</span>
       )}
       {isLongestHop && (
-        <span className="text-amber-500" title="Longest hop">
-          ★
-        </span>
+        <span className="text-amber-500" title="Best hop">✶</span>
       )}
     </div>
   );
 }
 
 export function ReplayMoveHistory() {
-  const { moves, currentStep, longestHopIndex, displayState, goToStep } = useReplayStore();
+  const { moves, currentStep, longestHopIndices, displayState, goToStep } = useReplayStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentEntryRef = useRef<HTMLDivElement>(null);
 
@@ -111,7 +103,7 @@ export function ReplayMoveHistory() {
                     activePlayers={activePlayers}
                     customColors={displayState.playerColors}
                     isCurrent={isCurrent}
-                    isLongestHop={longestHopIndex === index}
+                    isLongestHop={longestHopIndices.has(index)}
                     onClick={() => goToStep(index + 1)}
                   />
                 </div>

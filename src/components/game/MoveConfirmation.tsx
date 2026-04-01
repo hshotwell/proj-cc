@@ -2,8 +2,10 @@
 
 import { useEffect } from 'react';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
+import { isGemColor } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
 export function MoveConfirmation() {
   const { gameState, pendingConfirmation, validMovesForSelected, confirmMove, undoLastMove, undoConfirmedMove, canUndoConfirmedMove } = useGameStore();
@@ -96,9 +98,9 @@ export function MoveConfirmation() {
         style={{ borderColor: color }}
       >
         <div className="flex items-center gap-4">
-          <div
-            className="w-8 h-8 rounded-full border-2 border-white shadow"
-            style={{ backgroundColor: color }}
+          <ColorSwatch
+            color={color}
+            className={`w-8 h-8 shadow${!isGemColor(color) && color !== 'opal' ? ` border-2${color.toLowerCase() === '#ffffff' ? ' border-gray-400' : ' border-white'}` : ''}`}
           />
           <div className="text-sm">
             <span className="font-semibold" style={{ color }}>{name}</span>

@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { GameState, Move } from '@/types/game';
 import type { SavedGameSummary } from '@/types/replay';
 import { loadSavedGame } from '@/game/persistence';
-import { normalizeMoveHistory, reconstructGameStates, findLongestHop } from '@/game/replay';
+import { normalizeMoveHistory, reconstructGameStates, findLongestHopIndices, findBestHopGain } from '@/game/replay';
 
 interface ReplayStore {
   // State
@@ -13,8 +13,8 @@ interface ReplayStore {
   moves: Move[];
   currentStep: number;
   displayState: GameState | null;
-  longestHopIndex: number | null;
-  longestHopLength: number;
+  longestHopIndices: Set<number>;
+  longestHopLength: number; // max % progress gain from any jump
   gameSummary: SavedGameSummary | null;
 
   // Actions
@@ -34,7 +34,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
   moves: [],
   currentStep: 0,
   displayState: null,
-  longestHopIndex: null,
+  longestHopIndices: new Set<number>(),
   longestHopLength: 0,
   gameSummary: null,
 
@@ -44,7 +44,8 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
 
     const states = reconstructGameStates(savedGame);
     const moves = savedGame.moves;
-    const hop = findLongestHop(moves);
+    const hopIndices = findLongestHopIndices(moves, states);
+    const hopGain = findBestHopGain(moves, states);
 
     // turnNumber from final state is incremented after the last move, so subtract 1
     const finalTurnNumber = states[states.length - 1]?.turnNumber ?? 1;
@@ -56,7 +57,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       winner: savedGame.finishedPlayers[0]?.player ?? savedGame.initialConfig.activePlayers[0],
       totalMoves: moves.length,
       totalTurns: Math.max(1, finalTurnNumber - 1),
-      longestHop: hop?.jumpLength ?? 0,
+      longestHop: hopGain,
       playerColors: savedGame.initialConfig.playerColors,
       aiPlayers: savedGame.initialConfig.aiPlayers,
       ...(savedGame.initialConfig.teamMode ? { teamMode: true } : {}),
@@ -68,8 +69,8 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       moves,
       currentStep: 0,
       displayState: states[0],
-      longestHopIndex: hop?.moveIndex ?? null,
-      longestHopLength: hop?.jumpLength ?? 0,
+      longestHopIndices: hopIndices,
+      longestHopLength: hopGain,
       gameSummary: summary,
     });
 
@@ -78,7 +79,6 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
 
   loadReplayFromState: (finalState: GameState, gameId: string) => {
     const normalizedMoves = normalizeMoveHistory(finalState.moveHistory, finalState.activePlayers);
-    const hop = findLongestHop(normalizedMoves);
 
     // Build custom layout data if this is a custom board
     const customLayoutData = finalState.isCustomLayout ? {
@@ -108,6 +108,8 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
     };
 
     const states = reconstructGameStates(savedGame);
+    const hopIndices = findLongestHopIndices(normalizedMoves, states);
+    const hopGain = findBestHopGain(normalizedMoves, states);
 
     const summary: SavedGameSummary = {
       id: gameId,
@@ -118,7 +120,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       totalMoves: normalizedMoves.length,
       // turnNumber is incremented after the final move, so subtract 1 for actual turns played
       totalTurns: Math.max(1, finalState.turnNumber - 1),
-      longestHop: hop?.jumpLength ?? 0,
+      longestHop: hopGain,
       playerColors: finalState.playerColors,
       aiPlayers: finalState.aiPlayers,
       ...(finalState.teamMode ? { teamMode: true } : {}),
@@ -130,8 +132,8 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       moves: normalizedMoves,
       currentStep: 0,
       displayState: states[0],
-      longestHopIndex: hop?.moveIndex ?? null,
-      longestHopLength: hop?.jumpLength ?? 0,
+      longestHopIndices: hopIndices,
+      longestHopLength: hopGain,
       gameSummary: summary,
     });
   },
@@ -173,7 +175,7 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
       moves: [],
       currentStep: 0,
       displayState: null,
-      longestHopIndex: null,
+      longestHopIndices: new Set<number>(),
       longestHopLength: 0,
       gameSummary: null,
     });

@@ -44,6 +44,9 @@ export function applyMove(state: GameState, move: Move): GameState {
   }
   newState.board.set(toKey, piece);
 
+  // Transfer piece variant from 'from' to 'to', then check for powerup at 'to'
+  applyVariantTransfer(newState, fromKey, toKey, move.isSwap);
+
   // Record the move
   newState.moveHistory.push(move);
 
@@ -83,6 +86,78 @@ export function applyMove(state: GameState, move: Move): GameState {
   return newState;
 }
 
+// Helper: move pieceVariants entry from fromKey to toKey, consuming any powerup at toKey.
+// For swaps, also transfers the displaced piece's variant from toKey back to fromKey.
+// Power-up is applied immediately (used by applyMove / AI path).
+function applyVariantTransfer(state: GameState, fromKey: string, toKey: string, isSwap = false): void {
+  const movingVariant = state.pieceVariants?.get(fromKey);
+  // Save displaced variant before anything is overwritten
+  const displacedVariant = isSwap ? state.pieceVariants?.get(toKey) : undefined;
+
+  if (state.pieceVariants) state.pieceVariants.delete(fromKey);
+
+  const powerupVariant = state.powerups?.get(toKey);
+  const newMovingVariant = powerupVariant ?? movingVariant;
+
+  if (powerupVariant !== undefined && state.powerups) {
+    state.powerups.delete(toKey);
+  }
+
+  // Apply moving piece's variant to toKey (or clear it)
+  if (newMovingVariant !== undefined) {
+    if (!state.pieceVariants) state.pieceVariants = new Map();
+    state.pieceVariants.set(toKey, newMovingVariant);
+  } else if (state.pieceVariants) {
+    state.pieceVariants.delete(toKey);
+  }
+
+  // For swaps: restore displaced piece's variant at fromKey
+  if (isSwap && displacedVariant !== undefined) {
+    if (!state.pieceVariants) state.pieceVariants = new Map();
+    state.pieceVariants.set(fromKey, displacedVariant);
+  }
+}
+
+// Like applyVariantTransfer but defers power-up application to turn end (used by movePiece / human path).
+// Power-ups are consumed (removed from the board) but stored in pendingPowerups instead of pieceVariants,
+// so the piece cannot exploit the new variant during the same turn (e.g. chain jumps).
+function applyVariantTransferPending(state: GameState, fromKey: string, toKey: string, isSwap = false): void {
+  const movingVariant = state.pieceVariants?.get(fromKey);
+  const displacedVariant = isSwap ? state.pieceVariants?.get(toKey) : undefined;
+  // Carry any pending power-up forward as the piece moves
+  const pendingMoving = state.pendingPowerups?.get(fromKey);
+
+  if (state.pieceVariants) state.pieceVariants.delete(fromKey);
+  if (state.pendingPowerups) state.pendingPowerups.delete(fromKey);
+
+  const powerupVariant = state.powerups?.get(toKey);
+
+  if (powerupVariant !== undefined && state.powerups) {
+    // Consume the cell so it's not picked up twice, but defer applying the variant
+    state.powerups.delete(toKey);
+    if (!state.pendingPowerups) state.pendingPowerups = new Map();
+    state.pendingPowerups.set(toKey, powerupVariant);
+  } else if (pendingMoving !== undefined) {
+    // Carry the pending power-up to the new position
+    if (!state.pendingPowerups) state.pendingPowerups = new Map();
+    state.pendingPowerups.set(toKey, pendingMoving);
+  }
+
+  // Move the piece's existing variant (not the picked-up power-up) to toKey
+  if (movingVariant !== undefined) {
+    if (!state.pieceVariants) state.pieceVariants = new Map();
+    state.pieceVariants.set(toKey, movingVariant);
+  } else if (state.pieceVariants) {
+    state.pieceVariants.delete(toKey);
+  }
+
+  // For swaps: restore displaced piece's variant at fromKey
+  if (isSwap && displacedVariant !== undefined) {
+    if (!state.pieceVariants) state.pieceVariants = new Map();
+    state.pieceVariants.set(fromKey, displacedVariant);
+  }
+}
+
 // Move a piece on the board WITHOUT advancing the turn.
 // Used during chain hops where the turn only advances on confirmation.
 export function movePiece(state: GameState, move: Move): GameState {
@@ -102,6 +177,8 @@ export function movePiece(state: GameState, move: Move): GameState {
     newState.board.set(fromKey, { type: 'empty' });
   }
   newState.board.set(toKey, piece);
+  // Transfer piece variant; defer any picked-up power-up to turn end
+  applyVariantTransferPending(newState, fromKey, toKey, move.isSwap);
   // Store move with player and turn info for history tracking
   newState.moveHistory.push({ ...move, player: piece.player, turnNumber: state.turnNumber });
 
@@ -127,6 +204,16 @@ export function movePiece(state: GameState, move: Move): GameState {
 // Advance the turn to the next player, skipping players who have finished
 export function advanceTurn(state: GameState): GameState {
   const newState = cloneGameState(state);
+
+  // Apply any power-ups picked up during this turn now that it's confirmed
+  if (newState.pendingPowerups && newState.pendingPowerups.size > 0) {
+    if (!newState.pieceVariants) newState.pieceVariants = new Map();
+    for (const [key, variant] of newState.pendingPowerups) {
+      newState.pieceVariants.set(key, variant);
+    }
+    newState.pendingPowerups = undefined;
+  }
+
   const finishedSet = new Set(newState.finishedPlayers.map((fp) => fp.player));
   const currentIndex = newState.activePlayers.indexOf(state.currentPlayer);
   const numPlayers = newState.activePlayers.length;

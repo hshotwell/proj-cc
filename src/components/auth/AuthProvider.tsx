@@ -10,8 +10,21 @@ import { MigrationDialog } from './MigrationDialog';
 import { hasMigrated } from '@/services/migration';
 import { usePresence } from '@/hooks/usePresence';
 import { InviteNotification } from '@/components/InviteNotification';
+import { OFFLINE_MODE } from '@/lib/offlineMode';
+
+// Offline stub: immediately marks auth as not loading, no Convex calls.
+function OfflineAuthSync() {
+  const { clearAuth } = useAuthStore();
+  useEffect(() => { clearAuth(); }, [clearAuth]);
+  return null;
+}
 
 export function AuthSync() {
+  if (OFFLINE_MODE) return <OfflineAuthSync />;
+  return <OnlineAuthSync />;
+}
+
+function OnlineAuthSync() {
   const { isAuthenticated: isConvexAuthed, isLoading: isConvexLoading } = useConvexAuth();
   const profile = useQuery(api.users.getProfile);
   const { setUser, setLoading, clearAuth, isAuthenticated } = useAuthStore();

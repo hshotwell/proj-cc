@@ -19,12 +19,16 @@ export interface SerializedGameState {
   customGoalPositions?: GameState['customGoalPositions'];
   startingPositions?: GameState['startingPositions'];
   teamMode?: GameState['teamMode'];
+  playerPieceTypes?: GameState['playerPieceTypes'];
+  pieceVariantsEntries?: [string, import('@/types/game').PieceVariant][];
+  powerupsEntries?: [string, import('@/types/game').PieceVariant][];
 }
 
 export interface WorkerRequest {
   state: SerializedGameState;
   difficulty: AIDifficulty;
   personality: AIPersonality;
+  openingId?: string | null;
 }
 
 export interface WorkerResponse {
@@ -47,6 +51,9 @@ export function serializeGameState(state: GameState): SerializedGameState {
     customGoalPositions: state.customGoalPositions,
     startingPositions: state.startingPositions,
     teamMode: state.teamMode,
+    playerPieceTypes: state.playerPieceTypes,
+    pieceVariantsEntries: state.pieceVariants ? Array.from(state.pieceVariants.entries()) : undefined,
+    powerupsEntries: state.powerups ? Array.from(state.powerups.entries()) : undefined,
   };
 }
 
@@ -66,5 +73,8 @@ export function deserializeGameState(serialized: SerializedGameState): GameState
     customGoalPositions: serialized.customGoalPositions,
     startingPositions: serialized.startingPositions,
     teamMode: serialized.teamMode,
+    playerPieceTypes: serialized.playerPieceTypes,
+    pieceVariants: serialized.pieceVariantsEntries ? new Map(serialized.pieceVariantsEntries) : undefined,
+    powerups: serialized.powerupsEntries ? new Map(serialized.powerupsEntries) : undefined,
   };
 }

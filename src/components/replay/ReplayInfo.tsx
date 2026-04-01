@@ -2,6 +2,7 @@
 
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
 import { useReplayStore } from '@/store/replayStore';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
 export function ReplayInfo() {
   const { gameSummary } = useReplayStore();
@@ -25,10 +26,7 @@ export function ReplayInfo() {
       </h3>
       <div className="text-xs text-gray-500">{dateStr}</div>
       <div className="flex items-center gap-2">
-        <div
-          className="w-4 h-4 rounded-full"
-          style={{ backgroundColor: winnerColor }}
-        />
+        <ColorSwatch color={winnerColor} className="w-4 h-4" />
         <span className="font-medium" style={{ color: winnerColor }}>
           {winnerName}
         </span>
@@ -49,8 +47,8 @@ export function ReplayInfo() {
         </div>
         {gameSummary.longestHop > 0 && (
           <div className="bg-amber-50 rounded p-2">
-            <div className="text-amber-600">Longest Hop</div>
-            <div className="font-semibold text-amber-700">{gameSummary.longestHop} jumps</div>
+            <div className="text-amber-600">Best Hop</div>
+            <div className="font-semibold text-amber-700">{Math.round(gameSummary.longestHop)}%</div>
           </div>
         )}
       </div>

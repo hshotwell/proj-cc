@@ -4,8 +4,8 @@ import { useRef, useEffect } from 'react';
 import type { Move, PlayerIndex, ColorMapping } from '@/types/game';
 import { ACTIVE_PLAYERS } from '@/game/constants';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { getMetallicSwatchStyle, getGemSwatchStyle } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
 function formatCoord(coord: { q: number; r: number }): string {
   return `(${coord.q},${coord.r})`;
@@ -22,17 +22,11 @@ interface MoveEntryProps {
 function MoveEntry({ move, index, player, activePlayers, customColors }: MoveEntryProps) {
   const color = getPlayerColor(player, customColors);
   const name = getPlayerDisplayName(player, activePlayers);
-  const metallicStyle = getMetallicSwatchStyle(color);
-  const gemStyle = getGemSwatchStyle(color);
 
   return (
     <div className="flex items-center gap-2 py-1 px-2 text-xs rounded hover:bg-gray-50">
       <span className="text-gray-400 w-6">{index + 1}.</span>
-      <div
-        className={`w-3 h-3 flex-shrink-0${gemStyle ? ' gem-swatch' : ' rounded-full'}${metallicStyle ? ' metallic-swatch' : ''}`}
-        style={{ backgroundColor: color, ...metallicStyle, ...gemStyle }}
-        title={name}
-      />
+      <ColorSwatch color={color} className="w-3 h-3 flex-shrink-0" title={name} />
       <span className="font-mono">
         {formatCoord(move.from)} → {formatCoord(move.to)}
       </span>

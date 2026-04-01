@@ -3,37 +3,36 @@
 import type { PlayerIndex, ColorMapping } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { getMetallicSwatchStyle, getGemSwatchStyle } from '@/game/constants';
 import { countPiecesInGoal } from '@/game/state';
+import { computePlayerProgress } from '@/game/progress';
 import { useReplayStore } from '@/store/replayStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
 interface ReplayPlayerCardProps {
   player: PlayerIndex;
   piecesInGoal: number;
+  progress: number;
   customColors?: ColorMapping;
   activePlayers: PlayerIndex[];
   finishRank?: number;
   moveCount?: number;
   aiPlayers?: AIPlayerMap;
+  showPlayerProgress: boolean;
 }
 
-function ReplayPlayerCard({ player, piecesInGoal, customColors, activePlayers, finishRank, moveCount, aiPlayers }: ReplayPlayerCardProps) {
+function ReplayPlayerCard({ player, piecesInGoal, progress, customColors, activePlayers, finishRank, moveCount, aiPlayers, showPlayerProgress }: ReplayPlayerCardProps) {
   const color = getPlayerColor(player, customColors);
   const name = getPlayerDisplayName(player, activePlayers);
   const isFinished = finishRank !== undefined;
   const isAI = aiPlayers?.[player] != null;
-  const metallicStyle = getMetallicSwatchStyle(color);
-  const gemStyle = getGemSwatchStyle(color);
 
   return (
     <div className={`p-3 rounded-lg border-2 border-transparent ${isFinished ? 'opacity-80' : ''}`}>
       <div className="flex items-center gap-2">
-        <div
-          className={`w-4 h-4${gemStyle ? ' gem-swatch' : ' rounded-full'}${metallicStyle ? ' metallic-swatch' : ''}`}
-          style={{ backgroundColor: color, ...metallicStyle, ...gemStyle }}
-        />
+        <ColorSwatch color={color} className="w-4 h-4" />
         <span className="font-medium" style={{ color }}>
           {name}
         </span>
@@ -55,14 +54,15 @@ function ReplayPlayerCard({ player, piecesInGoal, customColors, activePlayers, f
       )}
       {!isFinished && (
         <>
-          <div className="mt-1 text-xs text-gray-500">
-            {piecesInGoal}/10 in goal
+          <div className="mt-1 flex justify-between text-xs text-gray-500">
+            <span>{piecesInGoal}/10 in goal</span>
+            {showPlayerProgress && <span>{Math.round(progress)}%</span>}
           </div>
           <div className="mt-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
               className="h-full transition-all duration-300"
               style={{
-                width: `${(piecesInGoal / 10) * 100}%`,
+                width: `${showPlayerProgress ? progress : (piecesInGoal / 10) * 100}%`,
                 backgroundColor: color,
               }}
             />
@@ -75,6 +75,7 @@ function ReplayPlayerCard({ player, piecesInGoal, customColors, activePlayers, f
 
 export function ReplayPlayerPanel() {
   const { displayState, gameSummary } = useReplayStore();
+  const { showPlayerProgress } = useSettingsStore();
 
   if (!displayState) return null;
 
@@ -87,16 +88,19 @@ export function ReplayPlayerPanel() {
         {displayState.activePlayers.map((player) => {
           const finishIdx = displayState.finishedPlayers.findIndex((fp) => fp.player === player);
           const fp = finishIdx >= 0 ? displayState.finishedPlayers[finishIdx] : undefined;
+          const progress = computePlayerProgress(displayState, player);
           return (
             <ReplayPlayerCard
               key={player}
               player={player}
               piecesInGoal={countPiecesInGoal(displayState, player)}
+              progress={progress}
               customColors={displayState.playerColors}
               activePlayers={displayState.activePlayers}
               finishRank={finishIdx >= 0 ? finishIdx : undefined}
               moveCount={fp?.moveCount}
               aiPlayers={displayState.aiPlayers}
+              showPlayerProgress={showPlayerProgress}
             />
           );
         })}

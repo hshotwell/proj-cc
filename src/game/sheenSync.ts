@@ -8,6 +8,12 @@ const DURATIONS: Record<string, number> = {
   copper: 3.5,
   silver: 2.8,
   gold: 2.2,
+  ice: 2.5,
+  onyx: 3.0,
+  pearl: 2.0,
+  jade: 3.8,
+  iron: 3.0,
+  morganite: 2.3,
 };
 
 function update() {
@@ -32,4 +38,10 @@ export const METALLIC_SHEEN_KEY: Record<string, string> = {
   '#b87333': 'copper',
   '#c0c0c0': 'silver',
   '#ffd700': 'gold',
+  '#a8d8f0': 'ice',
+  '#1a1820': 'onyx',
+  '#f0e8dc': 'pearl',
+  '#3a7850': 'jade',
+  '#303858': 'iron',
+  '#f07090': 'morganite',
 };

@@ -13,7 +13,7 @@ import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
 import { coordKey, cubeEquals, cubeDistance, centroid } from '../coordinates';
 import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
-import { getAllValidMoves } from '../moves';
+import { getAllValidMoves, canJumpOver } from '../moves';
 import { applyMove } from '../state';
 import { DIRECTIONS } from '../constants';
 import { getCachedEndgameInsights } from '../learning';
@@ -107,14 +107,13 @@ function couldEnterGoalIfEmpty(
     const outsidePiece = piecesOutside.find(p => cubeEquals(p, jumperPos));
     if (!outsidePiece) continue;
 
-    // Check if there's a piece to jump over (between jumper and goal)
+    // Check if there's a jumpable piece between the jumper and the goal
     const overPos: CubeCoord = {
       q: goalPos.q - dir.q,
       r: goalPos.r - dir.r,
       s: goalPos.s - dir.s,
     };
-    const overContent = state.board.get(coordKey(overPos));
-    if (overContent?.type === 'piece') {
+    if (canJumpOver(state, overPos, player)) {
       return outsidePiece; // This outside piece could jump in if goalPos were empty
     }
   }
@@ -341,7 +340,7 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   }
 
   // PRIORITY 6: 2-4 move lookahead for shuffle/reposition sequences
-  const shuffleSequence = findShuffleSequence(state, player, allMoves, goalKeys, 4);
+  const shuffleSequence = findShuffleSequence(state, player, allMoves, goalKeys, 2);
   if (shuffleSequence) {
     return shuffleSequence;
   }
@@ -349,40 +348,52 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   // PRIORITY 7: Move outside pieces toward the deepest empty goal
   if (emptyGoals.length > 0 && piecesOutside.length > 0) {
     const targetGoal = emptyGoals[0];
+    const goalCenter = centroid(goalPositions);
 
     const outsideMoves: Array<{
       move: Move;
       pieceDistFromGoal: number;
       improvement: number;
+      centerImprovement: number;
       jumpLen: number;
     }> = [];
 
     for (const piece of piecesOutside) {
       const distToGoal = cubeDistance(piece, targetGoal);
+      const distToCenter = cubeDistance(piece, goalCenter);
       for (const move of allMoves) {
         if (!cubeEquals(move.from, piece)) continue;
 
         const newDist = cubeDistance(move.to, targetGoal);
+        const newDistToCenter = cubeDistance(move.to, goalCenter);
         outsideMoves.push({
           move,
           pieceDistFromGoal: distToGoal,
           improvement: distToGoal - newDist,
+          centerImprovement: distToCenter - newDistToCenter,
           jumpLen: move.jumpPath?.length || 0
         });
       }
     }
 
     outsideMoves.sort((a, b) => {
-      if (Math.abs(b.improvement - a.improvement) > 0.5) {
-        return b.improvement - a.improvement;
-      }
-      if (Math.abs(b.pieceDistFromGoal - a.pieceDistFromGoal) > 0.5) {
-        return b.pieceDistFromGoal - a.pieceDistFromGoal;
-      }
+      // 0. Multi-hop chain jumps with positive improvement come first
+      const aBig = (a.move.jumpPath?.length ?? 0) > 1 && a.improvement > 0 ? 1 : 0;
+      const bBig = (b.move.jumpPath?.length ?? 0) > 1 && b.improvement > 0 ? 1 : 0;
+      if (bBig !== aBig) return bBig - aBig;
+      // 1. Improvement toward target goal
+      if (Math.abs(b.improvement - a.improvement) > 0.5) return b.improvement - a.improvement;
+      // 2. Farther pieces first (more to gain)
+      if (Math.abs(b.pieceDistFromGoal - a.pieceDistFromGoal) > 0.5) return b.pieceDistFromGoal - a.pieceDistFromGoal;
+      // 3. Any jump over step
       return b.jumpLen - a.jumpLen;
     });
 
-    const goodMoves = outsideMoves.filter(m => m.improvement >= 0);
+    // Keep moves that improve toward the target goal OR toward the goal center.
+    // This prevents backward walks when the specific target cell is off-axis.
+    const goodMoves = outsideMoves.filter(
+      m => m.improvement >= 0 || m.centerImprovement > 0
+    );
     if (goodMoves.length > 0) {
       return goodMoves[0].move;
     }
@@ -415,33 +426,6 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     });
     scored.sort((a, b) => b.score - a.score);
     return scored[0].move;
-  }
-
-  // PRIORITY 9: LAST RESORT - if we MUST leave goal, find the move that enables
-  // the best opportunity next turn
-  const leavingGoalMoves = allMoves
-    .filter(m => goalKeys.has(coordKey(m.from)) && !goalKeys.has(coordKey(m.to)))
-    .map(m => {
-      const nextState = applyMove(state, m);
-      const nextMoves = getAllValidMoves(nextState, player);
-      const canEnterNext = nextMoves.some(nm => isDirectGoalEntry(nextState, nm, player));
-      const forwardProgress = cubeDistance(m.from, centroid(goalPositions)) -
-                              cubeDistance(m.to, centroid(goalPositions));
-      return {
-        move: m,
-        canEnterNext,
-        forwardProgress
-      };
-    })
-    .sort((a, b) => {
-      if (a.canEnterNext !== b.canEnterNext) {
-        return a.canEnterNext ? -1 : 1;
-      }
-      return b.forwardProgress - a.forwardProgress;
-    });
-
-  if (leavingGoalMoves.length > 0) {
-    return leavingGoalMoves[0].move;
   }
 
   return allMoves[0];

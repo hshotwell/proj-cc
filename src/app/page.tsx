@@ -1,19 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useConvexAuth } from 'convex/react';
 import { useRouter } from 'next/navigation';
 
 export default function LandingPage() {
-  const { isLoading } = useConvexAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
-
-    // Always go to home page regardless of auth state
     router.replace('/home');
-  }, [isLoading, router]);
+  }, [router]);
 
   // Show loading state while redirecting
   return (

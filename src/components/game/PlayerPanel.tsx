@@ -3,8 +3,8 @@
 import type { PlayerIndex, ColorMapping } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { getMetallicSwatchStyle, getGemSwatchStyle } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
@@ -22,8 +22,7 @@ function PlayerCard({ player, isCurrentTurn, customColors, activePlayers, finish
   const name = getPlayerDisplayName(player, activePlayers);
   const isFinished = finishRank !== undefined;
   const isAI = aiPlayers?.[player] != null;
-  const metallicStyle = getMetallicSwatchStyle(color);
-  const gemStyle = getGemSwatchStyle(color);
+  const borderClass = color.toLowerCase() === '#ffffff' ? ' border border-gray-400' : '';
 
   return (
     <div
@@ -37,10 +36,7 @@ function PlayerCard({ player, isCurrentTurn, customColors, activePlayers, finish
       }}
     >
       <div className="flex items-center gap-2">
-        <div
-          className={`w-4 h-4${gemStyle ? ' gem-swatch' : ' rounded-full'}${color.toLowerCase() === '#ffffff' ? ' border border-gray-400' : ''}${metallicStyle ? ' metallic-swatch' : ''}`}
-          style={{ backgroundColor: color, ...metallicStyle, ...gemStyle }}
-        />
+        <ColorSwatch color={color} className={`w-4 h-4${borderClass}`} />
         <span className="font-medium" style={{ color: isCurrentTurn ? color : '#374151' }}>
           {name}
         </span>

@@ -166,9 +166,9 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
   background: linear-gradient(
     135deg,
     transparent 30%,
-    rgba(255,255,255,0.5) 45%,
-    rgba(255,255,255,0.8) 50%,
-    rgba(255,255,255,0.5) 55%,
+    rgba(var(--sheen-r, 255), var(--sheen-g, 255), var(--sheen-b, 255), 0.5) 45%,
+    rgba(var(--sheen-r, 255), var(--sheen-g, 255), var(--sheen-b, 255), 0.8) 50%,
+    rgba(var(--sheen-r, 255), var(--sheen-g, 255), var(--sheen-b, 255), 0.5) 55%,
     transparent 70%
   );
   background-size: 200% 100%;
@@ -193,19 +193,8 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
 }
 
 .metallic-swatch::before {
+  display: none; /* Twinkles handled by SVG overlay in ColorSwatch */
   content: '';
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  background: white;
-  border-radius: 50%;
-  top: 25%;
-  left: 30%;
-  z-index: 1;
-  animation: swatch-twinkle var(--tw-dur, 3s) ease-in-out infinite;
-  animation-delay: var(--tw-delay, 0s);
-  opacity: 0;
-  box-shadow: 0 0 3px 1px rgba(255,255,255,0.6);
 }
 
 /* Gem swatch — hex-shaped with twinkle dot, NO sheen */
@@ -216,20 +205,48 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
 }
 
 .gem-swatch::before {
+  display: none; /* Twinkles handled by SVG overlay in ColorSwatch */
+  content: '';
+}
+
+/* Rainbow / opal swatch: continuously shifting hue */
+@keyframes swatch-hue-rotate {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(360deg); }
+}
+
+/* rainbow-swatch: cross sparkle appearing sporadically at 4 positions */
+.rainbow-swatch { position: relative; }
+.rainbow-swatch::before,
+.rainbow-swatch::after {
   content: '';
   position: absolute;
-  width: 3px;
-  height: 3px;
   background: white;
-  border-radius: 50%;
-  top: 25%;
-  left: 30%;
-  z-index: 1;
-  animation: swatch-twinkle var(--tw-dur, 3s) ease-in-out infinite;
-  animation-delay: var(--tw-delay, 0s);
+  border-radius: 2px;
+  pointer-events: none;
   opacity: 0;
-  box-shadow: 0 0 3px 1px rgba(255,255,255,0.6);
+  animation: rainbow-swatch-twinkle 4.8s ease-in-out 0.3s infinite;
 }
+.rainbow-swatch::before { width: 1.5px; height: 8px; }
+.rainbow-swatch::after  { width: 8px;   height: 1.5px; }
+@keyframes rainbow-swatch-twinkle {
+  0%,  12% { opacity: 0; top: 22%; left: 68%; transform: translate(-50%, -50%) scale(0.2); }
+  14%      { opacity: 1; top: 22%; left: 68%; transform: translate(-50%, -50%) scale(1); }
+  18%      { opacity: 0; top: 22%; left: 68%; transform: translate(-50%, -50%) scale(0.2); }
+  34%      { opacity: 0; top: 68%; left: 30%; transform: translate(-50%, -50%) scale(0.2); }
+  36%      { opacity: 1; top: 68%; left: 30%; transform: translate(-50%, -50%) scale(1); }
+  40%      { opacity: 0; top: 68%; left: 30%; transform: translate(-50%, -50%) scale(0.2); }
+  53%      { opacity: 0; top: 40%; left: 62%; transform: translate(-50%, -50%) scale(0.2); }
+  55%      { opacity: 1; top: 40%; left: 62%; transform: translate(-50%, -50%) scale(1); }
+  59%      { opacity: 0; top: 40%; left: 62%; transform: translate(-50%, -50%) scale(0.2); }
+  77%      { opacity: 0; top: 30%; left: 24%; transform: translate(-50%, -50%) scale(0.2); }
+  79%      { opacity: 1; top: 30%; left: 24%; transform: translate(-50%, -50%) scale(1); }
+  83%, 100%{ opacity: 0; top: 22%; left: 68%; transform: translate(-50%, -50%) scale(0.2); }
+}
+.opal-swatch { }
+
+/* Rainbow/Opal in-game UI color cycling — hue-rotate on wrapper <g> elements */
+.rainbow-ui-filter { animation: swatch-hue-rotate 8s linear infinite; }
 
 /* Undo indicator animation */
 @keyframes undo-pulse {
@@ -295,6 +312,12 @@ html.dark .shadow-lg { box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5); }
 
 .pulse-opacity {
   animation: pulse-opacity 2s ease-in-out infinite;
+}
+
+/* Fade-in for home page mode expansion */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Hop particle burst effect */

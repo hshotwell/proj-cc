@@ -1,6 +1,7 @@
 import type { CubeCoord, GameState, PlayerIndex } from '@/types/game';
 import { DIRECTIONS } from './constants';
 import { coordKey, cubeAdd, getJumpDestination } from './coordinates';
+import { canJumpOver } from './moves';
 
 /**
  * Cache for theoretical distances from goals.
@@ -91,29 +92,25 @@ function computeDistancesFromGoals(
 /**
  * Check if a piece is stuck (has no valid moves).
  * A stuck piece can't contribute to progress.
+ * Respects big-piece blocking: opponent big pieces cannot be jumped over.
  */
-function isPieceStuck(state: GameState, pos: CubeCoord): boolean {
-  const posKey = coordKey(pos);
-
+function isPieceStuck(state: GameState, pos: CubeCoord, player: PlayerIndex): boolean {
   // Check for any step move
   for (const dir of DIRECTIONS) {
     const neighbor = cubeAdd(pos, dir);
-    const neighborKey = coordKey(neighbor);
-    const content = state.board.get(neighborKey);
+    const content = state.board.get(coordKey(neighbor));
     if (content?.type === 'empty') return false;
   }
 
-  // Check for any jump move
+  // Check for any jump move (using canJumpOver for big-piece awareness)
   for (const dir of DIRECTIONS) {
     const over = cubeAdd(pos, dir);
-    const overContent = state.board.get(coordKey(over));
-    if (overContent?.type !== 'piece') continue;
+    if (!canJumpOver(state, over, player)) continue;
 
     const landing = getJumpDestination(pos, over);
-    const landingKey = coordKey(landing);
-    if (!state.board.has(landingKey)) continue;
+    if (!state.board.has(coordKey(landing))) continue;
 
-    const landingContent = state.board.get(landingKey);
+    const landingContent = state.board.get(coordKey(landing));
     if (landingContent?.type === 'empty') return false;
   }
 

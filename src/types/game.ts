@@ -17,6 +17,13 @@ export type ColorMapping = Partial<Record<PlayerIndex, string>>;
 // Custom name mapping for players (falls back to "Player N" if not specified)
 export type PlayerNameMapping = Partial<Record<PlayerIndex, string>>;
 
+// Piece variant — determines movement rules
+// normal:  standard hop over adjacent piece/wall
+// turbo:   hop over a piece/wall any distance away in a line, same distance on the other side (represented as smaller pieces)
+// ghost:   hop over a contiguous run of adjacent pieces/walls, land after the run (translucent)
+// big:     standard movement; opponents cannot jump over you (only you or teammates can)
+export type PieceVariant = 'normal' | 'turbo' | 'ghost' | 'big';
+
 // Cell content - empty, piece, or wall
 export type CellContent =
   | { type: 'empty' }
@@ -73,6 +80,14 @@ export interface GameState {
   startingPositions?: Partial<Record<PlayerIndex, string[]>>;
   // Team mode: opposite players are teammates, both must finish to win
   teamMode?: boolean;
+  // Piece variant per player (normal if absent)
+  playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>;
+  // Per-piece variant overrides: coord key → variant (moves with the piece)
+  pieceVariants?: Map<string, PieceVariant>;
+  // Powerup positions: coord key → variant (consumed when a piece lands on them)
+  powerups?: Map<string, PieceVariant>;
+  // Power-ups picked up during the current turn, applied to pieceVariants on confirmMove
+  pendingPowerups?: Map<string, PieceVariant>;
 }
 
 // Player configuration (name, color, etc.)
@@ -102,6 +117,12 @@ export interface BoardLayout {
   goalPositions?: Partial<Record<PlayerIndex, string[]>>;
   // Wall positions (coord keys) - can be jumped over but not landed on
   walls?: string[];
+  // Powerup positions: coord key → variant (consumed when a piece lands on them)
+  powerups?: Record<string, PieceVariant>;
+  // Starting piece specialties: coord key → variant (piece at that position starts with this type)
+  pieceSpecialties?: Record<string, PieceVariant>;
+  // Which player indices participate for each player count (overrides ACTIVE_PLAYERS default)
+  playerCountConfig?: Partial<Record<PlayerCount, PlayerIndex[]>>;
   createdAt: number;
   isDefault?: boolean;
 }

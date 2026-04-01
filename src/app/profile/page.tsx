@@ -11,7 +11,8 @@ import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getSavedGamesList, deleteSavedGame } from '@/game/persistence';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { EXTRA_COLORS_NO_GEMS, GEM_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
+import { EXTRA_COLORS_NO_GEMS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
+import { FlowerSwatch, EggSwatch, ColorSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import type { SavedGameSummary } from '@/types/replay';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -116,10 +117,7 @@ function ProfileContent() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     {favoriteColor && (
-                      <div
-                        className={`w-5 h-5 flex-shrink-0${getGemSwatchStyle(favoriteColor) ? ' gem-swatch' : ' rounded-full border border-gray-300'}${getMetallicSwatchStyle(favoriteColor) ? ' metallic-swatch' : ''}`}
-                        style={{ backgroundColor: favoriteColor, ...getMetallicSwatchStyle(favoriteColor), ...getGemSwatchStyle(favoriteColor) }}
-                      />
+                      <ColorSwatch color={favoriteColor} className="w-5 h-5 flex-shrink-0" />
                     )}
                     <div>
                       <div className="text-sm font-medium text-gray-700">Favorite Color</div>
@@ -151,28 +149,48 @@ function ProfileContent() {
                       title={`Select: ${getColorName(color)}`}
                     />
                   ))}
-                </div>
-                <div className="flex gap-2 flex-wrap items-center mt-2">
+                  {NEUTRAL_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setFavoriteColor(color)}
+                      className={`w-7 h-7 rounded-full border-2 transition-all ${
+                        favoriteColor?.toLowerCase() === color.toLowerCase()
+                          ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                          : color === '#ffffff'
+                            ? 'border-gray-400 shadow hover:scale-110'
+                            : 'border-white shadow hover:scale-110'
+                      }`}
+                      style={{ backgroundColor: color }}
+                      title={`Select: ${getColorName(color)}`}
+                    />
+                  ))}
                   <ColorPicker
                     value={favoriteColor ?? '#888888'}
                     onChange={(color) => setFavoriteColor(color)}
                   />
-                  {EXTRA_COLORS_NO_GEMS.map((color) => {
+                </div>
+                <div className="flex gap-2 flex-wrap items-center mt-2">
+                  {ROW3_DISPLAY_ORDER.map((color, idx) => {
+                    if (color === null) return <div key={`blank-${idx}`} className="w-7 h-7 flex-shrink-0" />;
                     const metallicStyle = getMetallicSwatchStyle(color);
+                    const isRainbow = color === 'rainbow';
+                    const bgStyle = isRainbow
+                      ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
+                      : { backgroundColor: color, ...metallicStyle };
                     return (
                       <button
                         key={color}
                         onClick={() => setFavoriteColor(color)}
-                        className={`w-7 h-7 rounded-full border-2 transition-all${metallicStyle ? ' metallic-swatch' : ''} ${
+                        className={`w-7 h-7 rounded-full transition-all${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
                           favoriteColor?.toLowerCase() === color.toLowerCase()
-                            ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
-                            : color.toLowerCase() === '#ffffff'
-                              ? 'border-gray-400 shadow hover:scale-110'
-                              : 'border-white shadow hover:scale-110'
+                            ? 'border-2 border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                            : 'shadow hover:scale-110'
                         }`}
-                        style={{ backgroundColor: color, ...metallicStyle }}
+                        style={bgStyle}
                         title={`Select: ${getColorName(color)}`}
-                      />
+                      >
+                        {metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />}
+                      </button>
                     );
                   })}
                 </div>
@@ -180,24 +198,74 @@ function ProfileContent() {
                   {GEM_COLORS.map((color) => {
                     const gemStyle = getGemSwatchStyle(color);
                     const isSelected = favoriteColor?.toLowerCase() === color.toLowerCase();
+                    const isOpal = color === 'opal';
+                    const opalBg = isOpal ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)' } : undefined;
                     return (
                       <div
                         key={color}
-                        className={`w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isSelected ? 'hover:scale-110' : ''}`}
-                        style={{
-                          clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
-                          backgroundColor: isSelected ? '#6b7280' : 'transparent',
-                        }}
+                        className={`relative w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isSelected ? 'hover:scale-110' : ''}`}
                       >
+                        <div
+                          className="absolute"
+                          style={{
+                            width: '32px', height: '32px', top: '-2px', left: '-2px',
+                            clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
+                            backgroundColor: isSelected ? '#9ca3af' : 'transparent',
+                          }}
+                        />
+                        <div
+                          className="absolute"
+                          style={{
+                            inset: '1px',
+                            clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)',
+                            backgroundColor: isSelected ? 'white' : 'transparent',
+                          }}
+                        />
                         <button
                           onClick={() => setFavoriteColor(color)}
-                          className="w-5 h-5 gem-swatch"
-                          style={{ backgroundColor: color, ...gemStyle }}
+                          className={`relative z-10 w-6 h-6 gem-swatch${isOpal ? ' opal-swatch' : ''}`}
+                          style={isOpal ? { ...opalBg, ...gemStyle } : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
                           title={`Select: ${getColorName(color)}`}
-                        />
+                        >
+                          {gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />}
+                        </button>
                       </div>
                     );
                   })}
+                </div>
+                {/* Row 4: flowers */}
+                <div className="flex gap-2 flex-wrap items-center mt-2">
+                  {ROW4_DISPLAY_ORDER.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setFavoriteColor(color)}
+                      className={`w-7 h-7 transition-all flex items-center justify-center ${
+                        favoriteColor?.toLowerCase() === color.toLowerCase()
+                          ? 'ring-2 ring-gray-400 rounded-full'
+                          : 'hover:scale-110'
+                      }`}
+                      title={`Select: ${getColorName(color)}`}
+                    >
+                      <FlowerSwatch color={color} className="w-full h-full" />
+                    </button>
+                  ))}
+                </div>
+                {/* Row 5: eggs */}
+                <div className="flex gap-2 flex-wrap items-center mt-2">
+                  {ROW5_DISPLAY_ORDER.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setFavoriteColor(color)}
+                      className={`w-7 h-7 transition-all flex items-center justify-center ${
+                        favoriteColor?.toLowerCase() === color.toLowerCase()
+                          ? 'ring-2 ring-gray-400 rounded-full'
+                          : 'hover:scale-110'
+                      }`}
+                      title={`Select: ${getColorName(color)}`}
+                    >
+                      <EggSwatch color={color} className="w-full h-full" />
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
