@@ -57,8 +57,10 @@ function InteractiveOpeningBoard({ moves, onAddMove, gameMode }: InteractiveBoar
     let state = createGame(2, [0, 2], undefined, undefined, undefined, undefined, playerPieceTypes);
     for (const m of moves) {
       try {
-        // Apply each move and reset currentPlayer to 0 (we only record player 0's moves)
-        state = { ...applyMove(state, { from: m.from, to: m.to }), currentPlayer: 0 as PlayerIndex };
+        const toKey = coordKey(m.to);
+        const validMove = getValidMoves(state, m.from).find(v => coordKey(v.to) === toKey);
+        if (!validMove) break;
+        state = { ...applyMove(state, validMove), currentPlayer: 0 as PlayerIndex };
       } catch { break; }
     }
     return state;
