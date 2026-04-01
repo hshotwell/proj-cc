@@ -270,6 +270,16 @@ function ProfileContent() {
               </div>
             </div>
 
+            {/* Openings */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <Link
+                href="/openings"
+                className="w-full block px-6 py-3 bg-gray-50 text-gray-700 font-medium rounded-lg hover:bg-gray-100 border border-gray-200 transition-colors text-center"
+              >
+                Opening Book
+              </Link>
+            </div>
+
             {/* Sign Out */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <button

@@ -518,13 +518,6 @@ export default function HomePage() {
             Board Editor
           </Link>
 
-          <Link
-            href="/openings"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-gray-800 text-center rounded-full hover:bg-gray-100 transition-colors"
-          >
-            Openings
-          </Link>
-
           {/* Bottom star — flows with the button column */}
           <button
             type="button"
