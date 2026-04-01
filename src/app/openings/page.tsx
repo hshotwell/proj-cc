@@ -6,9 +6,12 @@ import { useOpeningStore } from '@/store/openingStore';
 import type { CustomOpening } from '@/store/openingStore';
 import { OPENING_LINES } from '@/game/ai/openingBook';
 import type { OpeningMove } from '@/game/ai/openingBook';
-import type { PieceVariant } from '@/types/game';
+import type { PieceVariant, PlayerIndex } from '@/types/game';
 import { generateBoardPositions, getTrianglePositions } from '@/game/board';
 import { coordKey } from '@/game/coordinates';
+import { createGame } from '@/game/setup';
+import { applyMove } from '@/game/state';
+import { getValidMoves } from '@/game/moves';
 
 // ── Interactive Opening Board ─────────────────────────────────────────────────
 
@@ -40,21 +43,43 @@ const PIECE_COLOR = '#ef4444'; // Red — player 0
 interface InteractiveBoardProps {
   moves: OpeningMove[];
   onAddMove: (move: OpeningMove) => void;
+  gameMode: PieceVariant;
 }
 
-function InteractiveOpeningBoard({ moves, onAddMove }: InteractiveBoardProps) {
+function InteractiveOpeningBoard({ moves, onAddMove, gameMode }: InteractiveBoardProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
-  // Piece positions derived from starting layout + recorded moves
-  const pieceKeys = useMemo(() => {
-    const keys = new Set(HOME_CELLS.map(coordKey));
+  // Build a real GameState so we can call getValidMoves for proper validation
+  const gameState = useMemo(() => {
+    const playerPieceTypes = gameMode !== 'normal'
+      ? { 0: gameMode } as Partial<Record<PlayerIndex, PieceVariant>>
+      : undefined;
+    let state = createGame(2, [0, 2], undefined, undefined, undefined, undefined, playerPieceTypes);
     for (const m of moves) {
-      const fk = coordKey(m.from);
-      const tk = coordKey(m.to);
-      if (keys.has(fk)) { keys.delete(fk); keys.add(tk); }
+      try {
+        // Apply each move and reset currentPlayer to 0 (we only record player 0's moves)
+        state = { ...applyMove(state, { from: m.from, to: m.to }), currentPlayer: 0 as PlayerIndex };
+      } catch { break; }
+    }
+    return state;
+  }, [moves, gameMode]);
+
+  // Player 0 piece positions from the game state
+  const pieceKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const [key, content] of gameState.board) {
+      if (content.type === 'piece' && content.player === 0) keys.add(key);
     }
     return keys;
-  }, [moves]);
+  }, [gameState]);
+
+  // Valid destination cells for the selected piece
+  const validDestKeys = useMemo(() => {
+    if (!selected) return new Set<string>();
+    const [q, r] = selected.split(',').map(Number);
+    const from = { q, r, s: -q - r };
+    return new Set(getValidMoves(gameState, from).map(m => coordKey(m.to)));
+  }, [selected, gameState]);
 
   // Deselect if selected piece was removed by an undo
   useEffect(() => {
@@ -73,8 +98,8 @@ function InteractiveOpeningBoard({ moves, onAddMove }: InteractiveBoardProps) {
       setSelected(null);
     } else if (hasPiece) {
       setSelected(key); // switch selection to a different piece
-    } else {
-      // Commit the move
+    } else if (validDestKeys.has(key)) {
+      // Only commit valid moves
       const [fq, fr] = selected.split(',').map(Number);
       onAddMove({ from: { q: fq, r: fr, s: -fq - fr }, to: { q, r, s: -q - r } });
       setSelected(null);
@@ -95,6 +120,7 @@ function InteractiveOpeningBoard({ moves, onAddMove }: InteractiveBoardProps) {
           const isSelected = key === selected;
           const isLastFrom = key === lastFromKey;
           const isLastTo   = key === lastToKey;
+          const isValidDest = !hasPiece && validDestKeys.has(key);
 
           // Cell background color
           let fill   = '#f3f4f6';
@@ -103,14 +129,9 @@ function InteractiveOpeningBoard({ moves, onAddMove }: InteractiveBoardProps) {
           if (HOME_KEY_SET.has(key)) { fill = '#dbeafe'; stroke = '#93c5fd'; }
           if (isLastFrom)            { fill = '#fde68a'; stroke = '#d97706'; }
           if (isLastTo)              { fill = '#bbf7d0'; stroke = '#16a34a'; }
+          if (isValidDest)           { fill = '#d1fae5'; stroke = '#6ee7b7'; }
 
-          // Show target highlight when a piece is selected and this cell is empty
-          if (isSelected)                  { /* piece highlight handled by circle color */ }
-          if (selected && !hasPiece && !isLastFrom && !isLastTo) {
-            // subtle hover-target tint for any empty cell when piece is selected
-          }
-
-          const clickable = hasPiece || !!selected;
+          const clickable = hasPiece || (!!selected && validDestKeys.has(key));
 
           return (
             <g
@@ -302,7 +323,7 @@ function EditorPanel({ initial, onSave, onCancel }: EditorPanelProps) {
 
           {/* Interactive board */}
           <div className="flex-shrink-0" style={{ width: 260 }}>
-            <InteractiveOpeningBoard moves={state.moves} onAddMove={handleAddMove} />
+            <InteractiveOpeningBoard moves={state.moves} onAddMove={handleAddMove} gameMode={state.gameMode} />
           </div>
         </div>
 
