@@ -3,6 +3,7 @@
 import type { PlayerIndex, ColorMapping } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
+import { getCSSColor } from '@/game/constants';
 import { countPiecesInGoal } from '@/game/state';
 import { computePlayerProgress } from '@/game/progress';
 import { useReplayStore } from '@/store/replayStore';
@@ -33,7 +34,7 @@ function ReplayPlayerCard({ player, piecesInGoal, progress, customColors, active
     <div className={`p-3 rounded-lg border-2 border-transparent ${isFinished ? 'opacity-80' : ''}`}>
       <div className="flex items-center gap-2">
         <ColorSwatch color={color} className="w-4 h-4" />
-        <span className="font-medium" style={{ color }}>
+        <span className="font-medium" style={{ color: getCSSColor(color) }}>
           {name}
         </span>
         {isAI && (
@@ -63,7 +64,7 @@ function ReplayPlayerCard({ player, piecesInGoal, progress, customColors, active
               className="h-full transition-all duration-300"
               style={{
                 width: `${showPlayerProgress ? progress : (piecesInGoal / 10) * 100}%`,
-                backgroundColor: color,
+                backgroundColor: getCSSColor(color),
               }}
             />
           </div>

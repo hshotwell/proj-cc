@@ -3,7 +3,7 @@
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { countPiecesInGoal } from '@/game/state';
 import { computePlayerProgress } from '@/game/progress';
-import { getGemSwatchStyle } from '@/game/constants';
+import { getGemSwatchStyle, getCSSColor } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
@@ -25,7 +25,7 @@ export function TurnIndicator() {
   const piecesInGoal = countPiecesInGoal(gameState, displayPlayer);
   const progress = computePlayerProgress(gameState, displayPlayer);
   const gemStyle = getGemSwatchStyle(color);
-  const borderClass = !gemStyle && color !== 'opal'
+  const borderClass = !gemStyle && color !== 'opal' && color !== 'rainbow'
     ? ` border-2${color.toLowerCase() === '#ffffff' ? ' border-gray-400' : ' border-white'}`
     : '';
 
@@ -35,7 +35,7 @@ export function TurnIndicator() {
         <ColorSwatch color={color} className={`w-6 h-6 shadow${borderClass}`} />
         <div>
           <div className="text-sm text-gray-500">Current Turn</div>
-          <div className="font-semibold" style={{ color }}>
+          <div className="font-semibold" style={{ color: getCSSColor(color) }}>
             {name}{isAI && <span className="text-gray-400 font-normal text-xs ml-1">(AI)</span>}
           </div>
         </div>
@@ -52,7 +52,7 @@ export function TurnIndicator() {
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div
               className="h-full transition-all duration-300"
-              style={{ width: `${progress}%`, backgroundColor: color }}
+              style={{ width: `${progress}%`, backgroundColor: getCSSColor(color) }}
             />
           </div>
         </div>

@@ -18,6 +18,8 @@ import { MoveConfirmation } from '@/components/game/MoveConfirmation';
 import { SettingsPopup } from '@/components/SettingsPopup';
 import { SettingsButton } from '@/components/SettingsButton';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
+import { getCSSColor } from '@/game/constants';
+import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 import type { PlayerIndex } from '@/types/game';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
@@ -91,11 +93,8 @@ function OnlineGameOverDialog({ gameId }: { gameId: Id<"onlineGames"> }) {
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                   <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>
-                  <div
-                    className="w-5 h-5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="font-semibold flex-1" style={{ color }}>
+                  <ColorSwatch color={color} className="w-5 h-5 flex-shrink-0" />
+                  <span className="font-semibold flex-1" style={{ color: getCSSColor(color) }}>
                     {name}
                   </span>
                   {i > 0 && (

@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping, PieceVariant } from '@/types/game';
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
 import { PLAYER_COLORS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, ACTIVE_PLAYERS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName, isFlowerColor, isEggColor } from '@/game/constants';
-import { FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
+import { SpecialSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
@@ -427,15 +427,13 @@ export default function PlayPage() {
             const isTaken = isColorUsedByOther(color, playerIndex);
             const metallicStyle = getMetallicSwatchStyle(color);
             const isRainbow = color === 'rainbow';
-            const bgStyle = isRainbow
-              ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
-              : { backgroundColor: color, ...metallicStyle };
+            const bgStyle = isRainbow ? {} : { backgroundColor: color, ...metallicStyle };
             return (
               <button
                 key={color}
                 onClick={() => handleColorSelectSafe(playerIndex, color)}
                 disabled={isTaken}
-                className={`w-7 h-7 rounded-full transition-all${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
+                className={`w-7 h-7 rounded-full transition-all overflow-hidden${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
                   isCurrentColor ? 'border-2 border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                   : isTaken ? 'opacity-40 cursor-not-allowed'
                   : 'shadow hover:scale-110'
@@ -443,7 +441,7 @@ export default function PlayPage() {
                 style={bgStyle}
                 title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
               >
-                {metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />}
+                {isRainbow ? <SpecialSwatch color="rainbow" className="w-full h-full" /> : (metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />)}
               </button>
             );
           })}
@@ -455,9 +453,6 @@ export default function PlayPage() {
             const isTaken = isColorUsedByOther(color, playerIndex);
             const gemStyle = getGemSwatchStyle(color);
             const isOpal = color === 'opal';
-            const opalBg = isOpal
-              ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)' }
-              : undefined;
             return (
               <div key={color} className={`relative w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isTaken && !isCurrentColor ? 'hover:scale-110' : ''}`}>
                 <div className="absolute" style={{ width: '32px', height: '32px', top: '-2px', left: '-2px', clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)', backgroundColor: isCurrentColor ? '#9ca3af' : 'transparent' }} />
@@ -466,10 +461,10 @@ export default function PlayPage() {
                   onClick={() => handleColorSelectSafe(playerIndex, color)}
                   disabled={isTaken}
                   className={`relative z-10 w-6 h-6 gem-swatch${isOpal ? ' opal-swatch' : ''} ${isTaken ? 'opacity-40 cursor-not-allowed' : ''}`}
-                  style={isOpal ? { ...opalBg, ...gemStyle } : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
+                  style={isOpal ? {} : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
                   title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
                 >
-                  {gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />}
+                  {isOpal ? <SpecialSwatch color="opal" className="w-full h-full" /> : (gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />)}
                 </button>
               </div>
             );

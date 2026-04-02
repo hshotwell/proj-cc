@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import type { CubeCoord, PlayerIndex, ColorMapping, PieceVariant } from '@/types/game';
-import { MOVE_ANIMATION_DURATION } from '@/game/constants';
+import { MOVE_ANIMATION_DURATION, RAINBOW_UI_COLORS } from '@/game/constants';
 import { cubeToPixel } from '@/game/coordinates';
 import { getPlayerColor } from '@/game/colors';
 import { startSheenSync, METALLIC_SHEEN_KEY } from '@/game/sheenSync';
@@ -493,94 +493,106 @@ export function Piece({
       {/* Rainbow marble */}
       {isRainbowPiece && (() => {
         const r = pieceRadius;
+        // Opal: soft iridescent color patches over a pale base, hue-rotating for play-of-color
         return (
           <>
-            {glassPieces ? (
-              // Glass mode: smooth 60-slice spectrum wheel with 3D sphere shading
-              <>
-                <defs>
-                  <radialGradient id={`${gId}rg`} cx="30%" cy="28%" r="60%">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.75)" />
-                    <stop offset="55%" stopColor="rgba(255,255,255,0)" />
-                  </radialGradient>
-                  <radialGradient id={`${gId}rv`} cx="50%" cy="50%" r="50%">
-                    <stop offset="50%" stopColor="rgba(0,0,0,0)" />
-                    <stop offset="100%" stopColor="rgba(0,0,0,0.52)" />
-                  </radialGradient>
-                  <clipPath id={`${gId}rc`}>
-                    <circle cx={0} cy={0} r={r} />
-                  </clipPath>
-                </defs>
-                {Array.from({ length: 60 }, (_, i) => (
-                  <path key={`rs${i}`} d={pieSlice(r, i * 6, (i + 1) * 6)} fill={`hsl(${i * 6}, 100%, 50%)`} />
-                ))}
-                {isLastMoved && <circle cx={0} cy={0} r={r} fill="rgba(0,0,0,0.15)" />}
-                <circle cx={0} cy={0} r={r} fill={`url(#${gId}rv)`} clipPath={`url(#${gId}rc)`} />
-                <circle cx={0} cy={0} r={r} fill={`url(#${gId}rg)`} clipPath={`url(#${gId}rc)`} />
-              </>
-            ) : (
-              // Simple mode: smooth 360-slice hsl wheel (1° per slice), no overlays
-              <>
-                {Array.from({ length: 360 }, (_, i) => (
-                  <path key={`rs${i}`} d={pieSlice(r, i, i + 1)} fill={`hsl(${i}, 100%, 50%)`} />
-                ))}
-                {isLastMoved && <circle cx={0} cy={0} r={r} fill="rgba(0,0,0,0.15)" />}
-              </>
-            )}
+            <defs>
+              <clipPath id={`${gId}oc`}><circle cx={0} cy={0} r={r} /></clipPath>
+              {glassPieces && <>
+                <radialGradient id={`${gId}og`} cx="32%" cy="30%" r="62%">
+                  <stop offset="0%" stopColor="rgba(255,255,255,0.78)" />
+                  <stop offset="58%" stopColor="rgba(255,255,255,0)" />
+                </radialGradient>
+                <radialGradient id={`${gId}ov`} cx="50%" cy="50%" r="50%">
+                  <stop offset="52%" stopColor="rgba(0,0,0,0)" />
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.50)" />
+                </radialGradient>
+              </>}
+            </defs>
+            <g className="rainbow-ui-filter" clipPath={`url(#${gId}oc)`}>
+              {/* Pale lavender base */}
+              <circle cx={0} cy={0} r={r} fill="#f2eeff" />
+              {/* Iridescent color patches */}
+              <ellipse cx={r*-0.22} cy={r*-0.28} rx={r*0.62} ry={r*0.44} fill="rgba(255,90,210,0.52)" />
+              <ellipse cx={r*0.34} cy={r*-0.14} rx={r*0.54} ry={r*0.40} fill="rgba(70,230,160,0.46)" />
+              <ellipse cx={r*0.08} cy={r*0.34} rx={r*0.50} ry={r*0.42} fill="rgba(70,155,255,0.43)" />
+              <ellipse cx={r*-0.30} cy={r*0.24} rx={r*0.44} ry={r*0.50} fill="rgba(185,70,255,0.37)" />
+              <ellipse cx={r*0.02} cy={r*-0.04} rx={r*0.38} ry={r*0.30} fill="rgba(255,215,75,0.40)" />
+              {/* Milky overlay for opalescence */}
+              <circle cx={0} cy={0} r={r} fill="rgba(245,242,255,0.28)" />
+              {isLastMoved && <circle cx={0} cy={0} r={r} fill="rgba(0,0,0,0.15)" />}
+            </g>
+            {glassPieces && <>
+              <circle cx={0} cy={0} r={r} fill={`url(#${gId}ov)`} clipPath={`url(#${gId}oc)`} />
+              <circle cx={0} cy={0} r={r} fill={`url(#${gId}og)`} clipPath={`url(#${gId}oc)`} />
+            </>}
           </>
         );
       })()}
-      {/* Opal gem: hex facets with 6 player colors */}
+      {/* Bismuth gem: hex facets with iridescent oxide-layer color bands blending between wedges */}
       {isOpalPiece && (() => {
         const r = pieceRadius;
         const outerVerts = hexVertices(r);
-        const rimColor = '#dddddd';
-        if (glassPieces) {
-          const innerR = r * 0.55;
-          const innerVerts = hexVertices(innerR);
-          // Each wedge gets its player color with WEDGE_SHADE_MAP lighting applied
-          const opalColors = SPECIAL_PIECE_COLORS.map((color, i) => {
-            const shadeIdx = WEDGE_SHADE_MAP[i]; // 0=lightest, 5=darkest
-            const lf = Math.max(0, (2.5 - shadeIdx) / 10);
-            const df = Math.max(0, (shadeIdx - 2.5) / 10);
-            const c = lf > 0 ? lightenColor(color, lf) : df > 0 ? darkenColor(color, df) : color;
-            return isLastMoved ? darkenColor(c, 0.15) : c;
-          });
-          return (
-            <>
+        // Bismuth interference colors: gold → amber → magenta → violet → blue → teal
+        const BC = ['#ffd040', '#ff7a00', '#cc1166', '#8800cc', '#0077cc', '#00aa66'];
+        const lm = isLastMoved ? 0.15 : 0;
+        const bc = (i: number) => lm > 0 ? darkenColor(BC[i], lm) : BC[i];
+        const rimColor = '#c8c8c8';
+        return (
+          <>
+            <defs>
               {outerVerts.map((v, i) => {
                 const next = outerVerts[(i + 1) % 6];
                 return (
-                  <polygon key={`ow${i}`} points={`0,0 ${v.x},${v.y} ${next.x},${next.y}`} fill={opalColors[i]} />
+                  <linearGradient key={`bg${i}`} id={`${gId}bg${i}`} gradientUnits="userSpaceOnUse"
+                    x1={v.x} y1={v.y} x2={next.x} y2={next.y}>
+                    <stop offset="0%" stopColor={bc(i)} />
+                    <stop offset="100%" stopColor={bc((i + 1) % 6)} />
+                  </linearGradient>
                 );
               })}
-              <polygon points={outerVerts.map(v => `${v.x},${v.y}`).join(' ')} fill="none" stroke={rimColor} strokeWidth={0.5} />
-              {innerVerts.map((v, i) => (
-                <line key={`ofl${i}`} x1={v.x} y1={v.y} x2={outerVerts[i].x} y2={outerVerts[i].y} stroke={rimColor} strokeWidth={0.3} opacity={0.4} />
-              ))}
-              <polygon
-                points={innerVerts.map(v => `${v.x},${v.y}`).join(' ')}
-                fill="rgba(255,255,255,0.5)"
-                stroke={rimColor}
-                strokeWidth={0.3}
-              />
-            </>
-          );
-        } else {
-          // Simple mode: 6 player colors, one per wedge
-          return (
-            <>
-              {outerVerts.map((v, i) => {
-                const next = outerVerts[(i + 1) % 6];
-                const c = isLastMoved ? darkenColor(SPECIAL_PIECE_COLORS[i], 0.15) : SPECIAL_PIECE_COLORS[i];
-                return (
-                  <polygon key={`osw${i}`} points={`0,0 ${v.x},${v.y} ${next.x},${next.y}`} fill={c} />
-                );
-              })}
-              <polygon points={outerVerts.map(v => `${v.x},${v.y}`).join(' ')} fill="none" stroke={rimColor} strokeWidth={0.5} />
-            </>
-          );
-        }
+              {glassPieces && <>
+                <radialGradient id={`${gId}bmbase`} cx="35%" cy="30%" r="68%">
+                  <stop offset="0%" stopColor="#e4e4e4" />
+                  <stop offset="65%" stopColor="#b0b0b0" />
+                  <stop offset="100%" stopColor="#787878" />
+                </radialGradient>
+                <radialGradient id={`${gId}bmspec`} cx="30%" cy="28%" r="55%">
+                  <stop offset="0%" stopColor="rgba(255,255,255,0.72)" />
+                  <stop offset="50%" stopColor="rgba(255,255,255,0)" />
+                </radialGradient>
+                <radialGradient id={`${gId}bmrim`} cx="50%" cy="50%" r="50%">
+                  <stop offset="55%" stopColor="rgba(0,0,0,0)" />
+                  <stop offset="100%" stopColor="rgba(0,0,0,0.48)" />
+                </radialGradient>
+              </>}
+            </defs>
+            {glassPieces && (
+              /* Metallic silver base */
+              <polygon points={outerVerts.map(v => `${v.x},${v.y}`).join(' ')} fill={`url(#${gId}bmbase)`} />
+            )}
+            {/* Blended bismuth color wedges */}
+            {outerVerts.map((v, i) => {
+              const next = outerVerts[(i + 1) % 6];
+              return (
+                <polygon key={`bw${i}`}
+                  points={`0,0 ${v.x},${v.y} ${next.x},${next.y}`}
+                  fill={`url(#${gId}bg${i})`}
+                  opacity={glassPieces ? 0.78 : 1}
+                />
+              );
+            })}
+            {/* Radial lines from center */}
+            {outerVerts.map((v, i) => (
+              <line key={`bl${i}`} x1={0} y1={0} x2={v.x} y2={v.y} stroke="rgba(200,200,200,0.45)" strokeWidth={0.35} />
+            ))}
+            <polygon points={outerVerts.map(v => `${v.x},${v.y}`).join(' ')} fill="none" stroke={rimColor} strokeWidth={0.5} />
+            {glassPieces && <>
+              <polygon points={outerVerts.map(v => `${v.x},${v.y}`).join(' ')} fill={`url(#${gId}bmspec)`} />
+              <polygon points={outerVerts.map(v => `${v.x},${v.y}`).join(' ')} fill={`url(#${gId}bmrim)`} />
+            </>}
+          </>
+        );
       })()}
       {/* Bouquet: layered green leaves + ring of 5 flowers */}
       {isBouquetPiece && (() => {
@@ -2194,7 +2206,7 @@ export function Piece({
         const segmentLen = circumference / 12;
         // In light mode, darken near-grey colors (e.g. silver) that would wash out against the board
         const isRainbowOrOpal = isRainbowPiece || isOpalPiece;
-        const isRainbowLike = isRainbowOrOpal || isBouquetPiece;
+        const isRainbowLike = isRainbowOrOpal || isBouquetPiece || RAINBOW_UI_COLORS.has(baseColor);
         const isGreyRing = isFlowerPiece;
         // Flowers/bouquet ring uses their own colour without dark-mode variation (stable across mode switches)
         const ringBaseColor = isRainbowLike ? '#808080' : pieceColor;

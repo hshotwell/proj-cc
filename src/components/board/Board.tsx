@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CubeCoord, PlayerIndex, Move, GameState } from '@/types/game';
-import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION, TRIANGLE_ASSIGNMENTS } from '@/game/constants';
+import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION, TRIANGLE_ASSIGNMENTS, RAINBOW_UI_COLORS } from '@/game/constants';
 import { generateBoardPositions, getTriangleForPosition } from '@/game/board';
 import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath } from '@/game/coordinates';
 import { getPlayerColorFromState, hexToRgba, blendColorsRgba, lightenHex } from '@/game/colors';
@@ -851,7 +851,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
           let hasTriRainbowOrOpal = false;
           if (tri.playerOwners.length > 0 && gameState) {
             const colors = tri.playerOwners.map((p) => getPlayerColorFromState(p, gameState));
-            hasTriRainbowOrOpal = colors.some(c => !c.startsWith('#'));
+            hasTriRainbowOrOpal = colors.some(c => RAINBOW_UI_COLORS.has(c));
             if (hasTriRainbowOrOpal) {
               fill = '#ff0000';
             } else if (woodenBoard) {
@@ -1037,7 +1037,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
         const rawColor = isReplayActive
           ? (replayMovePlayer !== undefined ? getPlayerColorFromState(replayMovePlayer, gameState) : '#808080')
           : getPlayerColorFromState(lastMoveInfo!.player, gameState);
-        const isRainbowOrOpalPath = rawColor === 'rainbow' || rawColor === 'opal';
+        const isRainbowOrOpalPath = RAINBOW_UI_COLORS.has(rawColor);
         const cHex = isRainbowOrOpalPath ? '808080' : rawColor.replace('#', '');
         const lum = (parseInt(cHex.substring(0, 2), 16) + parseInt(cHex.substring(2, 4), 16) + parseInt(cHex.substring(4, 6), 16)) / 3;
         const pathColor = isRainbowOrOpalPath ? '#ff0000' : (lum > 200 && !darkMode ? '#b0b0b0' : rawColor);

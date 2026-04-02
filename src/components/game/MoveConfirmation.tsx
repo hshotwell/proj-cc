@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
-import { isGemColor } from '@/game/constants';
+import { isGemColor, getCSSColor } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
@@ -69,7 +69,7 @@ export function MoveConfirmation() {
         <button
           onClick={undoConfirmedMove}
           className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors border-2"
-          style={{ borderColor: color }}
+          style={{ borderColor: getCSSColor(color) }}
           title="Press 'U' to undo"
         >
           Undo Move <span className="text-xs text-gray-400">(U)</span>
@@ -95,15 +95,15 @@ export function MoveConfirmation() {
     <div className="flex justify-center mt-4">
       <div
         className="bg-white rounded-xl shadow-lg border-2 p-4 flex flex-col gap-2"
-        style={{ borderColor: color }}
+        style={{ borderColor: getCSSColor(color) }}
       >
         <div className="flex items-center gap-4">
           <ColorSwatch
             color={color}
-            className={`w-8 h-8 shadow${!isGemColor(color) && color !== 'opal' ? ` border-2${color.toLowerCase() === '#ffffff' ? ' border-gray-400' : ' border-white'}` : ''}`}
+            className={`w-8 h-8 shadow${!isGemColor(color) && color !== 'opal' && color !== 'rainbow' ? ` border-2${color.toLowerCase() === '#ffffff' ? ' border-gray-400' : ' border-white'}` : ''}`}
           />
           <div className="text-sm">
-            <span className="font-semibold" style={{ color }}>{name}</span>
+            <span className="font-semibold" style={{ color: getCSSColor(color) }}>{name}</span>
             <span className="text-gray-600"> moved</span>
           </div>
           <div className="flex gap-2 ml-2">
@@ -117,7 +117,7 @@ export function MoveConfirmation() {
             <button
               onClick={confirmMove}
               className="px-4 py-2 text-sm font-medium rounded-lg text-white transition-colors"
-              style={{ backgroundColor: color }}
+              style={{ backgroundColor: getCSSColor(color) }}
               title="Press 'C' to confirm"
             >
               Confirm <span className="text-xs text-white/70">(C)</span>

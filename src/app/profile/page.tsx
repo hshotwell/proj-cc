@@ -12,7 +12,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { getSavedGamesList, deleteSavedGame } from '@/game/persistence';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
 import { EXTRA_COLORS_NO_GEMS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
-import { FlowerSwatch, EggSwatch, ColorSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
+import { SpecialSwatch, FlowerSwatch, EggSwatch, ColorSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import type { SavedGameSummary } from '@/types/replay';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -174,14 +174,12 @@ function ProfileContent() {
                     if (color === null) return <div key={`blank-${idx}`} className="w-7 h-7 flex-shrink-0" />;
                     const metallicStyle = getMetallicSwatchStyle(color);
                     const isRainbow = color === 'rainbow';
-                    const bgStyle = isRainbow
-                      ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
-                      : { backgroundColor: color, ...metallicStyle };
+                    const bgStyle = isRainbow ? {} : { backgroundColor: color, ...metallicStyle };
                     return (
                       <button
                         key={color}
                         onClick={() => setFavoriteColor(color)}
-                        className={`w-7 h-7 rounded-full transition-all${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
+                        className={`w-7 h-7 rounded-full transition-all overflow-hidden${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
                           favoriteColor?.toLowerCase() === color.toLowerCase()
                             ? 'border-2 border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                             : 'shadow hover:scale-110'
@@ -189,7 +187,7 @@ function ProfileContent() {
                         style={bgStyle}
                         title={`Select: ${getColorName(color)}`}
                       >
-                        {metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />}
+                        {isRainbow ? <SpecialSwatch color="rainbow" className="w-full h-full" /> : (metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />)}
                       </button>
                     );
                   })}
@@ -199,7 +197,6 @@ function ProfileContent() {
                     const gemStyle = getGemSwatchStyle(color);
                     const isSelected = favoriteColor?.toLowerCase() === color.toLowerCase();
                     const isOpal = color === 'opal';
-                    const opalBg = isOpal ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)' } : undefined;
                     return (
                       <div
                         key={color}
@@ -224,10 +221,10 @@ function ProfileContent() {
                         <button
                           onClick={() => setFavoriteColor(color)}
                           className={`relative z-10 w-6 h-6 gem-swatch${isOpal ? ' opal-swatch' : ''}`}
-                          style={isOpal ? { ...opalBg, ...gemStyle } : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
+                          style={isOpal ? {} : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
                           title={`Select: ${getColorName(color)}`}
                         >
-                          {gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />}
+                          {isOpal ? <SpecialSwatch color="opal" className="w-full h-full" /> : (gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />)}
                         </button>
                       </div>
                     );

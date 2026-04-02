@@ -1,6 +1,7 @@
 // Shared color swatch renderers used consistently across all UI.
 // Use ColorSwatch for any player color indicator — it handles all color types.
 
+import { useId } from 'react';
 import { getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, FLOWER_CENTER_COLORS, isFlowerColor, ELEMENTAL_COLORS, isEggColor } from '@/game/constants';
 
 // Shared version of flameStarPath for swatch rendering (no seed variation needed — fixed display)
@@ -37,7 +38,8 @@ function ruffledPath(R: number, bumps: number, depth: number): string {
   return `M ${pts[0]} L ${pts.slice(1).join(' L ')} Z`;
 }
 
-const OPAL_COLORS = ['#ef4444', '#facc15', '#22c55e', '#22d3ee', '#3b82f6', '#a855f7'];
+// Bismuth interference colors matching Piece.tsx BC array
+const BISMUTH_SWATCH_COLORS = ['#ffd040', '#ff7a00', '#cc1166', '#8800cc', '#0077cc', '#00aa66'];
 
 interface SpecialSwatchProps {
   color: 'rainbow' | 'opal';
@@ -46,30 +48,51 @@ interface SpecialSwatchProps {
 }
 
 export function SpecialSwatch({ color, className = '', title }: SpecialSwatchProps) {
+  const uid = useId();
   if (color === 'rainbow') {
+    // Opal: soft iridescent color patches on pale base, hue-rotating for play-of-color
+    const r = 10;
     return (
-      <div
-        className={className}
-        title={title}
-        style={{
-          background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
-        }}
-      />
+      <svg className={`${className} rainbow-ui-filter`} viewBox={`-${r} -${r} ${r * 2} ${r * 2}`} style={{ display: 'block', borderRadius: '50%', overflow: 'hidden' }}>
+        {title && <title>{title}</title>}
+        <circle cx={0} cy={0} r={r} fill="#f2eeff" />
+        <ellipse cx={-2.2} cy={-2.8} rx={6.2} ry={4.4} fill="rgba(255,90,210,0.52)" />
+        <ellipse cx={3.4} cy={-1.4} rx={5.4} ry={4.0} fill="rgba(70,230,160,0.46)" />
+        <ellipse cx={0.8} cy={3.4} rx={5.0} ry={4.2} fill="rgba(70,155,255,0.43)" />
+        <ellipse cx={-3.0} cy={2.4} rx={4.4} ry={5.0} fill="rgba(185,70,255,0.37)" />
+        <ellipse cx={0.2} cy={-0.4} rx={3.8} ry={3.0} fill="rgba(255,215,75,0.40)" />
+        <circle cx={0} cy={0} r={r} fill="rgba(245,242,255,0.28)" />
+      </svg>
     );
   }
-  // Opal: pointy-top hex with 6 flat player-color wedges (matches simple mode Piece rendering)
+  // Bismuth: pointy-top hex with blended oxide-layer color gradient between each wedge
   const r = 10;
   const verts = hexVerts(r);
   return (
     <svg className={className} viewBox={`-${r} -${r} ${r * 2} ${r * 2}`} style={{ display: 'block' }}>
       {title && <title>{title}</title>}
+      <defs>
+        {verts.map((v, i) => {
+          const next = verts[(i + 1) % 6];
+          return (
+            <linearGradient key={i} id={`${uid}bw${i}`} gradientUnits="userSpaceOnUse"
+              x1={v.x} y1={v.y} x2={next.x} y2={next.y}>
+              <stop offset="0%" stopColor={BISMUTH_SWATCH_COLORS[i]} />
+              <stop offset="100%" stopColor={BISMUTH_SWATCH_COLORS[(i + 1) % 6]} />
+            </linearGradient>
+          );
+        })}
+      </defs>
       {verts.map((v, i) => {
         const next = verts[(i + 1) % 6];
         return (
-          <polygon key={i} points={`0,0 ${v.x},${v.y} ${next.x},${next.y}`} fill={OPAL_COLORS[i]} />
+          <polygon key={i} points={`0,0 ${v.x},${v.y} ${next.x},${next.y}`} fill={`url(#${uid}bw${i})`} />
         );
       })}
-      <polygon points={verts.map(v => `${v.x},${v.y}`).join(' ')} fill="none" stroke="#dddddd" strokeWidth={0.5} />
+      {verts.map((v, i) => (
+        <line key={`l${i}`} x1={0} y1={0} x2={v.x} y2={v.y} stroke="rgba(200,200,200,0.45)" strokeWidth={0.35} />
+      ))}
+      <polygon points={verts.map(v => `${v.x},${v.y}`).join(' ')} fill="none" stroke="#c8c8c8" strokeWidth={0.5} />
     </svg>
   );
 }

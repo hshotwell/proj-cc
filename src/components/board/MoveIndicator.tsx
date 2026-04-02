@@ -2,6 +2,7 @@
 
 import type { CubeCoord } from '@/types/game';
 import { cubeToPixel } from '@/game/coordinates';
+import { RAINBOW_UI_COLORS } from '@/game/constants';
 
 interface MoveIndicatorProps {
   coord: CubeCoord;
@@ -18,7 +19,7 @@ export function MoveIndicator({ coord, onClick, size = 18, playerColor = '#22c55
   const { x, y } = cubeToPixel(coord, size);
 
   // In light mode, darken near-grey colors (e.g. silver) that would wash out (luminance > 185)
-  const isRainbowOrOpal = playerColor === 'rainbow' || playerColor === 'opal' || playerColor === 'bouquet';
+  const isRainbowOrOpal = RAINBOW_UI_COLORS.has(playerColor);
   const cleanHex = isRainbowOrOpal ? '808080' : playerColor.replace('#', '');
   const lum = (parseInt(cleanHex.substring(0, 2), 16) + parseInt(cleanHex.substring(2, 4), 16) + parseInt(cleanHex.substring(4, 6), 16)) / 3;
   const effectiveColor = isRainbowOrOpal ? '#ff0000' : (!darkMode && lum > 185

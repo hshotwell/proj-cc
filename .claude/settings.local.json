@@ -63,7 +63,9 @@
       "WebFetch(domain:w7.pngwing.com)",
       "WebFetch(domain:gyazo.com)",
       "WebFetch(domain:i.gyazo.com)",
-      "WebFetch(domain:static.wikia.nocookie.net)"
+      "WebFetch(domain:static.wikia.nocookie.net)",
+      "WebFetch(domain:media.gemstones.com)",
+      "WebFetch(domain:fossilcartel.com)"
     ]
   }
 }

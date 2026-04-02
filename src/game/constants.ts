@@ -164,6 +164,10 @@ export function isEggColor(hex: string): boolean {
   return EGG_COLORS.some(c => c.toLowerCase() === hex.toLowerCase());
 }
 
+// Colors that should render with the rainbow-shift UI filter (hue-rotate animation)
+// in board zones, move paths, and goal rings — because they contain all hues.
+export const RAINBOW_UI_COLORS = new Set(['rainbow', 'opal', 'bouquet', '#f0c8e8']);
+
 // All extra colors including gems, flowers, elementals and eggs (for validation/lookup)
 export const EXTRA_COLORS = [
   ...EXTRA_COLORS_NO_GEMS,
@@ -260,7 +264,7 @@ export const COLOR_NAMES: Record<string, string> = {
   '#b87333': 'Copper',
   '#c0c0c0': 'Silver',
   '#ffd700': 'Gold',
-  'rainbow': 'Rainbow',
+  'rainbow': 'Opal',
   '#cc2244': 'Ruby',
   '#e07020': 'Amber',
   '#22aa44': 'Emerald',
@@ -276,7 +280,7 @@ export const COLOR_NAMES: Record<string, string> = {
   '#3a7850': 'Jade',
   '#303858': 'Iron',
   '#f07090': 'Morganite',
-  'opal': 'Opal',
+  'opal': 'Bismuth',
   '#d4364e': 'Rose',
   '#e8b800': 'Sunflower',
   '#5ba3d9': 'Forget-me-not',
@@ -310,6 +314,17 @@ export const COLOR_NAMES: Record<string, string> = {
 
 export function getColorName(hex: string): string {
   return COLOR_NAMES[hex.toLowerCase()] ?? hex;
+}
+
+// Returns a CSS-safe color for UI use (borders, text, progress bars).
+// Sentinel strings like 'rainbow', 'opal', 'bouquet' are not valid CSS — map to representative hues.
+const SENTINEL_CSS: Record<string, string> = {
+  rainbow: '#c4a8f8', // opal lavender
+  opal: '#ffd040',    // bismuth gold
+  bouquet: '#4a9e60', // clover green
+};
+export function getCSSColor(color: string): string {
+  return SENTINEL_CSS[color] ?? color;
 }
 
 // Light background colors for triangles

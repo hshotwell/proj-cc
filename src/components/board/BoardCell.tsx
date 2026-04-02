@@ -6,6 +6,7 @@ import { cubeToPixel } from '@/game/coordinates';
 import { getTriangleForPosition } from '@/game/board';
 import { OPPOSITE_PLAYER } from '@/game/state';
 import { getPlayerColor, hexToRgba } from '@/game/colors';
+import { RAINBOW_UI_COLORS } from '@/game/constants';
 
 interface BoardCellProps {
   coord: CubeCoord;
@@ -166,10 +167,9 @@ export function BoardCell({
     ? (darkMode ? '#4a3420' : '#906038')
     : (darkMode ? '#364050' : '#949ca0');
 
-  // ── Sentinel color detection (rainbow / opal / bouquet are not valid CSS/SVG colors) ──
-  const SENTINELS = ['rainbow', 'opal', 'bouquet'];
-  const isSpecialHome = !!(homeIsActive && homeColor && SENTINELS.includes(homeColor));
-  const isSpecialGoal = !!(goalColor && SENTINELS.includes(goalColor));
+  // ── Sentinel color detection (some colors need rainbow-shift UI treatment) ──
+  const isSpecialHome = !!(homeIsActive && homeColor && RAINBOW_UI_COLORS.has(homeColor));
+  const isSpecialGoal = !!(goalColor && RAINBOW_UI_COLORS.has(goalColor));
   const isSpecialColor = isSpecialHome || isSpecialGoal;
   // Use a vivid red as stand-in so hue-rotate cycles through the full spectrum
   const effectiveHomeColor = isSpecialHome ? '#ff4444' : homeColor;

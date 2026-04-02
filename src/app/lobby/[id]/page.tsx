@@ -10,7 +10,7 @@ import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { PLAYER_COLORS, EXTRA_COLORS_NO_GEMS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
-import { FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
+import { SpecialSwatch, ColorSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { areTooSimilar } from '@/game/colors';
 
@@ -316,28 +316,7 @@ function LobbyContent() {
                 className="flex items-center justify-between py-3 px-4 rounded-lg border border-gray-200"
               >
                 <div className="flex items-center gap-3">
-                  {(() => {
-                    const c = player.color as string;
-                    const isRainbow = c === 'rainbow';
-                    const isOpal = c === 'opal';
-                    const gemSwatch = getGemSwatchStyle(c);
-                    const metallicSwatch = getMetallicSwatchStyle(c);
-                    const gemBg = getGemSimpleBackground(c);
-                    const isGemShape = !!(gemSwatch || isOpal);
-                    const bgStyle: React.CSSProperties = isRainbow
-                      ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
-                      : isOpal
-                      ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)', ...gemSwatch }
-                      : gemBg
-                      ? { background: gemBg, ...gemSwatch }
-                      : { backgroundColor: c, ...metallicSwatch };
-                    return (
-                      <div
-                        className={`w-6 h-6 shadow${isGemShape ? ' gem-swatch' : ' rounded-full'}${!isGemShape && !metallicSwatch && !isRainbow ? ' border-2 border-white' : ''}${metallicSwatch ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''}${isOpal ? ' opal-swatch' : ''}`}
-                        style={bgStyle}
-                      />
-                    );
-                  })()}
+                  <ColorSwatch color={player.color as string} className="w-6 h-6 shadow" />
                   <div>
                     {player.type === 'human' && (
                       <span className="text-sm font-medium text-gray-900">
@@ -507,15 +486,13 @@ function LobbyContent() {
                 const isSelected = mySlot.color === color;
                 const metallicStyle = getMetallicSwatchStyle(color);
                 const isRainbow = color === 'rainbow';
-                const bgStyle = isRainbow
-                  ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
-                  : { backgroundColor: color, ...metallicStyle };
+                const bgStyle = isRainbow ? {} : { backgroundColor: color, ...metallicStyle };
                 return (
                   <button
                     key={color}
                     disabled={isTaken}
                     onClick={() => void handleColorSelect(color)}
-                    className={`w-7 h-7 rounded-full transition-all${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
+                    className={`w-7 h-7 rounded-full transition-all overflow-hidden${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
                       isSelected
                         ? 'border-2 border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                         : isTaken
@@ -525,7 +502,7 @@ function LobbyContent() {
                     style={bgStyle}
                     title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
                   >
-                    {metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />}
+                    {isRainbow ? <SpecialSwatch color="rainbow" className="w-full h-full" /> : (metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />)}
                   </button>
                 );
               })}
@@ -536,7 +513,6 @@ function LobbyContent() {
                 const isSelected = mySlot.color === color;
                 const gemStyle = getGemSwatchStyle(color);
                 const isOpal = color === 'opal';
-                const opalBg = isOpal ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)' } : undefined;
                 return (
                   <div
                     key={color}
@@ -562,10 +538,10 @@ function LobbyContent() {
                       disabled={isTaken}
                       onClick={() => void handleColorSelect(color)}
                       className={`relative z-10 w-6 h-6 gem-swatch${isOpal ? ' opal-swatch' : ''} ${isTaken ? 'opacity-40 cursor-not-allowed' : ''}`}
-                      style={isOpal ? { ...gemStyle, ...opalBg } : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
+                      style={isOpal ? {} : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
                       title={isTaken ? 'Too similar to another player\'s color' : `Select: ${getColorName(color)}`}
                     >
-                      {gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />}
+                      {isOpal ? <SpecialSwatch color="opal" className="w-full h-full" /> : (gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />)}
                     </button>
                   </div>
                 );
