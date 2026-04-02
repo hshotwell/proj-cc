@@ -493,7 +493,7 @@ export function Piece({
       {/* Rainbow marble */}
       {isRainbowPiece && (() => {
         const r = pieceRadius;
-        // Opal: soft iridescent color patches over a pale base, hue-rotating for play-of-color
+        const opalSheenOp = 0.65;
         return (
           <>
             <defs>
@@ -508,19 +508,43 @@ export function Piece({
                   <stop offset="100%" stopColor="rgba(0,0,0,0.50)" />
                 </radialGradient>
               </>}
+              <linearGradient id={`${gId}osh`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="white" stopOpacity={0} />
+                <stop offset="20%" stopColor="white" stopOpacity={0.1 * opalSheenOp} />
+                <stop offset="45%" stopColor="white" stopOpacity={0.4 * opalSheenOp} />
+                <stop offset="55%" stopColor="white" stopOpacity={0.4 * opalSheenOp} />
+                <stop offset="80%" stopColor="white" stopOpacity={0.1 * opalSheenOp} />
+                <stop offset="100%" stopColor="white" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id={`${gId}osh2`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="white" stopOpacity={0} />
+                <stop offset="30%" stopColor="white" stopOpacity={0.35 * opalSheenOp} />
+                <stop offset="50%" stopColor="white" stopOpacity={0.7 * opalSheenOp} />
+                <stop offset="70%" stopColor="white" stopOpacity={0.35 * opalSheenOp} />
+                <stop offset="100%" stopColor="white" stopOpacity={0} />
+              </linearGradient>
             </defs>
-            <g className="rainbow-ui-filter" clipPath={`url(#${gId}oc)`}>
+            <g clipPath={`url(#${gId}oc)`}>
               {/* Pale lavender base */}
               <circle cx={0} cy={0} r={r} fill="#f2eeff" />
-              {/* Iridescent color patches */}
+              {/* Static iridescent color patches */}
               <ellipse cx={r*-0.22} cy={r*-0.28} rx={r*0.62} ry={r*0.44} fill="rgba(255,90,210,0.52)" />
               <ellipse cx={r*0.34} cy={r*-0.14} rx={r*0.54} ry={r*0.40} fill="rgba(70,230,160,0.46)" />
               <ellipse cx={r*0.08} cy={r*0.34} rx={r*0.50} ry={r*0.42} fill="rgba(70,155,255,0.43)" />
               <ellipse cx={r*-0.30} cy={r*0.24} rx={r*0.44} ry={r*0.50} fill="rgba(185,70,255,0.37)" />
               <ellipse cx={r*0.02} cy={r*-0.04} rx={r*0.38} ry={r*0.30} fill="rgba(255,215,75,0.40)" />
-              {/* Milky overlay for opalescence */}
+              {/* Milky overlay */}
               <circle cx={0} cy={0} r={r} fill="rgba(245,242,255,0.28)" />
               {isLastMoved && <circle cx={0} cy={0} r={r} fill="rgba(0,0,0,0.15)" />}
+              {/* Static sheen glow */}
+              <rect x={-r*0.75} y={-r*1.4} width={r*1.5} height={r*2.8} fill={`url(#${gId}osh)`} style={{ transform: `rotate(35deg) translateX(${-r*0.6}px)` }} />
+              {/* Animated narrow sheen sweep */}
+              <rect
+                className="metallic-sheen"
+                x={-r*0.3} y={-r*1.4} width={r*0.6} height={r*2.8}
+                fill={`url(#${gId}osh2)`}
+                style={{ '--sheen-r': `${r}`, '--sheen-phase': 'var(--sheen-phase-opal)', '--sheen-opacity': `${opalSheenOp}` } as React.CSSProperties}
+              />
             </g>
             {glassPieces && <>
               <circle cx={0} cy={0} r={r} fill={`url(#${gId}ov)`} clipPath={`url(#${gId}oc)`} />
@@ -533,10 +557,15 @@ export function Piece({
       {isOpalPiece && (() => {
         const r = pieceRadius;
         const outerVerts = hexVertices(r);
+        const innerR = r * 0.55;
+        const innerVerts = hexVertices(innerR);
         // Bismuth interference colors: gold → amber → magenta → violet → blue → teal
         const BC = ['#ffd040', '#ff7a00', '#cc1166', '#8800cc', '#0077cc', '#00aa66'];
+        // Lighter versions for inner hex (glass mode)
+        const BCL = ['#ffe880', '#ffb848', '#ff66aa', '#cc66ff', '#44aaff', '#44ee99'];
         const lm = isLastMoved ? 0.15 : 0;
         const bc = (i: number) => lm > 0 ? darkenColor(BC[i], lm) : BC[i];
+        const bcl = (i: number) => lm > 0 ? darkenColor(BCL[i], lm * 0.6) : BCL[i];
         const rimColor = '#c8c8c8';
         return (
           <>
@@ -565,6 +594,16 @@ export function Piece({
                   <stop offset="55%" stopColor="rgba(0,0,0,0)" />
                   <stop offset="100%" stopColor="rgba(0,0,0,0.48)" />
                 </radialGradient>
+                {innerVerts.map((iv, i) => {
+                  const nextIv = innerVerts[(i + 1) % 6];
+                  return (
+                    <linearGradient key={`ibg${i}`} id={`${gId}ibg${i}`} gradientUnits="userSpaceOnUse"
+                      x1={iv.x} y1={iv.y} x2={nextIv.x} y2={nextIv.y}>
+                      <stop offset="0%" stopColor={bcl(i)} />
+                      <stop offset="100%" stopColor={bcl((i + 1) % 6)} />
+                    </linearGradient>
+                  );
+                })}
               </>}
             </defs>
             {glassPieces && (
@@ -582,6 +621,24 @@ export function Piece({
                 />
               );
             })}
+            {glassPieces && <>
+              {/* Facet lines from inner to outer vertices */}
+              {innerVerts.map((iv, i) => (
+                <line key={`bfl${i}`} x1={iv.x} y1={iv.y} x2={outerVerts[i].x} y2={outerVerts[i].y} stroke="#e0e0e0" strokeWidth={0.3} opacity={0.5} />
+              ))}
+              {/* Inner hex with lighter bismuth colors */}
+              {innerVerts.map((iv, i) => {
+                const nextIv = innerVerts[(i + 1) % 6];
+                return (
+                  <polygon key={`ibw${i}`}
+                    points={`0,0 ${iv.x},${iv.y} ${nextIv.x},${nextIv.y}`}
+                    fill={`url(#${gId}ibg${i})`}
+                    opacity={0.88}
+                  />
+                );
+              })}
+              <polygon points={innerVerts.map(v => `${v.x},${v.y}`).join(' ')} fill="none" stroke="#e0e0e0" strokeWidth={0.35} />
+            </>}
             {/* Radial lines from center */}
             {outerVerts.map((v, i) => (
               <line key={`bl${i}`} x1={0} y1={0} x2={v.x} y2={v.y} stroke="rgba(200,200,200,0.45)" strokeWidth={0.35} />

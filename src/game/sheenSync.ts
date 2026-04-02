@@ -14,6 +14,7 @@ const DURATIONS: Record<string, number> = {
   jade: 3.8,
   iron: 3.0,
   morganite: 2.3,
+  opal: 2.6,
 };
 
 function update() {
@@ -44,4 +45,5 @@ export const METALLIC_SHEEN_KEY: Record<string, string> = {
   '#3a7850': 'jade',
   '#303858': 'iron',
   '#f07090': 'morganite',
+  'rainbow': 'opal',
 };

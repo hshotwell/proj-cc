@@ -53,7 +53,7 @@ export function SpecialSwatch({ color, className = '', title }: SpecialSwatchPro
     // Opal: soft iridescent color patches on pale base, hue-rotating for play-of-color
     const r = 10;
     return (
-      <svg className={`${className} rainbow-ui-filter`} viewBox={`-${r} -${r} ${r * 2} ${r * 2}`} style={{ display: 'block', borderRadius: '50%', overflow: 'hidden' }}>
+      <svg className={className} viewBox={`-${r} -${r} ${r * 2} ${r * 2}`} style={{ display: 'block', borderRadius: '50%', overflow: 'hidden' }}>
         {title && <title>{title}</title>}
         <circle cx={0} cy={0} r={r} fill="#f2eeff" />
         <ellipse cx={-2.2} cy={-2.8} rx={6.2} ry={4.4} fill="rgba(255,90,210,0.52)" />
