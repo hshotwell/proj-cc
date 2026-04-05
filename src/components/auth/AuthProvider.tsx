@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useConvexAuth, useQuery } from 'convex/react';
+import { track } from '@vercel/analytics';
 import { api } from '../../../convex/_generated/api';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -61,6 +62,7 @@ function OnlineAuthSync() {
 
       if (!wasAuthenticated && !hasSynced.current) {
         hasSynced.current = true;
+        track('sign_in');
 
         if (!hasMigrated()) {
           setShowMigration(true);

@@ -180,7 +180,7 @@ const StaticBorderLayers = memo(function StaticBorderLayers({ glassPieces }: { g
         const next = WALL_POSITIONS[(i + 1) % TOTAL_WALL];
         return (
           <line key={i} x1={pos.x} y1={pos.y} x2={next.x} y2={next.y}
-            stroke="#9ca3af" strokeWidth={3} strokeLinecap="round" />
+            stroke="#9ca3af" strokeWidth={5} strokeLinecap="round" />
         );
       })}
       {/* Wall pieces */}
@@ -365,12 +365,40 @@ export default function HomePage() {
           66.67%   { fill: ${STAR_COLORS[4]}; }
           83.33%   { fill: ${STAR_COLORS[5]}; }
         }
+        @media (max-width: 500px) {
+          /* Scale the wall to 75% — moves visual wall top from 263px to ~197px above center,
+             giving enough room for the title even on short phones (iPhone SE: 284px half-height). */
+          .home-hex-border { transform: scale(0.75); }
+          /* Title sits above scaled wall top (50% - 197px). Height ~68px + 5px gap = 202px.
+             So top = 202 + 68 = 270px above center. iPhone SE: 284-270 = 14px from screen top. */
+          .home-title {
+            top: calc(50% - 270px) !important;
+            width: min(90vw, 300px) !important;
+          }
+          .home-title h1 {
+            font-size: 2.25rem !important;
+            line-height: 2.5rem !important;
+            margin-bottom: 0.25rem !important;
+          }
+          .home-title p {
+            font-size: 1.1rem !important;
+            line-height: 1.5rem !important;
+          }
+          .home-title > div { margin-bottom: 0 !important; }
+          /* Buttons 30px below scaled wall top (50% - 197px) = 50% - 167px.
+             Width 240px fits inside the scaled wall inner boundary (~262px) at this height. */
+          .home-buttons {
+            top: calc(50% - 165px) !important;
+            width: min(75vw, 240px) !important;
+          }
+          .home-top-star { display: none !important; }
+        }
       `}</style>
 
       {/* Hex border SVG — centered behind the content
           Flat-top hex, wall ring R=300, outer hop ring R_OUTER=345.
           SVG viewBox accommodates ±(R_OUTER + WALL_SIZE + margin) */}
-      {mounted && <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true" style={{ visibility: borderVisible ? 'visible' : 'hidden' }}>
+      {mounted && <div className="home-hex-border absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true" style={{ visibility: borderVisible ? 'visible' : 'hidden' }}>
         <svg width={860} height={800} viewBox="-430 -400 860 800">
           {glassPieces && (
             <defs>
@@ -438,7 +466,7 @@ export default function HomePage() {
         <button
           type="button"
           onClick={() => setBorderVisible(v => !v)}
-          className="absolute z-10 cursor-pointer focus:outline-none"
+          className="absolute z-10 cursor-pointer focus:outline-none home-top-star"
           style={{ top: 'calc(50% - 250px)', left: '50%', transform: 'translateX(-50%)', opacity: borderVisible ? 1 : 0.4, background: 'none', border: 'none', padding: 0 }}
           aria-label={borderVisible ? 'Hide border animation' : 'Show border animation'}
         >
@@ -455,28 +483,26 @@ export default function HomePage() {
         </button>
       )}
 
-      {/*
-        Content anchored ~65px below the top flat wall.
-        Flat-top hex top wall at SVG y = -R*sin(60°) = -259.8 → screen 50% - 260px.
-        Content top at 50% - 195px → 65px below top wall.
-        Title and Play stay fixed; only Board Editor shifts down when Play expands.
-      */}
-      <main
-        className="absolute z-10 text-center"
+      {/* Logo / Title */}
+      <div
+        className="home-title absolute z-10 text-center"
         style={{ top: 'calc(50% - 195px)', left: '50%', transform: 'translateX(-50%)', width: '300px' }}
       >
-        {/* Logo / Title */}
         <div className="mb-5">
-          <h1 className="text-5xl font-bold text-gray-900 mb-2">
+          <h1 className="text-5xl font-bold text-gray-900 mb-2" translate="no">
             STERNHALMA
           </h1>
-
           <p className="text-xl italic text-gray-600">
             Chinese Checkers
           </p>
         </div>
+      </div>
 
-        {/* Action buttons */}
+      {/* Action buttons */}
+      <main
+        className="home-buttons absolute z-10 text-center"
+        style={{ top: 'calc(50% - 91px)', left: '50%', transform: 'translateX(-50%)', width: '300px' }}
+      >
         <div className="flex flex-col items-center">
           <button
             onClick={() => setShowModes(!showModes)}

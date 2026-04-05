@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 import { AuthSync } from "@/components/auth/AuthProvider";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
@@ -42,6 +43,7 @@ export default function RootLayout({
           <GlobalShortcuts />
           {children}
         </ConvexClientProvider>
+        <Analytics />
       </body>
     </html>
   );

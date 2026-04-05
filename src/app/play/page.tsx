@@ -2,11 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping, PieceVariant } from '@/types/game';
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
-import { PLAYER_COLORS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, ACTIVE_PLAYERS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName, isFlowerColor, isEggColor } from '@/game/constants';
-import { SpecialSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
+import { PLAYER_COLORS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, ACTIVE_PLAYERS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
+import { ColorSwatch, SpecialSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
@@ -266,43 +266,7 @@ export default function PlayPage() {
       <div key={playerIndex} className="flex flex-col gap-3 p-4 rounded-lg bg-gray-50">
         {/* Top row: Color swatch, Name, Human/AI toggle */}
         <div className="flex items-center gap-3">
-          {(() => {
-            const isRainbow = currentColor === 'rainbow';
-            const isOpal = currentColor === 'opal';
-            const isFlower = isFlowerColor(currentColor) || currentColor === 'bouquet';
-            const isEgg = isEggColor(currentColor);
-            const gemSwatch = getGemSwatchStyle(currentColor);
-            const metallicSwatch = getMetallicSwatchStyle(currentColor);
-            const gemBg = getGemSimpleBackground(currentColor);
-            const isGemShape = !!(gemSwatch || isOpal);
-            if (isFlower) {
-              return (
-                <div className="w-10 h-10 shadow flex-shrink-0 rounded-full overflow-hidden">
-                  <FlowerSwatch color={currentColor} className="w-full h-full" />
-                </div>
-              );
-            }
-            if (isEgg) {
-              return (
-                <div className="w-10 h-10 shadow flex-shrink-0">
-                  <EggSwatch color={currentColor} className="w-full h-full" />
-                </div>
-              );
-            }
-            const bgStyle: React.CSSProperties = isRainbow
-              ? { background: 'conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)' }
-              : isOpal
-              ? { background: 'conic-gradient(from 0deg, #ef4444 0deg 60deg, #facc15 60deg 120deg, #22c55e 120deg 180deg, #22d3ee 180deg 240deg, #3b82f6 240deg 300deg, #a855f7 300deg 360deg)', ...gemSwatch }
-              : gemBg
-              ? { background: gemBg, ...gemSwatch }
-              : { backgroundColor: currentColor, ...metallicSwatch };
-            return (
-              <div
-                className={`w-10 h-10 shadow flex-shrink-0${isGemShape ? ' gem-swatch' : ' rounded-full'}${!isGemShape && !metallicSwatch && !isRainbow ? (' border-2' + (currentColor === '#ffffff' ? ' border-gray-400' : ' border-white')) : ''}${metallicSwatch ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''}${isOpal ? ' opal-swatch' : ''}`}
-                style={bgStyle}
-              />
-            );
-          })()}
+          <ColorSwatch color={currentColor} className="w-10 h-10 shadow flex-shrink-0" />
           <div className="flex-1 min-w-0">
             {isEditing ? (
               <input
@@ -422,39 +386,43 @@ export default function PlayPage() {
         {/* Row 2: metallics + rainbow */}
         <div className="flex gap-2 flex-wrap items-center">
           {METALLIC_COLORS_LIST.map((color, idx) => {
-            if (color === null) return <div key={`blank-${idx}`} className="w-7 h-7 flex-shrink-0" />;
+            if (color === null) return <Fragment key={`blank-${idx}`}>{idx === 5 && <div className="w-full h-0 sm:hidden" />}<div className="w-7 h-7 flex-shrink-0" /></Fragment>;
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
             const metallicStyle = getMetallicSwatchStyle(color);
             const isRainbow = color === 'rainbow';
             const bgStyle = isRainbow ? {} : { backgroundColor: color, ...metallicStyle };
             return (
-              <button
-                key={color}
-                onClick={() => handleColorSelectSafe(playerIndex, color)}
-                disabled={isTaken}
-                className={`w-7 h-7 rounded-full transition-all overflow-hidden${metallicStyle ? ' metallic-swatch' : ''}${isRainbow ? ' rainbow-swatch' : ''} ${
-                  isCurrentColor ? 'border-2 border-gray-800 ring-2 ring-offset-1 ring-gray-400'
-                  : isTaken ? 'opacity-40 cursor-not-allowed'
-                  : 'shadow hover:scale-110'
-                }`}
-                style={bgStyle}
-                title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
-              >
-                {isRainbow ? <SpecialSwatch color="rainbow" className="w-full h-full" /> : (metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />)}
-              </button>
+              <Fragment key={color}>
+                {idx === 5 && <div className="w-full h-0 sm:hidden" />}
+                <button
+                  onClick={() => handleColorSelectSafe(playerIndex, color)}
+                  disabled={isTaken}
+                  className={`w-7 h-7 rounded-full transition-all overflow-hidden${metallicStyle ? ' metallic-swatch' : ''} ${
+                    isCurrentColor ? 'border-2 border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                    : isTaken ? 'opacity-40 cursor-not-allowed'
+                    : 'shadow hover:scale-110'
+                  }`}
+                  style={bgStyle}
+                  title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
+                >
+                  {isRainbow ? <SpecialSwatch color="rainbow" className="w-full h-full" /> : (metallicStyle && <MetallicGemTwinkle swStyle={metallicStyle} />)}
+                </button>
+              </Fragment>
             );
           })}
         </div>
         {/* Row 3: gems */}
         <div className="flex gap-2 flex-wrap items-center">
-          {GEM_COLORS.map((color) => {
+          {GEM_COLORS.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
             const gemStyle = getGemSwatchStyle(color);
             const isOpal = color === 'opal';
             return (
-              <div key={color} className={`relative w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isTaken && !isCurrentColor ? 'hover:scale-110' : ''}`}>
+              <Fragment key={color}>
+                {idx === 5 && <div className="w-full h-0 sm:hidden" />}
+              <div className={`relative w-7 h-7 flex items-center justify-center flex-shrink-0 transition-all ${!isTaken && !isCurrentColor ? 'hover:scale-110' : ''}`}>
                 <div className="absolute" style={{ width: '32px', height: '32px', top: '-2px', left: '-2px', clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)', backgroundColor: isCurrentColor ? '#9ca3af' : 'transparent' }} />
                 <div className="absolute" style={{ inset: '1px', clipPath: 'polygon(50% 4%, 93% 27%, 93% 73%, 50% 96%, 7% 73%, 7% 27%)', backgroundColor: isCurrentColor ? 'white' : 'transparent' }} />
                 <button
@@ -464,53 +432,58 @@ export default function PlayPage() {
                   style={isOpal ? {} : { background: getGemSimpleBackground(color) ?? color, ...gemStyle }}
                   title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
                 >
-                  {isOpal ? <SpecialSwatch color="opal" className="w-full h-full" /> : (gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />)}
+                  {isOpal ? <><SpecialSwatch color="opal" className="w-full h-full" />{gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />}</> : (gemStyle && <MetallicGemTwinkle swStyle={gemStyle} />)}
                 </button>
               </div>
+              </Fragment>
             );
           })}
         </div>
         {/* Row 4: flowers */}
         <div className="flex gap-2 flex-wrap items-center">
-          {FLOWER_COLORS_LIST.map((color) => {
+          {FLOWER_COLORS_LIST.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
             return (
-              <button
-                key={color}
-                onClick={() => handleColorSelectSafe(playerIndex, color)}
-                disabled={isTaken}
-                className={`w-7 h-7 transition-all flex items-center justify-center ${
-                  isCurrentColor ? 'ring-2 ring-gray-400 rounded-full'
-                  : isTaken ? 'opacity-40 cursor-not-allowed'
-                  : 'hover:scale-110'
-                }`}
-                title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
-              >
-                <FlowerSwatch color={color} className="w-full h-full" />
-              </button>
+              <Fragment key={color}>
+                {idx === 5 && <div className="w-full h-0 sm:hidden" />}
+                <button
+                  onClick={() => handleColorSelectSafe(playerIndex, color)}
+                  disabled={isTaken}
+                  className={`w-7 h-7 transition-all flex items-center justify-center ${
+                    isCurrentColor ? 'ring-2 ring-gray-400 rounded-full'
+                    : isTaken ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:scale-110'
+                  }`}
+                  title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
+                >
+                  <FlowerSwatch color={color} className="w-full h-full" />
+                </button>
+              </Fragment>
             );
           })}
         </div>
         {/* Row 5: eggs */}
         <div className="flex gap-2 flex-wrap items-center">
-          {EGG_COLORS_LIST.map((color) => {
+          {EGG_COLORS_LIST.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
             return (
-              <button
-                key={color}
-                onClick={() => handleColorSelectSafe(playerIndex, color)}
-                disabled={isTaken}
-                className={`w-7 h-7 transition-all flex items-center justify-center ${
-                  isCurrentColor ? 'ring-2 ring-gray-400 rounded-full'
-                  : isTaken ? 'opacity-40 cursor-not-allowed'
-                  : 'hover:scale-110'
-                }`}
-                title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
-              >
-                <EggSwatch color={color} className="w-full h-full" />
-              </button>
+              <Fragment key={color}>
+                {idx === 5 && <div className="w-full h-0 sm:hidden" />}
+                <button
+                  onClick={() => handleColorSelectSafe(playerIndex, color)}
+                  disabled={isTaken}
+                  className={`w-7 h-7 transition-all flex items-center justify-center ${
+                    isCurrentColor ? 'ring-2 ring-gray-400 rounded-full'
+                    : isTaken ? 'opacity-40 cursor-not-allowed'
+                    : 'hover:scale-110'
+                  }`}
+                  title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
+                >
+                  <EggSwatch color={color} className="w-full h-full" />
+                </button>
+              </Fragment>
             );
           })}
         </div>

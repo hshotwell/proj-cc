@@ -50,19 +50,28 @@ interface SpecialSwatchProps {
 export function SpecialSwatch({ color, className = '', title }: SpecialSwatchProps) {
   const uid = useId();
   if (color === 'rainbow') {
-    // Opal: soft iridescent color patches on pale base, hue-rotating for play-of-color
+    // Opal: iridescent blobs + MetallicGemTwinkle overlay matching other metallic swatch styles.
+    // Positions are in 0-100 coordinate space (MetallicGemTwinkle's viewBox).
+    const opalSwatchStyle = {
+      '--tw-delay': '0.5', '--tw-dur': '3.5',
+      '--tw-x1': '30', '--tw-y1': '25',
+      '--tw-x2': '65', '--tw-y2': '58',
+      '--tw-x3': '28', '--tw-y3': '65',
+    } as React.CSSProperties;
     const r = 10;
     return (
-      <svg className={className} viewBox={`-${r} -${r} ${r * 2} ${r * 2}`} style={{ display: 'block', borderRadius: '50%', overflow: 'hidden' }}>
-        {title && <title>{title}</title>}
-        <circle cx={0} cy={0} r={r} fill="#f2eeff" />
-        <ellipse cx={-2.2} cy={-2.8} rx={6.2} ry={4.4} fill="rgba(255,90,210,0.52)" />
-        <ellipse cx={3.4} cy={-1.4} rx={5.4} ry={4.0} fill="rgba(70,230,160,0.46)" />
-        <ellipse cx={0.8} cy={3.4} rx={5.0} ry={4.2} fill="rgba(70,155,255,0.43)" />
-        <ellipse cx={-3.0} cy={2.4} rx={4.4} ry={5.0} fill="rgba(185,70,255,0.37)" />
-        <ellipse cx={0.2} cy={-0.4} rx={3.8} ry={3.0} fill="rgba(255,215,75,0.40)" />
-        <circle cx={0} cy={0} r={r} fill="rgba(245,242,255,0.28)" />
-      </svg>
+      <div className={`${className} metallic-swatch`} title={title}>
+        <svg viewBox="-10 -10 20 20" style={{ display: 'block', width: '100%', height: '100%' }}>
+          <circle cx={0} cy={0} r={r} fill="#f2eeff" />
+          <ellipse cx={-2.2} cy={-2.8} rx={6.2} ry={4.4} fill="rgba(255,90,210,0.52)" />
+          <ellipse cx={3.4} cy={-1.4} rx={5.4} ry={4.0} fill="rgba(70,230,160,0.46)" />
+          <ellipse cx={0.8} cy={3.4} rx={5.0} ry={4.2} fill="rgba(70,155,255,0.43)" />
+          <ellipse cx={-3.0} cy={2.4} rx={4.4} ry={5.0} fill="rgba(185,70,255,0.37)" />
+          <ellipse cx={0.2} cy={-0.4} rx={3.8} ry={3.0} fill="rgba(255,215,75,0.40)" />
+          <circle cx={0} cy={0} r={r} fill="rgba(245,242,255,0.28)" />
+        </svg>
+        <MetallicGemTwinkle swStyle={opalSwatchStyle} />
+      </div>
     );
   }
   // Bismuth: pointy-top hex with blended oxide-layer color gradient between each wedge
