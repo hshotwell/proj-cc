@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CubeCoord, PlayerIndex, Move, GameState } from '@/types/game';
 import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION, TRIANGLE_ASSIGNMENTS, RAINBOW_UI_COLORS } from '@/game/constants';
 import { generateBoardPositions, getTriangleForPosition } from '@/game/board';
-import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath } from '@/game/coordinates';
+import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath, cubeDistance } from '@/game/coordinates';
 import { getPlayerColorFromState, hexToRgba, blendColorsRgba, lightenHex } from '@/game/colors';
 import { findBoardTriangles, findBorderEdges } from '@/game/triangles';
 import { isGameFullyOver } from '@/game/state';
@@ -90,6 +90,12 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
   // Hop particle effect state
   const [hopParticles, setHopParticles] = useState<HopParticle[]>([]);
+
+  // Refs for SVG-level touch forgiveness
+  const svgRef = useRef<SVGSVGElement>(null);
+  // Set to true by child click handlers when they call makeMove, so the SVG-level
+  // handler knows not to double-fire.
+  const moveHandledRef = useRef(false);
 
   // Replay piece animation state.
   // prevState = board state before the move; piece = move.from (where the piece lives in prevState).
@@ -633,8 +639,28 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
     // Check if clicking on a valid move destination first (works during pending too)
     if (validDestinations.some((dest) => cubeEquals(dest, coord))) {
+      moveHandledRef.current = true;
       makeMove(coord, animateMoves);
       return;
+    }
+
+    // Mobile forgiveness: if a piece is selected and the tapped cell is adjacent to a
+    // valid destination, snap to the nearest adjacent valid move.
+    if (selectedPiece && validDestinations.length > 0) {
+      const nearby = validDestinations.filter((dest) => cubeDistance(dest, coord) === 1);
+      if (nearby.length > 0) {
+        const tapPx = cubeToPixel(coord, HEX_SIZE);
+        const nearest = nearby.reduce((best, dest) => {
+          const px = cubeToPixel(dest, HEX_SIZE);
+          const bestPx = cubeToPixel(best, HEX_SIZE);
+          const d = Math.hypot(px.x - tapPx.x, px.y - tapPx.y);
+          const db = Math.hypot(bestPx.x - tapPx.x, bestPx.y - tapPx.y);
+          return d < db ? dest : best;
+        });
+        moveHandledRef.current = true;
+        makeMove(nearest, animateMoves);
+        return;
+      }
     }
 
     // If there's a pending confirmation and not clicking a valid move, confirm
@@ -671,8 +697,27 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
     // Check if clicking on a valid move destination (the piece might be at a valid move spot)
     if (validDestinations.some((dest) => cubeEquals(dest, coord))) {
+      moveHandledRef.current = true;
       makeMove(coord, animateMoves);
       return;
+    }
+
+    // Mobile forgiveness: snap to nearest adjacent valid destination
+    if (selectedPiece && validDestinations.length > 0) {
+      const nearby = validDestinations.filter((dest) => cubeDistance(dest, coord) === 1);
+      if (nearby.length > 0) {
+        const tapPx = cubeToPixel(coord, HEX_SIZE);
+        const nearest = nearby.reduce((best, dest) => {
+          const px = cubeToPixel(dest, HEX_SIZE);
+          const bestPx = cubeToPixel(best, HEX_SIZE);
+          const d = Math.hypot(px.x - tapPx.x, px.y - tapPx.y);
+          const db = Math.hypot(bestPx.x - tapPx.x, bestPx.y - tapPx.y);
+          return d < db ? dest : best;
+        });
+        moveHandledRef.current = true;
+        makeMove(nearest, animateMoves);
+        return;
+      }
     }
 
     // If there's a pending confirmation and not clicking a valid move, confirm
@@ -693,7 +738,59 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       undoLastMove();
       return;
     }
+    moveHandledRef.current = true;
     makeMove(coord, animateMoves);
+  };
+
+  // SVG-level click handler: catches taps on empty space between cells and snaps to the
+  // nearest valid destination. Only activates when a piece is selected and the child
+  // click handlers haven't already handled the event (moveHandledRef guards this).
+  const handleSVGClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    // If a child handler already called makeMove, skip and reset the flag.
+    if (moveHandledRef.current) {
+      moveHandledRef.current = false;
+      return;
+    }
+    if (isReplayActive || animatingPiece || isAITurn || !gameState) return;
+    if (!selectedPiece || validDestinations.length === 0) return;
+
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    // Convert screen click position to SVG user-space coordinates
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const svgCoord = pt.matrixTransform(ctm.inverse());
+
+    // The board <g> has a CSS rotation of cumulativeRotation degrees around (0,0).
+    // Apply the inverse rotation to get board-local coordinates.
+    const rad = (cumulativeRotation * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const localX = svgCoord.x * cos + svgCoord.y * sin;
+    const localY = -svgCoord.x * sin + svgCoord.y * cos;
+
+    // Find the nearest valid destination by pixel distance
+    let nearest: CubeCoord | null = null;
+    let nearestDist = Infinity;
+    for (const dest of validDestinations) {
+      const px = cubeToPixel(dest, HEX_SIZE);
+      const dist = Math.hypot(px.x - localX, px.y - localY);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = dest;
+      }
+    }
+
+    // Forgiveness radius: covers the valid move cell + all adjacent cells and the gaps
+    // between them (~1.5 cell-widths from center).
+    const FORGIVENESS_RADIUS = HEX_SIZE * Math.sqrt(3) * 1.8;
+    if (nearest && nearestDist <= FORGIVENESS_RADIUS) {
+      makeMove(nearest, animateMoves);
+    }
   };
 
   // Calculate the display position for an animating piece
@@ -724,10 +821,12 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
   return (
     <svg
+      ref={svgRef}
       viewBox={viewBox}
       className="w-full h-auto max-h-[70vh] sm:max-h-[75vh]"
       style={{ aspectRatio: aspectRatio }}
       preserveAspectRatio="xMidYMid meet"
+      onClick={handleSVGClick}
     >
       <g
         style={{

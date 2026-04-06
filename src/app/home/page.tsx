@@ -365,14 +365,12 @@ export default function HomePage() {
           66.67%   { fill: ${STAR_COLORS[4]}; }
           83.33%   { fill: ${STAR_COLORS[5]}; }
         }
-        @media (max-width: 500px) {
-          /* Scale the wall to 75% — moves visual wall top from 263px to ~197px above center,
-             giving enough room for the title even on short phones (iPhone SE: 284px half-height). */
+        @media (max-width: 650px) {
+          /* Scale wall to 75% — wall piece top edge moves to ~208px above center */
           .home-hex-border { transform: scale(0.75); }
-          /* Title sits above scaled wall top (50% - 197px). Height ~68px + 5px gap = 202px.
-             So top = 202 + 68 = 270px above center. iPhone SE: 284-270 = 14px from screen top. */
+          /* Title: 48px below scaled wall-piece top edge (208px), sits clearly inside the ring */
           .home-title {
-            top: calc(50% - 270px) !important;
+            top: calc(50% - 160px) !important;
             width: min(90vw, 300px) !important;
           }
           .home-title h1 {
@@ -385,11 +383,34 @@ export default function HomePage() {
             line-height: 1.5rem !important;
           }
           .home-title > div { margin-bottom: 0 !important; }
-          /* Buttons 30px below scaled wall top (50% - 197px) = 50% - 167px.
-             Width 240px fits inside the scaled wall inner boundary (~262px) at this height. */
+          /* Buttons: ~85px below title top, well inside the ring */
           .home-buttons {
-            top: calc(50% - 165px) !important;
+            top: calc(50% - 75px) !important;
             width: min(75vw, 240px) !important;
+          }
+          .home-top-star { display: none !important; }
+        }
+        /* Landscape mobile / very short screens */
+        @media (max-height: 500px) {
+          /* Scale wall to 55% — wall piece top edge moves to ~153px above center */
+          .home-hex-border { transform: scale(0.55) !important; }
+          .home-title {
+            top: calc(50% - 120px) !important;
+            width: min(90vw, 280px) !important;
+          }
+          .home-title h1 {
+            font-size: 1.75rem !important;
+            line-height: 2rem !important;
+            margin-bottom: 0.1rem !important;
+          }
+          .home-title p {
+            font-size: 0.9rem !important;
+            line-height: 1.25rem !important;
+          }
+          .home-title > div { margin-bottom: 0 !important; }
+          .home-buttons {
+            top: calc(50% - 45px) !important;
+            width: min(75vw, 220px) !important;
           }
           .home-top-star { display: none !important; }
         }
