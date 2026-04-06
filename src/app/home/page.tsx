@@ -204,8 +204,26 @@ export default function HomePage() {
   useEffect(() => setMounted(true), []);
   const [showModes, setShowModes] = useState(false);
   const [borderVisible, setBorderVisible] = useState(true);
+  const [hexScale, setHexScale] = useState(1);
+  const [screenH, setScreenH] = useState(800);
   const router = useRouter();
   const startTutorial = useTutorialStore((s) => s.startTutorial);
+
+  // Dynamic hex scale — fills ~95% of viewport width, constrained by height.
+  // Drives both SVG size and all content positions so everything stays inside the wall.
+  useEffect(() => {
+    const update = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const sw = (vw * 0.95) / 640;
+      const sh = (vh * 0.88) / 800;
+      setHexScale(Math.min(1, Math.max(0.38, Math.min(sw, sh))));
+      setScreenH(vh);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   const startTimeRef = useRef(Date.now());
   const marble1Ref = useRef(0);
@@ -365,62 +383,11 @@ export default function HomePage() {
           66.67%   { fill: ${STAR_COLORS[4]}; }
           83.33%   { fill: ${STAR_COLORS[5]}; }
         }
-        @media (max-width: 650px) {
-          /* Scale wall to 75% — wall piece top edge moves to ~208px above center */
-          .home-hex-border { transform: scale(0.75); }
-          /* Title: 48px below scaled wall-piece top edge (208px), sits clearly inside the ring */
-          .home-title {
-            top: calc(50% - 160px) !important;
-            width: min(90vw, 300px) !important;
-          }
-          .home-title h1 {
-            font-size: 2.25rem !important;
-            line-height: 2.5rem !important;
-            margin-bottom: 0.25rem !important;
-          }
-          .home-title p {
-            font-size: 1.1rem !important;
-            line-height: 1.5rem !important;
-          }
-          .home-title > div { margin-bottom: 0 !important; }
-          /* Buttons: ~85px below title top, well inside the ring */
-          .home-buttons {
-            top: calc(50% - 75px) !important;
-            width: min(75vw, 240px) !important;
-          }
-          .home-top-star { display: none !important; }
-        }
-        /* Landscape mobile / very short screens */
-        @media (max-height: 500px) {
-          /* Scale wall to 55% — wall piece top edge moves to ~153px above center */
-          .home-hex-border { transform: scale(0.55) !important; }
-          .home-title {
-            top: calc(50% - 120px) !important;
-            width: min(90vw, 280px) !important;
-          }
-          .home-title h1 {
-            font-size: 1.75rem !important;
-            line-height: 2rem !important;
-            margin-bottom: 0.1rem !important;
-          }
-          .home-title p {
-            font-size: 0.9rem !important;
-            line-height: 1.25rem !important;
-          }
-          .home-title > div { margin-bottom: 0 !important; }
-          .home-buttons {
-            top: calc(50% - 45px) !important;
-            width: min(75vw, 220px) !important;
-          }
-          .home-top-star { display: none !important; }
-        }
       `}</style>
 
-      {/* Hex border SVG — centered behind the content
-          Flat-top hex, wall ring R=300, outer hop ring R_OUTER=345.
-          SVG viewBox accommodates ±(R_OUTER + WALL_SIZE + margin) */}
-      {mounted && <div className="home-hex-border absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true" style={{ visibility: borderVisible ? 'visible' : 'hidden' }}>
-        <svg width={860} height={800} viewBox="-430 -400 860 800">
+      {/* Hex border SVG — scaled to ~95% of viewport width via hexScale */}
+      {mounted && <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true" style={{ visibility: borderVisible ? 'visible' : 'hidden' }}>
+        <svg width={860} height={800} viewBox="-430 -400 860 800" style={{ transform: `scale(${hexScale})`, transformOrigin: 'center' }}>
           {glassPieces && (
             <defs>
               <radialGradient id={MARBLE_GRAD_ID} cx="35%" cy="35%" r="65%">
@@ -481,16 +448,37 @@ export default function HomePage() {
         </svg>
       </div>}
 
-      {/* Top star — centered just below the ring-5 top wall (SVG y≈−262px → screen 50%−262px).
-          Placed at 50%−250px so it sits ~12px below the wall and ~45px above the title. */}
-      {mounted && (
-        <button
-          type="button"
-          onClick={() => setBorderVisible(v => !v)}
-          className="absolute z-10 cursor-pointer focus:outline-none home-top-star"
-          style={{ top: 'calc(50% - 250px)', left: '50%', transform: 'translateX(-50%)', opacity: borderVisible ? 1 : 0.4, background: 'none', border: 'none', padding: 0 }}
-          aria-label={borderVisible ? 'Hide border animation' : 'Show border animation'}
-        >
+      {/* ── Layout modes ────────────────────────────────────────────────────────
+          normalMode  (hexScale ≥ 0.95): desktop — all inside hex at original positions
+          titleAbove  (hexScale < 0.95, tall enough): portrait phone — title above wall ring,
+                      top star + buttons centered inside hex
+          compactMode (hexScale < 0.95, too short for title above): landscape/very short —
+                      title hidden, compact button block centered inside hex, no bottom star
+      */}
+      {(() => {
+        const normalMode = hexScale >= 0.95;
+        // px from screen center to top edge of wall ring (wall node center + wall piece radius)
+        const wallTopPx = Math.round(277 * hexScale);
+        // px of room between screen top (below header ~56px) and wall top
+        const roomAboveWall = Math.round(screenH / 2) - wallTopPx - 56;
+        // title is ~84px tall (h1 48px + mb-2 8px + p ~28px)
+        const TITLE_H = 84;
+        const titleAbove = !normalMode && roomAboveWall >= TITLE_H + 10;
+        const compactMode = !normalMode && !titleAbove;
+
+        // Title top in px from screen top (anchored 10px below title, above wall top)
+        const titleTopPx = titleAbove
+          ? Math.max(56, Math.round(screenH / 2) - wallTopPx - 10 - TITLE_H)
+          : 0;
+
+        // Top star offset above center — chosen so it fits in hex interior at any hexScale
+        // titleAbove: center the block [star(48)+gap(8)+play(56)+editor(56)+bstar(60)=228] → star at -114
+        // compactMode: smaller block [star(48)+gap(8)+play(56)+editor(56)=168] → star at -84
+        const topStarOffset = compactMode ? 84 : (normalMode ? 250 : 114);
+        // Play button top offset above center
+        const buttonsOffset = compactMode ? 36 : (normalMode ? 91 : 58);
+
+        const starSvg = (
           <svg viewBox="-100 -100 200 200" className="w-12 h-12">
             {STAR_TRIANGLES.map((t) => (
               <polygon key={t.index} points={t.points} style={{
@@ -501,91 +489,123 @@ export default function HomePage() {
             ))}
             <polygon points="-17.5,-30.3 17.5,-30.3 35,0 17.5,30.3 -17.5,30.3 -35,0" fill="#9ca3af" />
           </svg>
-        </button>
-      )}
+        );
 
-      {/* Logo / Title */}
-      <div
-        className="home-title absolute z-10 text-center"
-        style={{ top: 'calc(50% - 195px)', left: '50%', transform: 'translateX(-50%)', width: '300px' }}
-      >
-        <div className="mb-5">
-          <h1 className="text-5xl font-bold text-gray-900 mb-2" translate="no">
-            STERNHALMA
-          </h1>
-          <p className="text-xl italic text-gray-600">
-            Chinese Checkers
-          </p>
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <main
-        className="home-buttons absolute z-10 text-center"
-        style={{ top: 'calc(50% - 91px)', left: '50%', transform: 'translateX(-50%)', width: '300px' }}
-      >
-        <div className="flex flex-col items-center">
-          <button
-            onClick={() => setShowModes(!showModes)}
-            className="w-full px-12 py-4 text-xl font-semibold text-gray-800 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            Play
-          </button>
-
-          {showModes && (
-            <div className="w-full flex flex-col animate-[fadeIn_0.15s_ease-in]">
+        return (
+          <>
+            {/* Top star — inside hex or just above title in normal mode */}
+            {mounted && (
               <button
-                onClick={() => router.push('/play')}
-                className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
-              >
-                Local
-              </button>
-              <button
-                onClick={() => router.push('/profile')}
-                className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
-              >
-                Online
-              </button>
-              <button
-                onClick={() => {
-                  const gameId = startTutorial();
-                  router.push(`/game/${gameId}`);
+                type="button"
+                onClick={() => setBorderVisible(v => !v)}
+                className="absolute z-10 cursor-pointer focus:outline-none"
+                style={{
+                  top: `calc(50% - ${topStarOffset}px)`,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  opacity: borderVisible ? 1 : 0.4,
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
                 }}
-                className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label={borderVisible ? 'Hide border animation' : 'Show border animation'}
               >
-                Tutorial
+                {starSvg}
               </button>
-            </div>
-          )}
+            )}
 
-          <Link
-            href="/editor"
-            className="w-full inline-block px-12 py-4 text-xl font-semibold text-gray-800 text-center rounded-full hover:bg-gray-100 transition-colors"
-          >
-            Board Editor
-          </Link>
+            {/* Logo / Title */}
+            {!compactMode && (
+              <div
+                className="absolute z-10 text-center"
+                style={{
+                  ...(titleAbove
+                    ? { top: `${titleTopPx}px` }
+                    : { top: 'calc(50% - 195px)' }),
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: normalMode ? '300px' : 'min(90vw, 300px)',
+                }}
+              >
+                <div className={normalMode ? 'mb-5' : ''}>
+                  <h1 className="text-5xl font-bold text-gray-900 mb-2" translate="no">
+                    STERNHALMA
+                  </h1>
+                  <p className="text-xl italic text-gray-600">
+                    Chinese Checkers
+                  </p>
+                </div>
+              </div>
+            )}
 
-          {/* Bottom star — flows with the button column */}
-          <button
-            type="button"
-            onClick={() => setBorderVisible(v => !v)}
-            className="mt-3 cursor-pointer focus:outline-none"
-            style={{ opacity: borderVisible ? 1 : 0.4, background: 'none', border: 'none', padding: 0 }}
-            aria-label={borderVisible ? 'Hide border animation' : 'Show border animation'}
-          >
-            <svg viewBox="-100 -100 200 200" className="w-12 h-12">
-              {STAR_TRIANGLES.map((t) => (
-                <polygon key={t.index} points={t.points} style={{
-                  fill: STAR_COLORS[t.index],
-                  animation: 'colorRotate 12s linear infinite',
-                  animationDelay: `${-(t.index / 6) * 12}s`,
-                }} />
-              ))}
-              <polygon points="-17.5,-30.3 17.5,-30.3 35,0 17.5,30.3 -17.5,30.3 -35,0" fill="#9ca3af" />
-            </svg>
-          </button>
-        </div>
-      </main>
+            {/* Action buttons */}
+            <main
+              className="absolute z-10 text-center"
+              style={{
+                top: `calc(50% - ${buttonsOffset}px)`,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: normalMode ? '300px' : 'min(75vw, 260px)',
+              }}
+            >
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={() => setShowModes(!showModes)}
+                  className="w-full px-12 py-4 text-xl font-semibold text-gray-800 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  Play
+                </button>
+
+                {showModes && (
+                  <div className="w-full flex flex-col animate-[fadeIn_0.15s_ease-in]">
+                    <button
+                      onClick={() => router.push('/play')}
+                      className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      Local
+                    </button>
+                    <button
+                      onClick={() => router.push('/profile')}
+                      className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      Online
+                    </button>
+                    <button
+                      onClick={() => {
+                        const gameId = startTutorial();
+                        router.push(`/game/${gameId}`);
+                      }}
+                      className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      Tutorial
+                    </button>
+                  </div>
+                )}
+
+                <Link
+                  href="/editor"
+                  className="w-full inline-block px-12 py-4 text-xl font-semibold text-gray-800 text-center rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  Board Editor
+                </Link>
+
+                {/* Bottom star — hidden in compact/landscape mode to save vertical space */}
+                {!compactMode && (
+                  <button
+                    type="button"
+                    onClick={() => setBorderVisible(v => !v)}
+                    className="mt-3 cursor-pointer focus:outline-none"
+                    style={{ opacity: borderVisible ? 1 : 0.4, background: 'none', border: 'none', padding: 0 }}
+                    aria-label={borderVisible ? 'Hide border animation' : 'Show border animation'}
+                  >
+                    {starSvg}
+                  </button>
+                )}
+              </div>
+            </main>
+          </>
+        );
+      })()}
     </div>
   );
 }
