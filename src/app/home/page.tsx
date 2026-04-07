@@ -495,15 +495,14 @@ export default function HomePage() {
         const buttonsOffset = normalMode ? 91
           : isPortrait ? wallTopPx - 130
           : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
-        // Portrait star: sits above title which sits just above the wall.
-        // Shift the stack down 15px toward the wall (star + gap + title + gap above wallTopPx).
-        const PORTRAIT_STACK_ABOVE = 8 + PORTRAIT_TITLE_H + 8 + 48 - 15; // = 117 at PORTRAIT_TITLE_H=68
+        // Portrait star: slightly lower (-8px from previous); title significantly lower (+30px).
+        const PORTRAIT_STACK_ABOVE = 8 + PORTRAIT_TITLE_H + 8 + 48 - 23; // = 109 at PORTRAIT_TITLE_H=68
         const topStarOffset = normalMode ? 250
           : portraitHasRoom ? wallTopPx + PORTRAIT_STACK_ABOVE
           : isPortrait ? wallTopPx + 68
           : (buttonsOffset + 8 + 48);
-        // Top of portrait title block (px from screen top); +15 to match the downward shift
-        const portraitTitleTop = Math.round(screenH / 2) - wallTopPx - 8 - PORTRAIT_TITLE_H + 15;
+        // Title top: +45 pushes it 30px lower than before (overlaps wall outer edge, renders above it via z-10)
+        const portraitTitleTop = Math.round(screenH / 2) - wallTopPx - 8 - PORTRAIT_TITLE_H + 45;
 
         const starSvg = (
           <svg viewBox="-100 -100 200 200" className="w-12 h-12">
