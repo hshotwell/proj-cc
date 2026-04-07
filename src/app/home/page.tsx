@@ -216,8 +216,8 @@ export default function HomePage() {
     const update = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // Width: ring outer edge reaches ~97% of viewport width
-      const sw = (vw * 0.97) / 632;
+      // Width: ring fills viewport width (ring node at ±316px × scale ≈ ±vw/2)
+      const sw = vw / 600;
       // Height: only constrain on very short screens where wall would overflow vertically
       const sh = vh < 560 ? (vh * 0.90) / 560 : 1.0;
       setHexScale(Math.min(1, Math.max(0.38, Math.min(sw, sh))));
@@ -474,12 +474,13 @@ export default function HomePage() {
           ? Math.max(56, Math.round(screenH / 2) - wallTopPx - 10 - TITLE_H)
           : 0;
 
-        // Top star offset above center — chosen so it fits in hex interior at any hexScale
-        // titleAbove: center the block [star(48)+gap(8)+play(56)+editor(56)+bstar(60)=228] → star at -114
-        // compactMode: smaller block [star(48)+gap(8)+play(56)+editor(56)=168] → star at -84
-        const topStarOffset = compactMode ? 84 : (normalMode ? 250 : 114);
-        // Play button top offset above center
-        const buttonsOffset = compactMode ? 36 : (normalMode ? 91 : 58);
+        // Expanded buttons block height: play(56) + 3 modes(132) + editor(56) = 244, no bottom star
+        const EXPANDED_H = 244;
+        const MARGIN = 25;
+        // In non-normal modes, push buttons high enough that expanded block stays inside wall bottom
+        const buttonsOffset = normalMode ? 91 : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
+        // Top star sits above buttons with an 8px gap; in normalMode keep original position
+        const topStarOffset = normalMode ? 250 : (buttonsOffset + 8 + 48);
 
         const starSvg = (
           <svg viewBox="-100 -100 200 200" className="w-12 h-12">
@@ -496,8 +497,8 @@ export default function HomePage() {
 
         return (
           <>
-            {/* Top star — inside hex or just above title in normal mode */}
-            {mounted && (
+            {/* Top star — shown in normalMode and titleAbove, replaced by compact title in compactMode */}
+            {mounted && !compactMode && (
               <button
                 type="button"
                 onClick={() => setBorderVisible(v => !v)}
@@ -515,6 +516,21 @@ export default function HomePage() {
               >
                 {starSvg}
               </button>
+            )}
+
+            {/* Compact title — landscape/compactMode only, replaces top star */}
+            {mounted && compactMode && (
+              <div
+                className="absolute z-10 text-center"
+                style={{
+                  top: `calc(50% - ${buttonsOffset + 8 + 24}px)`,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 'min(90vw, 300px)',
+                }}
+              >
+                <h1 className="text-lg font-bold text-gray-900" translate="no">STERNHALMA</h1>
+              </div>
             )}
 
             {/* Logo / Title */}
@@ -592,8 +608,8 @@ export default function HomePage() {
                   Board Editor
                 </Link>
 
-                {/* Bottom star — hidden in compact/landscape mode to save vertical space */}
-                {!compactMode && (
+                {/* Bottom star — only in normalMode; removed in mobile modes to give room for expanded play */}
+                {normalMode && (
                   <button
                     type="button"
                     onClick={() => setBorderVisible(v => !v)}
