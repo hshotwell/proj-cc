@@ -553,7 +553,7 @@ export default function HomePage() {
                   width: 'min(90vw, 300px)',
                 }}
               >
-                <h1 className="text-lg font-bold text-gray-900" translate="no">STERNHALMA</h1>
+                <h1 className="text-lg font-bold text-gray-900 notranslate" translate="no">STERNHALMA</h1>
               </div>
             )}
 
@@ -568,7 +568,7 @@ export default function HomePage() {
                   width: 'min(90vw, 300px)',
                 }}
               >
-                <h1 className="text-4xl font-bold text-gray-900 mb-1" translate="no">STERNHALMA</h1>
+                <h1 className="text-4xl font-bold text-gray-900 mb-1 notranslate" translate="no">STERNHALMA</h1>
                 <p className="text-base italic text-gray-800">Chinese Checkers</p>
               </div>
             )}
@@ -587,7 +587,7 @@ export default function HomePage() {
                 }}
               >
                 <div className={normalMode ? 'mb-5' : ''}>
-                  <h1 className="text-5xl font-bold text-gray-900 mb-2" translate="no">
+                  <h1 className="text-5xl font-bold text-gray-900 mb-2 notranslate" translate="no">
                     STERNHALMA
                   </h1>
                   <p className="text-xl italic text-gray-600">
