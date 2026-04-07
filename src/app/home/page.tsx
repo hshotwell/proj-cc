@@ -470,21 +470,23 @@ export default function HomePage() {
         const roomAboveWall = Math.round(screenH / 2) - wallTopPx - 56;
         // title is ~84px tall (h1 48px + mb-2 8px + p ~28px)
         const TITLE_H = 84;
-        // need room for title (84) + gap (8) + star (48) + gap (10) = 150 above wall
-        const titleAbove = !normalMode && roomAboveWall >= 150;
+        // At 0.85 scale there isn't room above the wall for title + star on phones;
+        // threshold 200 effectively means titleAbove only fires on very large/tall screens.
+        const titleAbove = !normalMode && roomAboveWall >= 200;
         const compactMode = !normalMode && !titleAbove;
 
-        // Title top: leave 56px below for star+gap before the wall top
         const titleTopPx = titleAbove
-          ? Math.max(56, Math.round(screenH / 2) - wallTopPx - TITLE_H - 148)
+          ? Math.max(56, Math.round(screenH / 2) - wallTopPx - 10 - TITLE_H)
           : 0;
 
         // Expanded buttons block height: play(56) + 3 modes(132) + editor(56) = 244, no bottom star
         const EXPANDED_H = 244;
-        // Non-normal: play button starts 4px below the wall top ring
-        const buttonsOffset = normalMode ? 91 : wallTopPx - 4;
-        // Top star: 8px gap + 48px star above buttons → star bottom lands 4px above wall top
-        const topStarOffset = normalMode ? 250 : (buttonsOffset + 8 + 48);
+        const MARGIN = 25;
+        // Wall hex pieces are ±WALL_SIZE(15px) from the ring node centers.
+        // Portrait: play sits 7px below the inner wall edge (wallTopPx-15); star sits 7px above outer edge (wallTopPx+15).
+        // Landscape/compactMode: old safe formula keeps expanded block inside the wall bottom.
+        const buttonsOffset = normalMode ? 91 : isPortrait ? wallTopPx - 22 : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
+        const topStarOffset = normalMode ? 250 : isPortrait ? wallTopPx + 70 : (buttonsOffset + 8 + 48);
 
         const starSvg = (
           <svg viewBox="-100 -100 200 200" className="w-12 h-12">
@@ -527,7 +529,7 @@ export default function HomePage() {
               <div
                 className="absolute z-10 text-center"
                 style={{
-                  top: `calc(50% - ${topStarOffset + 32}px)`,
+                  top: isPortrait ? `calc(50% - ${topStarOffset + 32}px)` : `calc(50% - ${buttonsOffset + 32}px)`,
                   left: '50%',
                   transform: 'translateX(-50%)',
                   width: 'min(90vw, 300px)',
