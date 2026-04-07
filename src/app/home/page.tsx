@@ -456,14 +456,14 @@ export default function HomePage() {
       </div>}
 
       {/* ── Layout modes ────────────────────────────────────────────────────────
-          normalMode  (hexScale ≥ 0.95): desktop — all inside hex at original positions
-          titleAbove  (hexScale < 0.95, tall enough): portrait phone — title above wall ring,
-                      top star + buttons centered inside hex
-          compactMode (hexScale < 0.95, too short for title above): landscape/very short —
-                      title hidden, compact button block centered inside hex, no bottom star
+          normalMode  (hexScale ≥ 0.95, landscape): desktop — all inside hex at original positions
+          compactMode (portrait, or landscape too short): compact title above wall, star at wall top,
+                      play just below wall, bottom star inside hex
       */}
       {(() => {
-        const normalMode = hexScale >= 0.95;
+        // Portrait phones must never enter normalMode: the desktop inside-hex positions
+        // (title -195px, star -250px, buttons -91px) all land inside/on the wall ring on portrait.
+        const normalMode = hexScale >= 0.95 && !isPortrait;
         // px from screen center to top edge of wall ring (wall node center + wall piece radius)
         const wallTopPx = Math.round(277 * hexScale);
         // px of room between screen top (below header ~56px) and wall top
