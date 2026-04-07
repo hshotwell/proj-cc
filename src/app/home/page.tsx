@@ -486,10 +486,23 @@ export default function HomePage() {
         // wallTopPx = outer top vertex; innerBottomPx = inner bottom vertex of the top wall hex.
         const wallSizePx = Math.round(15 * hexScale);
         const wallInnerBottomPx = wallTopPx - 2 * wallSizePx;
-        // Portrait: play starts 20px below inner wall bottom; star sits 20px above outer wall top.
+        // Portrait title: text-3xl (~36px) + mb-1 + text-sm (~20px) ≈ 60px tall
+        const PORTRAIT_TITLE_H = 60;
+        // portraitHasRoom: enough space above wall for star(48) + gap(8) + title(60) + gap(8) = 124px
+        const portraitHasRoom = isPortrait && !normalMode && roomAboveWall >= 100;
+        // Portrait: play goes just below the outer wall top with enough clearance.
         // Landscape/compactMode: old safe formula keeps expanded block inside the wall bottom.
-        const buttonsOffset = normalMode ? 91 : isPortrait ? wallInnerBottomPx - 20 : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
-        const topStarOffset = normalMode ? 250 : isPortrait ? wallTopPx + 68 : (buttonsOffset + 8 + 48);
+        const buttonsOffset = normalMode ? 91
+          : isPortrait ? wallTopPx - 90
+          : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
+        // Portrait star: sits above title which sits above the wall.
+        // star(48) + gap(8) + title(60) + gap(8) = 124px above wallTopPx.
+        const topStarOffset = normalMode ? 250
+          : portraitHasRoom ? wallTopPx + 8 + PORTRAIT_TITLE_H + 8 + 48
+          : isPortrait ? wallTopPx + 68
+          : (buttonsOffset + 8 + 48);
+        // Top of portrait title block (px from screen top)
+        const portraitTitleTop = Math.round(screenH / 2) - wallTopPx - 8 - PORTRAIT_TITLE_H;
 
         const starSvg = (
           <svg viewBox="-100 -100 200 200" className="w-12 h-12">
@@ -527,18 +540,36 @@ export default function HomePage() {
               </button>
             )}
 
-            {/* Compact title — landscape/compactMode only, replaces top star */}
-            {mounted && compactMode && (
+            {/* Compact title — landscape/compactMode only; portrait uses portraitHasRoom block instead */}
+            {mounted && compactMode && !portraitHasRoom && (
               <div
                 className="absolute z-10 text-center"
                 style={{
-                  top: isPortrait ? `calc(50% - ${topStarOffset + 32}px)` : `calc(50% - ${buttonsOffset + 32}px)`,
+                  top: isPortrait
+                    ? `${Math.round(screenH / 2) - wallInnerBottomPx + 8}px`
+                    : `calc(50% - ${buttonsOffset + 32}px)`,
                   left: '50%',
                   transform: 'translateX(-50%)',
                   width: 'min(90vw, 300px)',
                 }}
               >
                 <h1 className="text-lg font-bold text-gray-900" translate="no">STERNHALMA</h1>
+              </div>
+            )}
+
+            {/* Portrait title — large title + subtitle above the wall ring */}
+            {mounted && portraitHasRoom && (
+              <div
+                className="absolute z-10 text-center"
+                style={{
+                  top: `${portraitTitleTop}px`,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: 'min(90vw, 300px)',
+                }}
+              >
+                <h1 className="text-3xl font-bold text-gray-900 mb-1" translate="no">STERNHALMA</h1>
+                <p className="text-sm italic text-gray-600">Chinese Checkers</p>
               </div>
             )}
 
