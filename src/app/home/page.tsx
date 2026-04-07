@@ -206,6 +206,7 @@ export default function HomePage() {
   const [borderVisible, setBorderVisible] = useState(true);
   const [hexScale, setHexScale] = useState(1);
   const [screenH, setScreenH] = useState(800);
+  const [isPortrait, setIsPortrait] = useState(false);
   const router = useRouter();
   const startTutorial = useTutorialStore((s) => s.startTutorial);
 
@@ -217,13 +218,14 @@ export default function HomePage() {
     const update = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const isPortrait = vh > vw;
-      // Width: on portrait phones scale up the ring so button text sits inside the wall boundary
-      const sw = isPortrait ? vw / 510 : vw / 600;
+      const portrait = vh > vw;
+      // Width: portrait phones use a smaller divisor (~0.85 scale) so buttons sit inside the wall
+      const sw = portrait ? vw / 458 : vw / 600;
       // Height: only constrain on very short screens where wall would overflow vertically
       const sh = vh < 560 ? (vh * 0.90) / 560 : 1.0;
       setHexScale(Math.min(1, Math.max(0.38, Math.min(sw, sh))));
       setScreenH(vh);
+      setIsPortrait(portrait);
     };
     update();
     window.addEventListener('resize', update);
@@ -468,20 +470,20 @@ export default function HomePage() {
         const roomAboveWall = Math.round(screenH / 2) - wallTopPx - 56;
         // title is ~84px tall (h1 48px + mb-2 8px + p ~28px)
         const TITLE_H = 84;
-        const titleAbove = !normalMode && roomAboveWall >= TITLE_H + 10;
+        // need room for title (84) + gap (8) + star (48) + gap (10) = 150 above wall
+        const titleAbove = !normalMode && roomAboveWall >= 150;
         const compactMode = !normalMode && !titleAbove;
 
-        // Title top in px from screen top (anchored 10px below title, above wall top)
+        // Title top: leave 56px below for star+gap before the wall top
         const titleTopPx = titleAbove
-          ? Math.max(56, Math.round(screenH / 2) - wallTopPx - 10 - TITLE_H)
+          ? Math.max(56, Math.round(screenH / 2) - wallTopPx - TITLE_H - 148)
           : 0;
 
         // Expanded buttons block height: play(56) + 3 modes(132) + editor(56) = 244, no bottom star
         const EXPANDED_H = 244;
-        const MARGIN = 25;
-        // In non-normal modes, push buttons high enough that expanded block stays inside wall bottom
-        const buttonsOffset = normalMode ? 91 : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
-        // Top star sits above buttons with an 8px gap; in normalMode keep original position
+        // Non-normal: play button starts 4px below the wall top ring
+        const buttonsOffset = normalMode ? 91 : wallTopPx - 4;
+        // Top star: 8px gap + 48px star above buttons → star bottom lands 4px above wall top
         const topStarOffset = normalMode ? 250 : (buttonsOffset + 8 + 48);
 
         const starSvg = (
@@ -499,8 +501,8 @@ export default function HomePage() {
 
         return (
           <>
-            {/* Top star — shown in normalMode and titleAbove, replaced by compact title in compactMode */}
-            {mounted && !compactMode && (
+            {/* Top star — shown in normalMode and titleAbove; also portrait compactMode (compact title shows above it) */}
+            {mounted && (!compactMode || isPortrait) && (
               <button
                 type="button"
                 onClick={() => setBorderVisible(v => !v)}
@@ -525,7 +527,7 @@ export default function HomePage() {
               <div
                 className="absolute z-10 text-center"
                 style={{
-                  top: `calc(50% - ${buttonsOffset + 8 + 24}px)`,
+                  top: `calc(50% - ${topStarOffset + 32}px)`,
                   left: '50%',
                   transform: 'translateX(-50%)',
                   width: 'min(90vw, 300px)',
@@ -610,8 +612,8 @@ export default function HomePage() {
                   Board Editor
                 </Link>
 
-                {/* Bottom star — only in normalMode; removed in mobile modes to give room for expanded play */}
-                {normalMode && (
+                {/* Bottom star — shown in normalMode and portrait modes (buttons are high enough to fit it) */}
+                {(normalMode || isPortrait) && (
                   <button
                     type="button"
                     onClick={() => setBorderVisible(v => !v)}
