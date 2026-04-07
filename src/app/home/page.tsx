@@ -486,14 +486,14 @@ export default function HomePage() {
         // wallTopPx = outer top vertex; innerBottomPx = inner bottom vertex of the top wall hex.
         const wallSizePx = Math.round(15 * hexScale);
         const wallInnerBottomPx = wallTopPx - 2 * wallSizePx;
-        // Portrait title: text-3xl (~36px) + mb-1 + text-sm (~20px) ≈ 60px tall
-        const PORTRAIT_TITLE_H = 60;
-        // portraitHasRoom: enough space above wall for star(48) + gap(8) + title(60) + gap(8) = 124px
-        const portraitHasRoom = isPortrait && !normalMode && roomAboveWall >= 100;
-        // Portrait: play goes just below the outer wall top with enough clearance.
+        // Portrait title: text-4xl (~44px) + mb-1 + text-base (~20px) ≈ 68px tall
+        const PORTRAIT_TITLE_H = 68;
+        // portraitHasRoom: enough space above wall for star(48) + gap(8) + title(68) + gap(8) = 132px
+        const portraitHasRoom = isPortrait && !normalMode && roomAboveWall >= 60;
+        // Portrait: play sits clearly below the wall; subtract more to push it further down.
         // Landscape/compactMode: old safe formula keeps expanded block inside the wall bottom.
         const buttonsOffset = normalMode ? 91
-          : isPortrait ? wallTopPx - 90
+          : isPortrait ? wallTopPx - 130
           : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
         // Portrait star: sits above title which sits above the wall.
         // star(48) + gap(8) + title(60) + gap(8) = 124px above wallTopPx.
@@ -568,8 +568,8 @@ export default function HomePage() {
                   width: 'min(90vw, 300px)',
                 }}
               >
-                <h1 className="text-3xl font-bold text-gray-900 mb-1" translate="no">STERNHALMA</h1>
-                <p className="text-sm italic text-gray-600">Chinese Checkers</p>
+                <h1 className="text-4xl font-bold text-gray-900 mb-1" translate="no">STERNHALMA</h1>
+                <p className="text-base italic text-gray-800">Chinese Checkers</p>
               </div>
             )}
 
