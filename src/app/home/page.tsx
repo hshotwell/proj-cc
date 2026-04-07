@@ -212,12 +212,14 @@ export default function HomePage() {
   // Dynamic hex scale — ring (±316px at scale=1 = 632px wide) fills ~97% of viewport width.
   // Height constraint only fires on very short screens (< 560px, e.g. landscape phones):
   // the wall is ±277px tall at scale=1 = 554px, so it fits any screen ≥ 560px with no scaling.
+  // Portrait phones (vh > vw) use a smaller divisor so the hex is larger and buttons fit inside.
   useEffect(() => {
     const update = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // Width: ring fills viewport width (ring node at ±316px × scale ≈ ±vw/2)
-      const sw = vw / 600;
+      const isPortrait = vh > vw;
+      // Width: on portrait phones scale up the ring so button text sits inside the wall boundary
+      const sw = isPortrait ? vw / 510 : vw / 600;
       // Height: only constrain on very short screens where wall would overflow vertically
       const sh = vh < 560 ? (vh * 0.90) / 560 : 1.0;
       setHexScale(Math.min(1, Math.max(0.38, Math.min(sw, sh))));
