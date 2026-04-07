@@ -482,11 +482,14 @@ export default function HomePage() {
         // Expanded buttons block height: play(56) + 3 modes(132) + editor(56) = 244, no bottom star
         const EXPANDED_H = 244;
         const MARGIN = 25;
-        // Wall hex pieces are ±WALL_SIZE(15px) from the ring node centers.
-        // Portrait: play sits 7px below the inner wall edge (wallTopPx-15); star sits 7px above outer edge (wallTopPx+15).
+        // Wall hex pieces are ±wallSizePx from the ring node centers (WALL_SIZE=15 scaled).
+        // wallTopPx = outer top vertex; innerBottomPx = inner bottom vertex of the top wall hex.
+        const wallSizePx = Math.round(15 * hexScale);
+        const wallInnerBottomPx = wallTopPx - 2 * wallSizePx;
+        // Portrait: play starts 20px below inner wall bottom; star sits 20px above outer wall top.
         // Landscape/compactMode: old safe formula keeps expanded block inside the wall bottom.
-        const buttonsOffset = normalMode ? 91 : isPortrait ? wallTopPx - 22 : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
-        const topStarOffset = normalMode ? 250 : isPortrait ? wallTopPx + 70 : (buttonsOffset + 8 + 48);
+        const buttonsOffset = normalMode ? 91 : isPortrait ? wallInnerBottomPx - 20 : Math.max(58, EXPANDED_H - wallTopPx + MARGIN);
+        const topStarOffset = normalMode ? 250 : isPortrait ? wallTopPx + 68 : (buttonsOffset + 8 + 48);
 
         const starSvg = (
           <svg viewBox="-100 -100 200 200" className="w-12 h-12">
