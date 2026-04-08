@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useGameStore } from './gameStore';
 import { useSettingsStore } from './settingsStore';
+import type { PieceVariant, PlayerIndex } from '@/types/game';
 
 export type TutorialTrigger =
   | 'piece-selected'       // auto when player selects a piece
@@ -32,7 +33,7 @@ interface TutorialStore {
   steps: TutorialStep[];
   /** coordKey of the AI piece the AI will never move (for the swap lesson) */
   blockedPieceKey: string | null;
-  startTutorial: () => string;
+  startTutorial: (humanColor?: string, pieceType?: PieceVariant) => string;
   nextStep: () => void;
   releaseBlockedPiece: () => void;
   endTutorial: () => void;
@@ -93,13 +94,18 @@ export const useTutorialStore = create<TutorialStore>((set) => ({
   steps: TUTORIAL_STEPS,
   blockedPieceKey: null,
 
-  startTutorial: () => {
+  startTutorial: (humanColor?: string, pieceType?: PieceVariant) => {
+    const playerPieceTypes: Partial<Record<PlayerIndex, PieceVariant>> | undefined =
+      pieceType && pieceType !== 'normal' ? { 0: pieceType } : undefined;
+
     const gameId = useGameStore.getState().startGame(
       2,
       [0, 2],
-      { 0: '#ef4444', 2: '#22d3ee' },
+      { 0: humanColor ?? '#ef4444', 2: '#22d3ee' },
       { 2: { difficulty: 'easy', personality: 'generalist' } },
-      { 0: 'You', 2: 'AI' }
+      { 0: 'You', 2: 'AI' },
+      undefined,
+      playerPieceTypes,
     );
 
     // Find player 2's front piece (q=-1, r=5) to block so the swap lesson can trigger later

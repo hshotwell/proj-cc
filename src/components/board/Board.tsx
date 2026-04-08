@@ -646,7 +646,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
 
     // Mobile forgiveness: if a piece is selected and the tapped cell is adjacent to a
     // valid destination, snap to the nearest adjacent valid move.
-    if (selectedPiece && validDestinations.length > 0) {
+    // Only applies on touch devices (not PC/mouse users).
+    if (selectedPiece && validDestinations.length > 0 && navigator.maxTouchPoints > 0) {
       const nearby = validDestinations.filter((dest) => cubeDistance(dest, coord) === 1);
       if (nearby.length > 0) {
         const tapPx = cubeToPixel(coord, HEX_SIZE);
@@ -702,8 +703,15 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
       return;
     }
 
-    // Mobile forgiveness: snap to nearest adjacent valid destination
-    if (selectedPiece && validDestinations.length > 0) {
+    // If clicking the already-selected piece, deselect it
+    if (selectedPiece && cubeEquals(coord, selectedPiece)) {
+      clearSelection();
+      return;
+    }
+
+    // Mobile forgiveness: snap to nearest adjacent valid destination.
+    // Only applies on touch devices (not PC/mouse users).
+    if (selectedPiece && validDestinations.length > 0 && navigator.maxTouchPoints > 0) {
       const nearby = validDestinations.filter((dest) => cubeDistance(dest, coord) === 1);
       if (nearby.length > 0) {
         const tapPx = cubeToPixel(coord, HEX_SIZE);
@@ -745,6 +753,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
   // SVG-level click handler: catches taps on empty space between cells and snaps to the
   // nearest valid destination. Only activates when a piece is selected and the child
   // click handlers haven't already handled the event (moveHandledRef guards this).
+  // Only applies on touch devices (not PC/mouse users).
   const handleSVGClick = (e: React.MouseEvent<SVGSVGElement>) => {
     // If a child handler already called makeMove, skip and reset the flag.
     if (moveHandledRef.current) {
@@ -753,6 +762,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
     }
     if (isReplayActive || animatingPiece || isAITurn || !gameState) return;
     if (!selectedPiece || validDestinations.length === 0) return;
+    if (navigator.maxTouchPoints === 0) return;
 
     const svg = svgRef.current;
     if (!svg) return;

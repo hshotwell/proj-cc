@@ -9,7 +9,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
 export function TurnIndicator() {
-  const { gameState } = useGameStore();
+  const { gameState, currentLayout } = useGameStore();
   const { showPlayerProgress } = useSettingsStore();
 
   if (!gameState) return null;
@@ -29,6 +29,10 @@ export function TurnIndicator() {
     ? ` border-2${color.toLowerCase() === '#ffffff' ? ' border-gray-400' : ' border-white'}`
     : '';
 
+  const puzzlePar = currentLayout?.puzzleGoalMoves;
+  // Turns completed so far (turnNumber is 1-indexed, current turn is in progress)
+  const turnsCompleted = Math.max(0, turnNumber - 1);
+
   return (
     <div className="p-4 rounded-lg shadow bg-white">
       <div className="flex items-center gap-3">
@@ -39,9 +43,26 @@ export function TurnIndicator() {
             {name}{isAI && <span className="text-gray-400 font-normal text-xs ml-1">(AI)</span>}
           </div>
         </div>
-        <div className="ml-auto text-sm text-gray-500">
-          Turn {turnNumber}
-        </div>
+        {puzzlePar ? (
+          <div className="ml-auto text-right">
+            <div className="text-sm font-semibold text-gray-700">
+              {turnsCompleted}
+              <span className="text-gray-400 font-normal"> / par {puzzlePar}</span>
+            </div>
+            {turnsCompleted > 0 && (() => {
+              const diff = turnsCompleted - puzzlePar;
+              return (
+                <div className={`text-xs font-medium ${diff < 0 ? 'text-green-600' : diff === 0 ? 'text-gray-500' : 'text-red-500'}`}>
+                  {diff > 0 ? `+${diff}` : diff === 0 ? 'even' : `${diff}`}
+                </div>
+              );
+            })()}
+          </div>
+        ) : (
+          <div className="ml-auto text-sm text-gray-500">
+            Turn {turnNumber}
+          </div>
+        )}
       </div>
       {showPlayerProgress && !isFinished && (
         <div className="mt-3 pt-3 border-t border-gray-100">

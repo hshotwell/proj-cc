@@ -8,27 +8,52 @@ import { getCSSColor } from '@/game/constants';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 import { isGameFullyOver, OPPOSITE_PLAYER } from '@/game/state';
 import { saveCompletedGame } from '@/game/persistence';
+import { savePuzzleCompletion, setTutorialComplete } from '@/game/puzzleProgress';
 import { useGameStore } from '@/store/gameStore';
 import { useReplayStore } from '@/store/replayStore';
+import { useTutorialStore } from '@/store/tutorialStore';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
 export function GameOverDialog() {
-  const { gameState, gameId, resetGame } = useGameStore();
+  const { gameState, gameId, currentLayout, resetGame } = useGameStore();
   const { loadReplayFromState } = useReplayStore();
+  const tutorialGameId = useTutorialStore((s) => s.gameId);
   const router = useRouter();
   const savedRef = useRef<string | null>(null);
 
   const isOver = gameState && isGameFullyOver(gameState);
 
-  // Auto-save on game completion
+  // Auto-save and record progress on game completion
   useEffect(() => {
     if (!isOver || !gameState || !gameId) return;
-    // Only save once per game
     if (savedRef.current === gameId) return;
     savedRef.current = gameId;
     saveCompletedGame(gameId, gameState);
-  }, [isOver, gameState, gameId]);
+
+    // Record puzzle completion
+    if (currentLayout?.puzzleGoalMoves) {
+      const seenTurns = new Map<PlayerIndex, Set<number>>();
+      for (const m of gameState.moveHistory) {
+        if (m.player !== undefined && m.turnNumber !== undefined) {
+          if (!seenTurns.has(m.player)) seenTurns.set(m.player, new Set());
+          seenTurns.get(m.player)!.add(m.turnNumber);
+        }
+      }
+      const humanPlayer = gameState.finishedPlayers[0]?.player;
+      if (humanPlayer !== undefined) {
+        const turns = seenTurns.get(humanPlayer)?.size ?? 0;
+        savePuzzleCompletion(currentLayout.id, turns, currentLayout.puzzleGoalMoves);
+      }
+    }
+
+    // Record tutorial completion — tutorial game has no custom layout and human (player 0) wins
+    if (!currentLayout && tutorialGameId === gameId) {
+      if (gameState.finishedPlayers[0]?.player === 0) {
+        setTutorialComplete();
+      }
+    }
+  }, [isOver, gameState, gameId, currentLayout, tutorialGameId]);
 
   if (!gameState || !isOver) return null;
 
@@ -118,10 +143,23 @@ export function GameOverDialog() {
             })}
           </div>
 
-          <p className="text-sm text-gray-500 mb-6">
-            Completed in {gameState.moveHistory.length} moves over{' '}
-            {Math.max(1, gameState.turnNumber - 1)} turns
-          </p>
+          {currentLayout?.puzzleGoalMoves ? (() => {
+            const goal = currentLayout.puzzleGoalMoves;
+            const diff = firstPlayerTurns - goal;
+            return (
+              <p className="text-sm text-gray-500 mb-6">
+                {firstPlayerTurns} moves &nbsp;·&nbsp; par {goal} &nbsp;·&nbsp;{' '}
+                <span className={diff <= 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'}>
+                  {diff > 0 ? `+${diff}` : diff === 0 ? 'Even' : `${diff}`}
+                </span>
+              </p>
+            );
+          })() : (
+            <p className="text-sm text-gray-500 mb-6">
+              Completed in {gameState.moveHistory.length} moves over{' '}
+              {Math.max(1, gameState.turnNumber - 1)} turns
+            </p>
+          )}
           <div className="flex flex-col gap-3">
             <button
               onClick={resetGame}
@@ -136,7 +174,11 @@ export function GameOverDialog() {
               Watch Replay
             </button>
             <button
-              onClick={() => router.push('/play')}
+              onClick={() => {
+                const isPuzzle = !!currentLayout;
+                const isTutorial = tutorialGameId === gameId;
+                router.push(isPuzzle || isTutorial ? '/practice' : '/play');
+              }}
               className="w-full px-6 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
             >
               New Game

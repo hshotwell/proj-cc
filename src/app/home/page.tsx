@@ -630,13 +630,10 @@ export default function HomePage() {
                       Online
                     </button>
                     <button
-                      onClick={() => {
-                        const gameId = startTutorial();
-                        router.push(`/game/${gameId}`);
-                      }}
+                      onClick={() => router.push('/practice')}
                       className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
                     >
-                      Tutorial
+                      Training
                     </button>
                   </div>
                 )}

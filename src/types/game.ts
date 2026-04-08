@@ -125,4 +125,6 @@ export interface BoardLayout {
   playerCountConfig?: Partial<Record<PlayerCount, PlayerIndex[]>>;
   createdAt: number;
   isDefault?: boolean;
+  // For endgame puzzles: the number of turns it took to finish in the original game (used as par/goal)
+  puzzleGoalMoves?: number;
 }
