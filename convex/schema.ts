@@ -139,4 +139,39 @@ export default defineSchema({
     fitness: v.number(),
     lastUpdated: v.number(),
   }),
+
+  // ── Endgame-specific training ───────────────────────────────────────────
+
+  // Puzzle positions stored server-side so the training action can access them.
+  endgameTrainingPuzzles: defineTable({
+    name: v.string(),
+    // Piece coordinate keys for the single active player (player 0).
+    positions: v.array(v.string()),
+    // Goal cell coordinate keys for the same player.
+    goalPositions: v.array(v.string()),
+    // Par: target turn count (at-or-under = success).
+    par: v.number(),
+    // 'seeded' | 'uploaded'
+    source: v.string(),
+    createdAt: v.number(),
+  }),
+
+  // Running state for the endgame GA (single row, upserted each step).
+  endgameTrainingState: defineTable({
+    generation: v.number(),
+    population: v.any(),
+    bestFitness: v.number(),
+    generationHistory: v.any(),
+    puzzleCount: v.number(),
+    lastUpdated: v.number(),
+  }),
+
+  // Best genome found by endgame training (single row, upserted when improved).
+  endgameEvolvedGenome: defineTable({
+    genome: v.any(),
+    generation: v.number(),
+    fitness: v.number(),
+    puzzleCount: v.number(),
+    lastUpdated: v.number(),
+  }),
 });
