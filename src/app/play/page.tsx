@@ -336,25 +336,26 @@ export default function PlayPage() {
 
         {/* Row 1: player colors + neutrals + custom picker */}
         <div className="flex gap-x-2 gap-y-1 flex-wrap items-center">
-          {DEFAULT_COLORS.map((color) => {
+          {DEFAULT_COLORS.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
             return (
-              <button
-                key={color}
-                onClick={() => handleColorSelectSafe(playerIndex, color)}
-                disabled={isTaken}
-                className={`w-7 h-7 rounded-full border-2 transition-all ${
-                  isCurrentColor ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
-                  : isTaken ? 'border-gray-300 opacity-40 cursor-not-allowed'
-                  : 'border-white shadow hover:scale-110'
-                }`}
-                style={{ backgroundColor: color }}
-                title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
-              />
+              <Fragment key={color}>
+                {idx === 5 && <div className="w-full h-0 sm:hidden" />}
+                <button
+                  onClick={() => handleColorSelectSafe(playerIndex, color)}
+                  disabled={isTaken}
+                  className={`w-7 h-7 rounded-full border-2 transition-all ${
+                    isCurrentColor ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
+                    : isTaken ? 'border-gray-300 opacity-40 cursor-not-allowed'
+                    : 'border-white shadow hover:scale-110'
+                  }`}
+                  style={{ backgroundColor: color }}
+                  title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
+                />
+              </Fragment>
             );
           })}
-          <div className="w-full h-0 sm:hidden" />
           {NEUTRAL_COLORS.map((color) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
@@ -414,7 +415,7 @@ export default function PlayPage() {
           })}
         </div>
         {/* Row 3: gems */}
-        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center">
+        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center mt-2 sm:mt-0">
           {GEM_COLORS.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
@@ -465,7 +466,7 @@ export default function PlayPage() {
           })}
         </div>
         {/* Row 5: eggs */}
-        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center">
+        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center mt-2 sm:mt-0">
           {EGG_COLORS_LIST.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
