@@ -12,6 +12,8 @@ import type * as auth from "../auth.js";
 import type * as authFunctions from "../authFunctions.js";
 import type * as cleanup from "../cleanup.js";
 import type * as crons from "../crons.js";
+import type * as endgameTraining from "../endgameTraining.js";
+import type * as endgameTrainingActions from "../endgameTrainingActions.js";
 import type * as friends from "../friends.js";
 import type * as gameInvites from "../gameInvites.js";
 import type * as games from "../games.js";
@@ -37,6 +39,8 @@ declare const fullApi: ApiFromModules<{
   authFunctions: typeof authFunctions;
   cleanup: typeof cleanup;
   crons: typeof crons;
+  endgameTraining: typeof endgameTraining;
+  endgameTrainingActions: typeof endgameTrainingActions;
   friends: typeof friends;
   gameInvites: typeof gameInvites;
   games: typeof games;
