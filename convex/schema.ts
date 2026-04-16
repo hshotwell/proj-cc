@@ -58,6 +58,16 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_userId_gameId", ["userId", "gameId"]),
 
+  inProgressLocalGames: defineTable({
+    userId: v.id("users"),
+    gameId: v.string(),
+    gameData: v.any(),
+    summary: v.any(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_gameId", ["userId", "gameId"]),
+
   passwordResetTokens: defineTable({
     userId: v.id("users"),
     token: v.string(),

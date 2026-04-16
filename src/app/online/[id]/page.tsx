@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation } from 'convex/react';
@@ -20,6 +20,7 @@ import { SettingsButton } from '@/components/SettingsButton';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { getCSSColor } from '@/game/constants';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
+import { saveCompletedGame } from '@/game/persistence';
 import type { PlayerIndex } from '@/types/game';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
@@ -43,6 +44,15 @@ function OnlineGameOverDialog({ gameId }: { gameId: Id<"onlineGames"> }) {
       router.replace(`/online/${rematchGameId}`);
     }
   }, [rematchGameId, router]);
+
+  // Save completed online game to match history (once, when game finishes)
+  const hasSavedRef = useRef(false);
+  useEffect(() => {
+    if (isFinished && gameState && !hasSavedRef.current) {
+      hasSavedRef.current = true;
+      saveCompletedGame(gameId.toString(), gameState);
+    }
+  }, [isFinished, gameState, gameId]);
 
   if (!isFinished || !gameState || !onlineGame) return null;
 

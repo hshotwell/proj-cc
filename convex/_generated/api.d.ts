@@ -22,6 +22,7 @@ import type * as layouts from "../layouts.js";
 import type * as learning from "../learning.js";
 import type * as lib_email from "../lib/email.js";
 import type * as lib_usernameValidation from "../lib/usernameValidation.js";
+import type * as localGames from "../localGames.js";
 import type * as onlineGames from "../onlineGames.js";
 import type * as presence from "../presence.js";
 import type * as training from "../training.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   learning: typeof learning;
   "lib/email": typeof lib_email;
   "lib/usernameValidation": typeof lib_usernameValidation;
+  localGames: typeof localGames;
   onlineGames: typeof onlineGames;
   presence: typeof presence;
   training: typeof training;

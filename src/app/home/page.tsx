@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useAuthStore } from '@/store/authStore';
 import { useTutorialStore } from '@/store/tutorialStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -200,6 +202,11 @@ type TrailSample = { x: number; y: number; ts: number; color: string };
 export default function HomePage() {
   const { user, isAuthenticated, isLoading } = useAuthStore();
   const { glassPieces, hopEffect, showLastMoves, animateMoves } = useSettingsStore();
+  const activeGamesData = useQuery(
+    api.onlineGames.listMyActiveGames,
+    isAuthenticated ? {} : 'skip'
+  );
+  const atGameLimit = activeGamesData?.atLimit ?? false;
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [showModes, setShowModes] = useState(false);
@@ -624,8 +631,10 @@ export default function HomePage() {
                       Local
                     </button>
                     <button
-                      onClick={() => router.push('/profile')}
-                      className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+                      onClick={() => router.push(atGameLimit ? '/profile?tab=current-games&limit=1' : '/profile')}
+                      className={`w-full px-12 py-3 text-lg rounded-full transition-colors ${
+                        atGameLimit ? 'text-gray-400' : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       Online
                     </button>

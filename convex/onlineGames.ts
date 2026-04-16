@@ -5,6 +5,35 @@ import { auth } from "./auth";
 // Default colors for player slots
 const SLOT_COLORS = ["#ef4444", "#3b82f6", "#22d3ee", "#22c55e", "#facc15", "#a855f7"];
 
+const MAX_ACTIVE_GAMES = 10;
+
+async function countActiveGamesForUser(ctx: any, userId: any): Promise<number> {
+  const hostedGames = await ctx.db
+    .query("onlineGames")
+    .withIndex("by_hostId", (q: any) => q.eq("hostId", userId))
+    .collect();
+  const hostedActive = hostedGames.filter(
+    (g: any) => g.status === "lobby" || g.status === "playing"
+  ).length;
+
+  const lobbyGames = await ctx.db
+    .query("onlineGames")
+    .withIndex("by_status", (q: any) => q.eq("status", "lobby"))
+    .collect();
+  const playingGames = await ctx.db
+    .query("onlineGames")
+    .withIndex("by_status", (q: any) => q.eq("status", "playing"))
+    .collect();
+
+  const participantActive = [...lobbyGames, ...playingGames].filter((g: any) => {
+    if (g.hostId === userId) return false;
+    const players = g.players as any[];
+    return players.some((p: any) => p.userId === userId);
+  }).length;
+
+  return hostedActive + participantActive;
+}
+
 export const createLobby = mutation({
   args: {
     playerCount: v.number(),
@@ -16,6 +45,11 @@ export const createLobby = mutation({
 
     const host = await ctx.db.get(userId);
     if (!host) throw new Error("User not found");
+
+    const activeCount = await countActiveGamesForUser(ctx, userId);
+    if (activeCount >= MAX_ACTIVE_GAMES) {
+      throw new Error(`You already have ${MAX_ACTIVE_GAMES} active games. Finish one before starting a new one.`);
+    }
 
     const receiver = await ctx.db.get(receiverId);
     if (!receiver) throw new Error("Receiver not found");
@@ -754,5 +788,72 @@ export const listActiveGames = query({
     });
 
     return [...activeGames, ...otherGames];
+  },
+});
+
+export const listMyActiveGames = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) return { games: [], count: 0, atLimit: false };
+
+    const hostedGames = await ctx.db
+      .query("onlineGames")
+      .withIndex("by_hostId", (q) => q.eq("hostId", userId))
+      .collect();
+
+    const hostedActive = hostedGames.filter(
+      (g) => g.status === "lobby" || g.status === "playing"
+    );
+
+    const lobbyGames = await ctx.db
+      .query("onlineGames")
+      .withIndex("by_status", (q) => q.eq("status", "lobby"))
+      .collect();
+
+    const playingGames = await ctx.db
+      .query("onlineGames")
+      .withIndex("by_status", (q) => q.eq("status", "playing"))
+      .collect();
+
+    const participantGames = [...lobbyGames, ...playingGames].filter((g) => {
+      if (g.hostId === userId) return false;
+      const players = g.players as any[];
+      return players.some((p: any) => p.userId === userId);
+    });
+
+    const all = [...hostedActive, ...participantGames].sort(
+      (a, b) => b.createdAt - a.createdAt
+    );
+
+    const games = all.map((g) => {
+      const players = (g.players as any[]).filter((p: any) => p.type !== "empty");
+      const isHost = g.hostId === userId;
+      const mySlot = (g.players as any[]).find((p: any) => p.userId === userId);
+      const myColor = mySlot?.color ?? null;
+      const opponentNames = players
+        .filter((p: any) => p.userId !== userId)
+        .map((p: any) => p.username ?? "Unknown");
+      const isMyTurn =
+        g.status === "playing" &&
+        (g.players as any[])[g.currentPlayerIndex ?? 0]?.userId === userId;
+
+      return {
+        id: g._id,
+        status: g.status as "lobby" | "playing",
+        playerCount: g.playerCount,
+        isHost,
+        myColor,
+        opponentNames,
+        isMyTurn,
+        createdAt: g.createdAt,
+      };
+    });
+
+    return {
+      games,
+      count: games.length,
+      atLimit: games.length >= MAX_ACTIVE_GAMES,
+    };
   },
 });

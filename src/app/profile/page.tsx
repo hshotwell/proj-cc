@@ -3,29 +3,34 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../../convex/_generated/api';
 import { AuthGuard } from '@/components/auth';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { getSavedGamesList, deleteSavedGame } from '@/game/persistence';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
 import { EXTRA_COLORS_NO_GEMS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
 import { SpecialSwatch, FlowerSwatch, EggSwatch, ColorSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { ColorPicker } from '@/components/ui/ColorPicker';
-import type { SavedGameSummary } from '@/types/replay';
 import type { Id } from '../../../convex/_generated/dataModel';
 
-type Tab = 'profile' | 'friends' | 'match-history';
+type Tab = 'profile' | 'current-games' | 'friends' | 'match-history';
 
 function ProfileContent() {
   const { user } = useAuthStore();
   const { signOut } = useAuthActions();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { darkMode, toggleDarkMode, favoriteColor, setFavoriteColor } = useSettingsStore();
 
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const tabParam = searchParams.get('tab') as Tab | null;
+  const showLimitNotice = searchParams.get('limit') === '1';
+  const [activeTab, setActiveTab] = useState<Tab>(
+    tabParam && ['profile', 'current-games', 'friends', 'match-history'].includes(tabParam)
+      ? tabParam
+      : 'profile'
+  );
 
   const handleSignOut = async () => {
     await signOut();
@@ -44,18 +49,18 @@ function ProfileContent() {
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg">
-          {(['profile', 'friends', 'match-history'] as Tab[]).map((tab) => (
+        <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg flex-wrap">
+          {(['profile', 'current-games', 'friends', 'match-history'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                 activeTab === tab
                   ? 'bg-white text-gray-900 shadow'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              {tab === 'match-history' ? 'Match History' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'match-history' ? 'History' : tab === 'current-games' ? 'Games' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
@@ -289,6 +294,7 @@ function ProfileContent() {
           </div>
         )}
 
+        {activeTab === 'current-games' && <CurrentGamesTab showLimitNotice={showLimitNotice} />}
         {activeTab === 'friends' && <FriendsTab />}
         {activeTab === 'match-history' && <MatchHistoryTab />}
       </div>
@@ -296,18 +302,179 @@ function ProfileContent() {
   );
 }
 
+function CurrentGamesTab({ showLimitNotice }: { showLimitNotice: boolean }) {
+  const [subTab, setSubTab] = useState<'local' | 'online'>('online');
+
+  return (
+    <div className="space-y-3">
+      {/* Sub-tab switcher */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+        {(['online', 'local'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setSubTab(t)}
+            className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              subTab === t ? 'bg-white text-gray-900 shadow' : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'online' && <OnlineGamesSubTab showLimitNotice={showLimitNotice} />}
+      {subTab === 'local' && <LocalGamesSubTab />}
+    </div>
+  );
+}
+
+function OnlineGamesSubTab({ showLimitNotice }: { showLimitNotice: boolean }) {
+  const router = useRouter();
+  const result = useQuery(api.onlineGames.listMyActiveGames);
+  const abandonGame = useMutation(api.onlineGames.abandonGame);
+
+  if (!result) {
+    return <div className="bg-white rounded-xl shadow-lg p-6 text-sm text-gray-500">Loading...</div>;
+  }
+
+  const { games, count, atLimit } = result;
+
+  return (
+    <div className="space-y-3">
+      {(atLimit || showLimitNotice) && (
+        <p className="text-sm text-gray-500 px-1">
+          You can have at most 10 ongoing online games. Finish or abandon one to start a new one.
+        </p>
+      )}
+      {games.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <p className="text-sm text-gray-500">No active online games. Challenge a friend to get started!</p>
+        </div>
+      ) : (
+        <>
+          <div className="text-xs text-gray-500 px-1">{count} / 10 active games</div>
+          {games.map((game) => {
+            const isLobby = game.status === 'lobby';
+            const href = isLobby ? `/lobby/${game.id}` : `/online/${game.id}`;
+            const opponentText = game.opponentNames.length > 0
+              ? game.opponentNames.join(', ')
+              : 'No opponents yet';
+            const dateStr = new Date(game.createdAt).toLocaleDateString(undefined, {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            });
+            return (
+              <div key={game.id} className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    onClick={() => router.push(href)}
+                    className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity"
+                  >
+                    {game.myColor && <ColorSwatch color={game.myColor} className="w-5 h-5 flex-shrink-0" />}
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900 text-sm truncate">
+                        {game.playerCount}-player game &middot; vs {opponentText}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                          isLobby ? 'bg-blue-50 text-blue-700'
+                          : game.isMyTurn ? 'bg-green-50 text-green-700'
+                          : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {isLobby ? 'Lobby' : game.isMyTurn ? 'Your turn' : 'In progress'}
+                        </span>
+                        <span className="text-xs text-gray-400">{dateStr}</span>
+                        {game.isHost && <span className="text-xs text-gray-400">Host</span>}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => void abandonGame({ gameId: game.id })}
+                    className="text-gray-400 hover:text-red-500 transition-colors p-1 flex-shrink-0"
+                    title="Abandon game"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+function LocalGamesSubTab() {
+  const router = useRouter();
+  const games = useQuery(api.localGames.listInProgress) ?? [];
+  const deleteGame = useMutation(api.localGames.deleteInProgress);
+
+  if (games.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <p className="text-sm text-gray-500">No active local games. Start a local or practice game to see it here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-gray-500 px-1">{games.length} / 10 active games</div>
+      {games.map((game: any) => {
+        const dateStr = new Date(game.updatedAt).toLocaleDateString(undefined, {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+        const hasAI = game.aiPlayers && Object.keys(game.aiPlayers).length > 0;
+        const playerColors: Record<number, string> = game.playerColors ?? {};
+        const myColor = playerColors[0] ?? null;
+
+        return (
+          <div key={game.gameId} className="bg-white rounded-lg shadow p-4">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => router.push(`/game/${game.gameId}`)}
+                className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity"
+              >
+                {myColor && <ColorSwatch color={myColor} className="w-5 h-5 flex-shrink-0" />}
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-900 text-sm truncate">
+                    {game.playerCount}-player game{hasAI ? ' vs AI' : ''}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-600">
+                      Turn {game.turnNumber ?? '?'}
+                    </span>
+                    <span className="text-xs text-gray-400">{dateStr}</span>
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => void deleteGame({ gameId: game.gameId })}
+                className="text-gray-400 hover:text-red-500 transition-colors p-1 flex-shrink-0"
+                title="Remove game"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MatchHistoryTab() {
   const router = useRouter();
-  const [games, setGames] = useState<SavedGameSummary[]>([]);
-
-  useEffect(() => {
-    setGames(getSavedGamesList());
-  }, []);
+  const games = useQuery(api.games.listGames) ?? [];
+  const deleteGame = useMutation(api.games.deleteGame);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteSavedGame(id);
-    setGames(getSavedGamesList());
+    void deleteGame({ gameId: id });
   };
 
   if (games.length === 0) {

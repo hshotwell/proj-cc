@@ -66,6 +66,19 @@ export const saveGame = mutation({
         gameData,
         summary,
       });
+
+      // Enforce 50-game limit: delete oldest games if over the cap
+      const allGames = await ctx.db
+        .query("savedGames")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .order("asc")
+        .collect();
+
+      if (allGames.length > 50) {
+        for (const old of allGames.slice(0, allGames.length - 50)) {
+          await ctx.db.delete(old._id);
+        }
+      }
     }
 
     return { success: true };
