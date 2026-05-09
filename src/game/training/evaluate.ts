@@ -14,6 +14,11 @@ export const DEFAULT_GENOME: Genome = {
   centerControl: 1.0,
   blocking: 1.0,
   jumpPotential: 0.5,
+  // Pattern weights
+  chainDepth: 1.0,
+  pathClearance: 1.0,
+  formationSpread: 0.5,
+  vanguardBonus: 1.0,
   // Scoring constants (from evaluatePosition)
   stragglerDivisor: 5,
   centerPieceValue: 3,

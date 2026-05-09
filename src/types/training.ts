@@ -5,6 +5,11 @@ export interface Genome {
   centerControl: number;
   blocking: number;
   jumpPotential: number;
+  // Pattern weights (board-agnostic)
+  chainDepth: number;
+  pathClearance: number;
+  formationSpread: number;
+  vanguardBonus: number;
   // Scoring constants
   stragglerDivisor: number;
   centerPieceValue: number;
