@@ -5,8 +5,9 @@ import {
   computePathClearance,
   computeFormationSpread,
   computeVanguardBonus,
+  DEFAULT_GENOME,
 } from '@/game/training/evaluate';
-import { scorePuzzleResult } from '@/game/training/endgameRunner';
+import { scorePuzzleResult, runEndgamePuzzle } from '@/game/training/endgameRunner';
 
 function makeBoard(
   pieces: Array<{ q: number; r: number; player: number }>,
@@ -146,5 +147,21 @@ describe('scorePuzzleResult', () => {
 
   it('returns 0 when far over par (20 turns on par 10)', () => {
     expect(scorePuzzleResult(true, 20, 10)).toBe(0);
+  });
+});
+
+describe('runEndgamePuzzle (beam search)', () => {
+  const GOAL = ['1,4','2,3','3,2','4,1','4,2','3,3','2,4','4,3','4,4','3,4'];
+  // "Nearly Done": 9 in goal, 1 piece 1-2 hops out
+  const positions = ['2,3','3,2','4,1','4,2','3,3','2,4','4,3','4,4','3,4','0,3'];
+
+  it('solves a simple puzzle', () => {
+    const result = runEndgamePuzzle(positions, GOAL, 2, DEFAULT_GENOME);
+    expect(result.solved).toBe(true);
+  });
+
+  it('solves in a reasonable number of turns (<= par x 3)', () => {
+    const result = runEndgamePuzzle(positions, GOAL, 2, DEFAULT_GENOME);
+    expect(result.turnsUsed).toBeLessThanOrEqual(6);
   });
 });
