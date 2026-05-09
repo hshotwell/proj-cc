@@ -42,3 +42,43 @@ export function getServerEvolvedGenome(): Genome | null {
   }
   return cachedGenome;
 }
+
+// Endgame genome cache
+let cachedEndgameGenome: Genome | null = null;
+let endgameCacheTimestamp = 0;
+let endgameFetchPromise: Promise<Genome | null> | null = null;
+
+async function fetchEndgameGenome(): Promise<Genome | null> {
+  try {
+    const client = getConvexClientOrNull();
+    if (!client) return cachedEndgameGenome;
+
+    const result = await client.query(api.endgameTraining.getEndgameEvolvedGenome);
+    if (result) {
+      cachedEndgameGenome = result.genome as Genome;
+      endgameCacheTimestamp = Date.now();
+    }
+    return cachedEndgameGenome;
+  } catch (e) {
+    console.warn('[EndgameGenome] Failed to fetch:', e);
+    return cachedEndgameGenome; // Return stale cache on error
+  }
+}
+
+/**
+ * Get the server-evolved endgame genome synchronously (for use in AI evaluation hot path).
+ * Returns null if no cached data available.
+ * Triggers async refresh in background if cache is stale.
+ */
+export function getServerEndgameGenome(): Genome | null {
+  const now = Date.now();
+  if (now - endgameCacheTimestamp > CACHE_TTL) {
+    // Trigger background refresh (deduplicated)
+    if (!endgameFetchPromise) {
+      endgameFetchPromise = fetchEndgameGenome().finally(() => {
+        endgameFetchPromise = null;
+      });
+    }
+  }
+  return cachedEndgameGenome;
+}

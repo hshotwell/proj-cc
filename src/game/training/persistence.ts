@@ -1,5 +1,5 @@
 import type { Genome, Individual, TrainingConfig, GenerationResult } from '@/types/training';
-import { getServerEvolvedGenome } from '@/hooks/useEvolvedGenome';
+import { getServerEvolvedGenome, getServerEndgameGenome } from '@/hooks/useEvolvedGenome';
 
 const STORAGE_KEY = 'chinese-checkers-evolved-ai';
 const SESSION_KEY = 'chinese-checkers-training-session';
@@ -25,6 +25,12 @@ export function loadEvolvedGenome(): Genome | null {
   } catch {
     return null;
   }
+}
+
+export function loadEndgameGenome(): Genome | null {
+  const serverGenome = getServerEndgameGenome();
+  if (serverGenome) return serverGenome;
+  return null; // No local fallback — if not loaded yet, caller uses hardcoded weights
 }
 
 export function hasEvolvedGenome(): boolean {
