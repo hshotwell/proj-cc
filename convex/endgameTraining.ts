@@ -39,6 +39,36 @@ export const seedPuzzles = internalMutation({
 });
 
 /**
+ * Internal mutation: insert any puzzles not already in the DB (by name).
+ * Safe to call multiple times — idempotent by name.
+ */
+export const addMissingPuzzles = internalMutation({
+  args: {
+    puzzles: v.array(
+      v.object({
+        name: v.string(),
+        positions: v.array(v.string()),
+        goalPositions: v.array(v.string()),
+        par: v.number(),
+        source: v.string(),
+        createdAt: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, { puzzles }) => {
+    for (const puzzle of puzzles) {
+      const existing = await ctx.db
+        .query('endgameTrainingPuzzles')
+        .filter((q) => q.eq(q.field('name'), puzzle.name))
+        .first();
+      if (!existing) {
+        await ctx.db.insert('endgameTrainingPuzzles', puzzle);
+      }
+    }
+  },
+});
+
+/**
  * Public mutation: upload a puzzle from the client (extracted from a real game).
  * Idempotent by name — won't insert a duplicate.
  */

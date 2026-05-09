@@ -74,6 +74,76 @@ const SEED_PUZZLES = [
     par: 12,
     source: 'seeded',
   },
+  {
+    name: 'Endgame Seed · Last Mile',
+    positions: ['2,3','3,2','4,1','4,2','3,3','2,4','4,3','4,4','3,4','-1,2'],
+    goalPositions: GOAL,
+    par: 4,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Corner Entry',
+    positions: ['1,4','3,2','4,1','4,2','3,3','2,4','4,3','4,4','3,4','-1,3'],
+    goalPositions: GOAL,
+    par: 3,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Straggler Crisis',
+    positions: ['3,2','4,1','4,2','3,3','2,4','4,3','4,4','3,4','0,3','4,-5'],
+    goalPositions: GOAL,
+    par: 8,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Traffic Jam',
+    positions: ['4,1','4,2','3,3','2,4','4,3','4,4','3,4','0,3','1,3','0,4'],
+    goalPositions: GOAL,
+    par: 4,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Chain Ladder',
+    positions: ['4,1','4,2','3,3','2,4','4,3','4,4','-1,1','0,2','1,2','0,3'],
+    goalPositions: GOAL,
+    par: 5,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Two Waves',
+    positions: ['3,3','2,4','4,3','4,4','3,4','0,3','1,2','2,1','1,-1','0,-1'],
+    goalPositions: GOAL,
+    par: 10,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · The Bottleneck',
+    positions: ['4,2','3,3','4,3','4,4','3,4','0,3','1,3','0,4','1,2','0,2'],
+    goalPositions: GOAL,
+    par: 8,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Spread Out',
+    positions: ['4,3','4,4','3,4','2,4','0,3','2,1','0,0','1,-1','-1,1','2,-1'],
+    goalPositions: GOAL,
+    par: 14,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Long Road',
+    positions: ['4,4','3,4','0,3','1,2','-1,2','2,1','1,1','0,0','1,-1','2,-1'],
+    goalPositions: GOAL,
+    par: 20,
+    source: 'seeded',
+  },
+  {
+    name: 'Endgame Seed · Full Approach',
+    positions: ['0,0','1,0','0,1','-1,1','1,-1','2,0','-1,0','0,-1','1,1','-1,2'],
+    goalPositions: GOAL,
+    par: 25,
+    source: 'seeded',
+  },
 ];
 
 // ── Main action ───────────────────────────────────────────────────────────────
@@ -90,9 +160,9 @@ const SEED_PUZZLES = [
  *       – Save state and best genome after each generation.
  *  4. Stops early if approaching the Convex 2-minute action time limit.
  *
- * Compute budget: ~5 gens × 8 genomes × 8 puzzles ≈ 320 greedy puzzle runs
- * per invocation. Each run completes in <10 ms → <5 s total per action.
- * At 24 invocations/day with 256 MB RAM: ~0.008 GB-hours/day. Well under 0.5 GB.
+ * Compute budget: ~5 gens × 8 genomes × 15 puzzles ≈ 600 beam-search puzzle runs
+ * per invocation (~15–20 s). At 8 invocations/day (180-min cron) with 256 MB RAM:
+ * ~0.65 GB-hours/month. Under the 1 GB-hour/month limit.
  */
 export const runEndgameTrainingStep = internalAction({
   args: {},
@@ -105,12 +175,13 @@ export const runEndgameTrainingStep = internalAction({
         internal.endgameTraining.getPuzzleCount
       );
 
+      // Always run addMissingPuzzles so new puzzles are added to existing deployments
+      await ctx.runMutation(internal.endgameTraining.addMissingPuzzles, {
+        puzzles: SEED_PUZZLES.map((p) => ({ ...p, createdAt: Date.now() })),
+      });
       if (puzzleCount === 0) {
-        await ctx.runMutation(internal.endgameTraining.seedPuzzles, {
-          puzzles: SEED_PUZZLES.map((p) => ({ ...p, createdAt: Date.now() })),
-        });
         console.log(`[EndgameTraining] Seeded ${SEED_PUZZLES.length} puzzles`);
-        return; // Next invocation picks up with training
+        return; // Next invocation starts training
       }
 
       // ── 2. Load puzzles ────────────────────────────────────────────────
