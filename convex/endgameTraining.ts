@@ -58,11 +58,11 @@ export const addMissingPuzzles = internalMutation({
   handler: async (ctx, { puzzles }) => {
     for (const puzzle of puzzles) {
       const existing = await ctx.db
-        .query('endgameTrainingPuzzles')
-        .filter((q) => q.eq(q.field('name'), puzzle.name))
+        .query("endgameTrainingPuzzles")
+        .filter((q) => q.eq(q.field("name"), puzzle.name))
         .first();
       if (!existing) {
-        await ctx.db.insert('endgameTrainingPuzzles', puzzle);
+        await ctx.db.insert("endgameTrainingPuzzles", puzzle);
       }
     }
   },

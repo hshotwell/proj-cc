@@ -25,7 +25,9 @@ const CONFIG = {
 };
 
 // ── Seed puzzles ──────────────────────────────────────────────────────────────
-// Player 0 goal zone = player 3's starting positions (bottom-right triangle).
+// Goal zone = player 3's starting triangle (bottom-right corner).
+// Note: this is NOT player 0's standard opposite goal; these puzzles use a fixed
+// goal zone defined explicitly in goalPositions, bypassing OPPOSITE_PLAYER.
 // All positions are valid board cells (standard 121-cell board).
 // Pieces listed: (in-goal cells first, then approaching pieces).
 
