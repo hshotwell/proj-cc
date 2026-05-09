@@ -146,6 +146,14 @@ export function loadSavedGame(id: string): SavedGameData | null {
     const raw = localStorage.getItem(GAME_DATA_PREFIX + id);
     if (!raw) return null;
     const data = JSON.parse(raw) as SavedGameData;
+    // Migrate legacy 'evolved' difficulty to 'hard'
+    if (data.initialConfig.aiPlayers) {
+      for (const config of Object.values(data.initialConfig.aiPlayers)) {
+        if (config && (config.difficulty as string) === 'evolved') {
+          config.difficulty = 'hard';
+        }
+      }
+    }
     // Restore s coordinates for CubeCoords
     data.moves = data.moves.map(m => ({
       ...m,
@@ -188,7 +196,17 @@ export async function getSavedGamesListFromCloud(): Promise<SavedGameSummary[]> 
 }
 
 export async function loadSavedGameFromCloud(id: string): Promise<SavedGameData | null> {
-  return cloudGameStorage.loadGame(id);
+  const data = await cloudGameStorage.loadGame(id);
+  if (!data) return null;
+  // Migrate legacy 'evolved' difficulty to 'hard'
+  if (data.initialConfig.aiPlayers) {
+    for (const config of Object.values(data.initialConfig.aiPlayers)) {
+      if (config && (config.difficulty as string) === 'evolved') {
+        config.difficulty = 'hard';
+      }
+    }
+  }
+  return data;
 }
 
 // Merge local and cloud game lists

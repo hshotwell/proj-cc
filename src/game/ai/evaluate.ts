@@ -7,7 +7,7 @@ import { DIRECTIONS } from '../constants';
 import { canJumpOver } from '../moves';
 import { computePlayerProgress } from '../progress';
 import { getWorstAssignmentCost } from '../pathfinding';
-import { loadEvolvedGenome } from '../training/persistence';
+import { loadEndgameGenome } from '../training/persistence';
 import { evaluateWithGenome } from '../training/evaluate';
 import { getCachedLearnedWeights, getCachedEndgameInsights } from '../learning';
 
@@ -207,13 +207,14 @@ export function evaluatePosition(
   personality: AIPersonality,
   difficulty: AIDifficulty = 'hard'
 ): number {
-  // Delegate to genome-based evaluation for evolved difficulty
-  if (difficulty === 'evolved') {
-    const genome = loadEvolvedGenome();
-    if (genome) {
-      return evaluateWithGenome(state, player, genome);
+  // In endgame phase, all difficulties use the puzzle-trained endgame genome
+  const inGoal = countPiecesInGoal(state, player);
+  if (inGoal >= 7) {
+    const endgameGenome = loadEndgameGenome();
+    if (endgameGenome) {
+      return evaluateWithGenome(state, player, endgameGenome);
     }
-    // Fall back to hard/generalist if no genome saved
+    // Fall through to personality-based evaluation if genome not yet loaded
   }
 
   const pieces = getPlayerPieces(state, player);
@@ -225,7 +226,6 @@ export function evaluatePosition(
   const weights = PERSONALITY_WEIGHTS[personality];
 
   // 1. Progress score: pieces already in goal (0-100)
-  const inGoal = countPiecesInGoal(state, player);
   const progressScore = inGoal * 10;
 
   // 2. Calibrated distance progress score (0-100)
