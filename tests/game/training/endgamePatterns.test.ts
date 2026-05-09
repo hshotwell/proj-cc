@@ -6,6 +6,7 @@ import {
   computeFormationSpread,
   computeVanguardBonus,
 } from '@/game/training/evaluate';
+import { scorePuzzleResult } from '@/game/training/endgameRunner';
 
 function makeBoard(
   pieces: Array<{ q: number; r: number; player: number }>,
@@ -117,9 +118,12 @@ describe('computePathClearance', () => {
   });
 });
 
-import { scorePuzzleResult } from '@/game/training/endgameRunner';
-
 describe('scorePuzzleResult', () => {
+  it('returns par*100 when turnsUsed is 0 (division guard)', () => {
+    // Math.max(1, 0) prevents division by zero; result is par/1 * 100
+    expect(scorePuzzleResult(true, 0, 10)).toBe(1000);
+  });
+
   it('returns 0 for unsolved', () => {
     expect(scorePuzzleResult(false, 99, 10)).toBe(0);
   });
