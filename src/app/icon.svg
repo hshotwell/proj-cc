@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-100 -100 200 200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-80 -80 160 160">
   <!-- Center hexagon -->
-  <polygon points="-17.5,-30.3 17.5,-30.3 35,0 17.5,30.3 -17.5,30.3 -35,0" fill="white"/>
+  <polygon points="-17.5,-30.3 17.5,-30.3 35,0 17.5,30.3 -17.5,30.3 -35,0" fill="black"/>
   <!-- Star triangles with starting colors -->
   <polygon points="-17.5,-30.3 17.5,-30.3 0,-70" fill="#ef4444"/>
   <polygon points="17.5,-30.3 35,0 60.6,-35" fill="#facc15"/>
