@@ -6,7 +6,7 @@ const crons = cronJobs();
 // General GA training — paused in favour of endgame-specific training
 // crons.interval("ai training step", { minutes: 30 }, internal.trainingActions.runTrainingStep);
 
-// Endgame training: runs every 60 minutes, < 0.5 GB action compute / day
-crons.interval("endgame training step", { minutes: 60 }, internal.endgameTrainingActions.runEndgameTrainingStep);
+// Endgame training: runs every 180 minutes (~0.65 GB-hours/month with beam search)
+crons.interval("endgame training step", { minutes: 180 }, internal.endgameTrainingActions.runEndgameTrainingStep);
 
 export default crons;

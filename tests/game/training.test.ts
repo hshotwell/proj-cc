@@ -21,9 +21,9 @@ import { DEFAULT_TRAINING_CONFIG } from '@/types/training';
 import type { Individual } from '@/types/training';
 
 describe('DEFAULT_GENOME', () => {
-  it('has all 15 expected fields', () => {
+  it('has all 19 expected fields', () => {
     const keys = Object.keys(DEFAULT_GENOME);
-    expect(keys).toHaveLength(15);
+    expect(keys).toHaveLength(19);
     expect(DEFAULT_GENOME.progress).toBe(3.0);
     expect(DEFAULT_GENOME.goalDistance).toBe(2.5);
     expect(DEFAULT_GENOME.centerControl).toBe(1.0);
@@ -37,10 +37,10 @@ describe('DEFAULT_GENOME', () => {
 });
 
 describe('createRandomGenome', () => {
-  it('returns a genome with all 15 fields', () => {
+  it('returns a genome with all 19 fields', () => {
     const genome = createRandomGenome();
     const keys = Object.keys(genome);
-    expect(keys).toHaveLength(15);
+    expect(keys).toHaveLength(19);
   });
 
   it('produces genomes that differ from the default', () => {
