@@ -25,7 +25,9 @@ export const cloudSettingsStorage: SettingsStorageProvider = {
 
   async save(settings: SyncableSettings): Promise<void> {
     try {
-      await convexClient.mutation(api.users.saveSettings, settings);
+      // hopEffect is local-only and not stored in the cloud schema
+      const { hopEffect: _, ...cloudSettings } = settings;
+      await convexClient.mutation(api.users.saveSettings, cloudSettings);
     } catch (e) {
       console.error('Failed to save settings to cloud:', e);
     }
