@@ -77,21 +77,32 @@ export interface StoredPuzzle {
 }
 
 /**
+ * Score a single puzzle result.
+ * - unsolved → 0
+ * - solved > par → max(0, 100 − (turns − par) × 10)
+ * - solved ≤ par → 100 × (par / turnsUsed)  [uncapped — ratio-based]
+ */
+export function scorePuzzleResult(
+  solved: boolean,
+  turnsUsed: number,
+  par: number
+): number {
+  if (!solved) return 0;
+  if (turnsUsed <= par) {
+    return (par / Math.max(1, turnsUsed)) * 100;
+  }
+  return Math.max(0, 100 - (turnsUsed - par) * 10);
+}
+
+/**
  * Score a genome across a set of puzzles.
- *
- * Per-puzzle scoring:
- *   solved ≤ par  → 100 + (par − turns) × 5   (bonus for beating par)
- *   solved > par  → max(0, 100 − (turns − par) × 15)
- *   unsolved      → 0
- *
- * Returns the mean score across all puzzles (0–125 range per puzzle).
+ * Returns the mean score across all puzzles.
  */
 export function scoreGenomeOnPuzzles(
   genome: Genome,
   puzzles: StoredPuzzle[]
 ): number {
   if (puzzles.length === 0) return 0;
-
   let total = 0;
   for (const puzzle of puzzles) {
     const { solved, turnsUsed } = runEndgamePuzzle(
@@ -100,13 +111,7 @@ export function scoreGenomeOnPuzzles(
       puzzle.par,
       genome
     );
-    if (!solved) {
-      total += 0;
-    } else if (turnsUsed <= puzzle.par) {
-      total += 100 + (puzzle.par - turnsUsed) * 5;
-    } else {
-      total += Math.max(0, 100 - (turnsUsed - puzzle.par) * 15);
-    }
+    total += scorePuzzleResult(solved, turnsUsed, puzzle.par);
   }
   return total / puzzles.length;
 }

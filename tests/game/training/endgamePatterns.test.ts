@@ -116,3 +116,31 @@ describe('computePathClearance', () => {
       .toBeGreaterThanOrEqual(computePathClearance([piece], goalCenter, goalSet, blockedBoard));
   });
 });
+
+import { scorePuzzleResult } from '@/game/training/endgameRunner';
+
+describe('scorePuzzleResult', () => {
+  it('returns 0 for unsolved', () => {
+    expect(scorePuzzleResult(false, 99, 10)).toBe(0);
+  });
+
+  it('returns 100 for exactly hitting par', () => {
+    expect(scorePuzzleResult(true, 10, 10)).toBe(100);
+  });
+
+  it('returns 200 for finishing in half par time', () => {
+    expect(scorePuzzleResult(true, 5, 10)).toBe(200);
+  });
+
+  it('returns > 100 for beating par', () => {
+    expect(scorePuzzleResult(true, 8, 10)).toBeGreaterThan(100);
+  });
+
+  it('returns < 100 for finishing over par', () => {
+    expect(scorePuzzleResult(true, 12, 10)).toBeLessThan(100);
+  });
+
+  it('returns 0 when far over par (20 turns on par 10)', () => {
+    expect(scorePuzzleResult(true, 20, 10)).toBe(0);
+  });
+});
