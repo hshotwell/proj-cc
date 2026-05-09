@@ -1,10 +1,126 @@
-import type { GameState, PlayerIndex, Move } from '@/types/game';
+import type { GameState, PlayerIndex, Move, CubeCoord } from '@/types/game';
 import type { Genome } from '@/types/training';
 import { getPlayerPieces } from '../setup';
 import { getGoalPositionsForState, countPiecesInGoal, applyMove } from '../state';
 import { cubeDistance, centroid, cubeAdd, coordKey } from '../coordinates';
 import { getAllValidMoves } from '../moves';
 import { DIRECTIONS } from '../constants';
+
+// ── Pattern scoring helpers ────────────────────────────────────────────────
+
+/** Recursively find the maximum chain-jump depth reachable from `from`. */
+function getMaxChainDepth(
+  from: CubeCoord,
+  board: Map<string, { type: string }>,
+  visited: Set<string>
+): number {
+  const newVisited = new Set(visited);
+  newVisited.add(coordKey(from));
+  let max = 0;
+  for (const dir of DIRECTIONS) {
+    const over = cubeAdd(from, dir);
+    const land = cubeAdd(over, dir);
+    const landKey = coordKey(land);
+    if (newVisited.has(landKey)) continue;
+    const overContent = board.get(coordKey(over));
+    const landContent = board.get(landKey);
+    if (overContent?.type === 'piece' && (!landContent || landContent.type === 'empty')) {
+      const deeper = getMaxChainDepth(land, board, newVisited);
+      max = Math.max(max, 1 + deeper);
+    }
+  }
+  return max;
+}
+
+/**
+ * Sum of max chain-jump depth across all pieces.
+ * Exported for testing.
+ */
+export function computeChainDepth(
+  pieces: CubeCoord[],
+  board: Map<string, { type: string }>
+): number {
+  let total = 0;
+  for (const piece of pieces) {
+    total += getMaxChainDepth(piece, board, new Set());
+  }
+  return total;
+}
+
+/**
+ * For each non-goal piece, count how many move options (steps + jump landings)
+ * are closer to goal and currently empty. More open options = more clearance.
+ * Exported for testing.
+ */
+export function computePathClearance(
+  pieces: CubeCoord[],
+  goalCenter: CubeCoord,
+  goalSet: Set<string>,
+  board: Map<string, { type: string }>
+): number {
+  let total = 0;
+  for (const piece of pieces) {
+    if (goalSet.has(coordKey(piece))) continue;
+    const distToGoal = cubeDistance(piece, goalCenter);
+    let openOptions = 0;
+    for (const dir of DIRECTIONS) {
+      const adj = cubeAdd(piece, dir);
+      const adjContent = board.get(coordKey(adj));
+      if (adjContent?.type === 'piece') {
+        const landing = cubeAdd(adj, dir);
+        const landContent = board.get(coordKey(landing));
+        if (
+          (!landContent || landContent.type === 'empty') &&
+          cubeDistance(landing, goalCenter) < distToGoal
+        ) {
+          openOptions++;
+        }
+      } else if (!adjContent || adjContent.type === 'empty') {
+        if (cubeDistance(adj, goalCenter) < distToGoal) {
+          openOptions++;
+        }
+      }
+    }
+    total += openOptions;
+  }
+  return total;
+}
+
+/**
+ * Standard deviation of piece positions from group centroid.
+ * Higher = more spread out (penalised by genome.formationSpread).
+ * Exported for testing.
+ */
+export function computeFormationSpread(pieces: CubeCoord[]): number {
+  if (pieces.length < 2) return 0;
+  const cx = pieces.reduce((s, p) => s + p.q, 0) / pieces.length;
+  const cy = pieces.reduce((s, p) => s + p.r, 0) / pieces.length;
+  const variance =
+    pieces.reduce((s, p) => {
+      const dx = p.q - cx;
+      const dy = p.r - cy;
+      return s + dx * dx + dy * dy;
+    }, 0) / pieces.length;
+  return Math.sqrt(variance);
+}
+
+/**
+ * Bell-curve bonus for having a lead piece 2–4 cells ahead of group average.
+ * Peaks at gap=3, falls off for leaders that are too close or too far ahead.
+ * Exported for testing.
+ */
+export function computeVanguardBonus(
+  pieces: CubeCoord[],
+  goalCenter: CubeCoord
+): number {
+  if (pieces.length < 2) return 0;
+  const distances = pieces.map((p) => cubeDistance(p, goalCenter));
+  const avgDist = distances.reduce((a, b) => a + b, 0) / distances.length;
+  const minDist = Math.min(...distances);
+  const gap = avgDist - minDist;
+  // Bell curve: peak at gap=3, sigma=2
+  return Math.exp(-((gap - 3) ** 2) / 8);
+}
 
 // Default genome: extracted from hard/generalist values
 export const DEFAULT_GENOME: Genome = {
@@ -100,6 +216,27 @@ export function evaluateWithGenome(
     );
   }
 
+  // 7. Chain depth — actual jump chain potential
+  const chainDepthScore = computeChainDepth(
+    pieces,
+    state.board as unknown as Map<string, { type: string }>
+  );
+
+  // 8. Path clearance — open routes toward goal
+  const goalSet = new Set(goalPositions.map(coordKey));
+  const pathClearanceScore = computePathClearance(
+    pieces,
+    goalCenter,
+    goalSet,
+    state.board as unknown as Map<string, { type: string }>
+  );
+
+  // 9. Formation spread — penalise scattered pieces
+  const spreadScore = computeFormationSpread(pieces);
+
+  // 10. Vanguard bonus — reward useful lead piece
+  const vanguardScore = computeVanguardBonus(pieces, goalCenter);
+
   // Endgame focus
   const endgame = inGoal >= genome.endgameThreshold || state.winner !== null;
   const wProgress = endgame ? genome.progress * 2 : genome.progress;
@@ -108,6 +245,10 @@ export function evaluateWithGenome(
   const wCenter = endgame ? 0 : genome.centerControl;
   const wBlocking = endgame ? 0 : genome.blocking;
   const wJumpPotential = endgame ? 0 : genome.jumpPotential;
+  const wChainDepth = endgame ? genome.chainDepth * 1.5 : genome.chainDepth;
+  const wPathClearance = endgame ? genome.pathClearance * 1.5 : genome.pathClearance;
+  const wFormationSpread = genome.formationSpread;
+  const wVanguard = genome.vanguardBonus;
 
   return (
     wProgress * progressScore +
@@ -115,7 +256,11 @@ export function evaluateWithGenome(
     wStraggler * stragglerScore +
     wCenter * centerControlScore +
     wBlocking * blockingScore +
-    wJumpPotential * jumpPotentialScore
+    wJumpPotential * jumpPotentialScore +
+    wChainDepth * chainDepthScore +
+    wPathClearance * pathClearanceScore -
+    wFormationSpread * spreadScore +
+    wVanguard * vanguardScore
   );
 }
 
