@@ -1,4 +1,4 @@
-import type { GameState, PlayerIndex, Move, CubeCoord } from '@/types/game';
+import type { GameState, PlayerIndex, Move, CubeCoord, CellContent } from '@/types/game';
 import type { Genome } from '@/types/training';
 import { getPlayerPieces } from '../setup';
 import { getGoalPositionsForState, countPiecesInGoal, applyMove } from '../state';
@@ -11,7 +11,7 @@ import { DIRECTIONS } from '../constants';
 /** Recursively find the maximum chain-jump depth reachable from `from`. */
 function getMaxChainDepth(
   from: CubeCoord,
-  board: Map<string, { type: string }>,
+  board: Map<string, CellContent>,
   visited: Set<string>
 ): number {
   const newVisited = new Set(visited);
@@ -24,7 +24,7 @@ function getMaxChainDepth(
     if (newVisited.has(landKey)) continue;
     const overContent = board.get(coordKey(over));
     const landContent = board.get(landKey);
-    if (overContent?.type === 'piece' && (!landContent || landContent.type === 'empty')) {
+    if (overContent?.type === 'piece' && landContent?.type === 'empty') {
       const deeper = getMaxChainDepth(land, board, newVisited);
       max = Math.max(max, 1 + deeper);
     }
@@ -38,7 +38,7 @@ function getMaxChainDepth(
  */
 export function computeChainDepth(
   pieces: CubeCoord[],
-  board: Map<string, { type: string }>
+  board: Map<string, CellContent>
 ): number {
   let total = 0;
   for (const piece of pieces) {
@@ -56,7 +56,7 @@ export function computePathClearance(
   pieces: CubeCoord[],
   goalCenter: CubeCoord,
   goalSet: Set<string>,
-  board: Map<string, { type: string }>
+  board: Map<string, CellContent>
 ): number {
   let total = 0;
   for (const piece of pieces) {
@@ -70,12 +70,12 @@ export function computePathClearance(
         const landing = cubeAdd(adj, dir);
         const landContent = board.get(coordKey(landing));
         if (
-          (!landContent || landContent.type === 'empty') &&
+          landContent?.type === 'empty' &&
           cubeDistance(landing, goalCenter) < distToGoal
         ) {
           openOptions++;
         }
-      } else if (!adjContent || adjContent.type === 'empty') {
+      } else if (adjContent?.type === 'empty') {
         if (cubeDistance(adj, goalCenter) < distToGoal) {
           openOptions++;
         }
@@ -117,6 +117,7 @@ export function computeVanguardBonus(
   const distances = pieces.map((p) => cubeDistance(p, goalCenter));
   const avgDist = distances.reduce((a, b) => a + b, 0) / distances.length;
   const minDist = Math.min(...distances);
+  if (minDist === 0) return 0; // All pieces at or past goal center — no useful vanguard
   const gap = avgDist - minDist;
   // Bell curve: peak at gap=3, sigma=2
   return Math.exp(-((gap - 3) ** 2) / 8);
@@ -217,19 +218,11 @@ export function evaluateWithGenome(
   }
 
   // 7. Chain depth — actual jump chain potential
-  const chainDepthScore = computeChainDepth(
-    pieces,
-    state.board as unknown as Map<string, { type: string }>
-  );
+  const chainDepthScore = computeChainDepth(pieces, state.board);
 
   // 8. Path clearance — open routes toward goal
   const goalSet = new Set(goalPositions.map(coordKey));
-  const pathClearanceScore = computePathClearance(
-    pieces,
-    goalCenter,
-    goalSet,
-    state.board as unknown as Map<string, { type: string }>
-  );
+  const pathClearanceScore = computePathClearance(pieces, goalCenter, goalSet, state.board);
 
   // 9. Formation spread — penalise scattered pieces
   const spreadScore = computeFormationSpread(pieces);

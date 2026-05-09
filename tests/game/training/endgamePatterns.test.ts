@@ -7,10 +7,19 @@ import {
   computeVanguardBonus,
 } from '@/game/training/evaluate';
 
-function makeBoard(pieces: Array<{ q: number; r: number; player: number }>) {
+function makeBoard(
+  pieces: Array<{ q: number; r: number; player: number }>,
+  emptyCells: Array<{ q: number; r: number }> = []
+) {
   const board = new Map<string, { type: string; player?: number }>();
   for (const p of pieces) {
     board.set(`${p.q},${p.r}`, { type: 'piece', player: p.player });
+  }
+  for (const e of emptyCells) {
+    const key = `${e.q},${e.r}`;
+    if (!board.has(key)) {
+      board.set(key, { type: 'empty' });
+    }
   }
   return board;
 }
@@ -26,21 +35,20 @@ describe('computeChainDepth', () => {
 
   it('returns >= 1 when a single jump is available', () => {
     // Piece at (0,0), neighbor at (1,0), empty landing at (2,0)
-    const board = makeBoard([
-      { q: 0, r: 0, player: 0 },
-      { q: 1, r: 0, player: 1 },
-    ]);
+    const board = makeBoard(
+      [{ q: 0, r: 0, player: 0 }, { q: 1, r: 0, player: 1 }],
+      [{ q: 2, r: 0 }]
+    );
     const pieces = [coord(0, 0)];
     expect(computeChainDepth(pieces, board)).toBeGreaterThanOrEqual(1);
   });
 
   it('returns > 1 when a chain jump is possible', () => {
     // Piece at (0,0), hop over (1,0) to (2,0), then hop over (3,0) to (4,0)
-    const board = makeBoard([
-      { q: 0, r: 0, player: 0 },
-      { q: 1, r: 0, player: 1 },
-      { q: 3, r: 0, player: 1 },
-    ]);
+    const board = makeBoard(
+      [{ q: 0, r: 0, player: 0 }, { q: 1, r: 0, player: 1 }, { q: 3, r: 0, player: 1 }],
+      [{ q: 2, r: 0 }, { q: 4, r: 0 }]
+    );
     const pieces = [coord(0, 0)];
     expect(computeChainDepth(pieces, board)).toBeGreaterThanOrEqual(2);
   });
