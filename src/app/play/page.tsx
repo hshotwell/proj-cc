@@ -11,7 +11,6 @@ import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { ColorPicker } from '@/components/ui/ColorPicker';
-import { hasEvolvedGenome } from '@/game/training/persistence';
 import { areTooSimilar } from '@/game/colors';
 import { validateLayout } from '@/game/layoutValidation';
 import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
@@ -98,12 +97,10 @@ export default function PlayPage() {
   const [teamMode, setTeamMode] = useState(false);
   const [gameMode, setGameMode] = useState<PieceVariant>('normal');
   const [customPlayerCount, setCustomPlayerCount] = useState<number | null>(null);
-  const [evolvedAvailable, setEvolvedAvailable] = useState(false);
   const [editingName, setEditingName] = useState<PlayerIndex | null>(null);
 
   const layoutKeyRef = useRef('');
 
-  useEffect(() => { setEvolvedAvailable(hasEvolvedGenome()); }, []);
   useEffect(() => { loadLayouts(); }, [loadLayouts]);
 
   // Reset state on layout change; preserve colors when only player count changes
@@ -318,9 +315,6 @@ export default function PlayPage() {
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
-              <option value="evolved" disabled={!evolvedAvailable}>
-                Evolved{!evolvedAvailable ? ' (train first)' : ''}
-              </option>
             </select>
             <select
               value={aiConfig[playerIndex]!.personality}

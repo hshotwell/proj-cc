@@ -7,12 +7,7 @@ import { getPlayerPieces } from '../setup';
 import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
-import { loadEvolvedGenome } from '../training/persistence';
 import { computePlayerProgress } from '../progress';
-import {
-  computeRegressionPenaltyWithGenome,
-  computeRepetitionPenaltyWithGenome,
-} from '../training/evaluate';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove } from './endgame';
 import { getOpeningMove } from './openingBook';
@@ -325,13 +320,6 @@ export function computeRegressionPenalty(
     return progressDelta < 0.01 ? 100 : -progressDelta * 50;
   }
 
-  if (difficulty === 'evolved') {
-    const genome = loadEvolvedGenome();
-    if (genome) {
-      return computeRegressionPenaltyWithGenome(state, move, player, genome);
-    }
-  }
-
   const goalPositions = getGoalPositionsForState(state, player);
   if (goalPositions.length === 0) return 0;
 
@@ -359,8 +347,8 @@ export function computeRegressionPenalty(
       }
     }
 
-    if (difficulty === 'hard' || difficulty === 'evolved') {
-      // Hard/evolved: only allow if the net gain is more than double the loss
+    if (difficulty === 'hard') {
+      // Hard: only allow if the net gain is more than double the loss
       // (requires an exceptional recovery to justify going backward)
       if (progressDelta + bestNextDelta <= Math.abs(progressDelta)) {
         return Infinity;
@@ -461,13 +449,6 @@ export function computeRepetitionPenalty(
   player: PlayerIndex,
   difficulty?: AIDifficulty
 ): number {
-  if (difficulty === 'evolved') {
-    const genome = loadEvolvedGenome();
-    if (genome) {
-      return computeRepetitionPenaltyWithGenome(state, move, player, genome);
-    }
-  }
-
   const numPlayers = state.activePlayers.length;
   const lookback = numPlayers * 10; // Extended lookback window
   const history = state.moveHistory;
@@ -855,7 +836,6 @@ function selectMoveWithVariance(
     easy:    60,
     medium:  40,
     hard:    25,
-    evolved: 25,
   };
 
   const gap = best - scored[1].score;
@@ -868,7 +848,6 @@ function selectMoveWithVariance(
     easy:    [1, 2, 1],  // Slightly prefer 2nd (imperfect)
     medium:  [5, 2, 1],  // Mostly best with some variance
     hard:    [20, 3, 1], // Strongly best with rare deviation
-    evolved: [20, 3, 1],
   };
 
   const w = weights[difficulty];

@@ -1,6 +1,6 @@
 import type { PlayerIndex } from './game';
 
-export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'evolved';
+export type AIDifficulty = 'easy' | 'medium' | 'hard';
 export type AIPersonality = 'generalist' | 'defensive' | 'aggressive';
 
 export interface AIConfig {
@@ -10,12 +10,11 @@ export interface AIConfig {
 
 export type AIPlayerMap = Partial<Record<PlayerIndex, AIConfig>>;
 
-/** Base mid-game search depth (all difficulties use depth-2 in mid-game). */
+/** Base mid-game search depth. */
 export const AI_DEPTH: Record<AIDifficulty, number> = {
   easy: 2,
   medium: 2,
   hard: 2,
-  evolved: 2,
 };
 
 /** Deeper search used in early-game and end-game phases. */
@@ -23,21 +22,18 @@ export const AI_OPENING_DEPTH: Record<AIDifficulty, number> = {
   easy: 2,
   medium: 3,
   hard: 4,
-  evolved: 4,
 };
 
 export const AI_ENDGAME_DEPTH: Record<AIDifficulty, number> = {
   easy: 2,
   medium: 3,
   hard: 4,
-  evolved: 4,
 };
 
 export const AI_MOVE_LIMIT: Record<AIDifficulty, number> = {
   easy: 10,
   medium: 15,
   hard: 20,
-  evolved: 20,
 };
 
 export const AI_THINK_DELAY = 400;
