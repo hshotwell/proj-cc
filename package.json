@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
-    "@convex-dev/auth": "^0.0.90",
+    "@convex-dev/auth": "^0.0.92",
     "@vercel/analytics": "^2.0.1",
-    "convex": "^1.31.7",
+    "convex": "^1.39.1",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
