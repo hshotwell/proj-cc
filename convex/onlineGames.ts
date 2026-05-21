@@ -668,6 +668,9 @@ export const acceptRematch = mutation({
         currentPlayerIndex: 0,
         finishedPlayers: [],
         createdAt: Date.now(),
+        gameMode: game.gameMode ?? "normal",
+        teamMode: game.teamMode ?? false,
+        selectedLayoutId: game.selectedLayoutId,
       });
 
       await ctx.db.patch(gameId, {
