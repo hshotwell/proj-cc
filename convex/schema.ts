@@ -105,6 +105,12 @@ export default defineSchema({
     winner: v.optional(v.number()),
     finishedPlayers: v.optional(v.any()),
     createdAt: v.number(),
+    gameMode: v.optional(v.union(
+      v.literal("normal"), v.literal("turbo"),
+      v.literal("ghost"), v.literal("big")
+    )),
+    teamMode: v.optional(v.boolean()),
+    selectedLayoutId: v.optional(v.id("boardLayouts")),
     rematchRequestedBy: v.optional(v.id("users")),
     rematchAcceptedBy: v.optional(v.any()),
     rematchDeclinedBy: v.optional(v.id("users")),

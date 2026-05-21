@@ -36,10 +36,10 @@ async function countActiveGamesForUser(ctx: any, userId: any): Promise<number> {
 
 export const createLobby = mutation({
   args: {
-    playerCount: v.number(),
-    receiverId: v.id("users"),
+    playerCount: v.optional(v.number()),
+    receiverId: v.optional(v.id("users")),
   },
-  handler: async (ctx, { playerCount, receiverId }) => {
+  handler: async (ctx, { playerCount: rawPlayerCount, receiverId }) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -51,29 +51,15 @@ export const createLobby = mutation({
       throw new Error(`You already have ${MAX_ACTIVE_GAMES} active games. Finish one before starting a new one.`);
     }
 
-    const receiver = await ctx.db.get(receiverId);
-    if (!receiver) throw new Error("Receiver not found");
+    const playerCount = rawPlayerCount ?? 2;
 
-    // Look up favorite colors
+    // Look up host favorite color
     const hostSettings = await ctx.db
       .query("userSettings")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
-    const receiverSettings = await ctx.db
-      .query("userSettings")
-      .withIndex("by_userId", (q) => q.eq("userId", receiverId))
-      .first();
-
     const hostFavColor = hostSettings?.favoriteColor || null;
-    const receiverFavColor = receiverSettings?.favoriteColor || null;
-
-    // Determine host color (favorite if set, otherwise default)
     const hostColor = hostFavColor || SLOT_COLORS[0];
-    // Determine receiver color (favorite if set and not taken by host, otherwise default)
-    let receiverColor = SLOT_COLORS[1];
-    if (receiverFavColor && receiverFavColor !== hostColor) {
-      receiverColor = receiverFavColor;
-    }
 
     // Build initial player slots
     const players = [];
@@ -87,8 +73,18 @@ export const createLobby = mutation({
           color: hostColor,
           isReady: false,
         });
-      } else if (i === 1) {
-        // Reserve slot for invited player
+      } else if (i === 1 && receiverId) {
+        const receiver = await ctx.db.get(receiverId);
+        if (!receiver) throw new Error("Receiver not found");
+        const receiverSettings = await ctx.db
+          .query("userSettings")
+          .withIndex("by_userId", (q) => q.eq("userId", receiverId))
+          .first();
+        const receiverFavColor = receiverSettings?.favoriteColor || null;
+        let receiverColor = SLOT_COLORS[1];
+        if (receiverFavColor && receiverFavColor !== hostColor) {
+          receiverColor = receiverFavColor;
+        }
         players.push({
           slot: i,
           type: "human" as const,
@@ -114,16 +110,21 @@ export const createLobby = mutation({
       boardType: "standard",
       players,
       createdAt: Date.now(),
+      gameMode: "normal",
+      teamMode: false,
+      selectedLayoutId: undefined,
     });
 
-    // Create invite for receiver
-    await ctx.db.insert("gameInvites", {
-      gameId,
-      senderId: userId,
-      receiverId,
-      status: "pending",
-      createdAt: Date.now(),
-    });
+    // Create invite for receiver if provided
+    if (receiverId) {
+      await ctx.db.insert("gameInvites", {
+        gameId,
+        senderId: userId,
+        receiverId,
+        status: "pending",
+        createdAt: Date.now(),
+      });
+    }
 
     return gameId;
   },
