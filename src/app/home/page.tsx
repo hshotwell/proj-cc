@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useAuthStore } from '@/store/authStore';
 import { useTutorialStore } from '@/store/tutorialStore';
@@ -207,7 +207,31 @@ export default function HomePage() {
     isAuthenticated ? {} : 'skip'
   );
   const atGameLimit = activeGamesData?.atLimit ?? false;
+  const createLobby = useMutation(api.onlineGames.createLobby);
+  const [lobbyError, setLobbyError] = useState<string | null>(null);
+  const [creatingLobby, setCreatingLobby] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  const handleOnlinePlay = async () => {
+    if (!isAuthenticated) {
+      router.push('/auth/signin');
+      return;
+    }
+    if (atGameLimit) {
+      setLobbyError('You have 10 active games. Finish or abandon one to start a new one.');
+      return;
+    }
+    setCreatingLobby(true);
+    setLobbyError(null);
+    try {
+      const gameId = await createLobby({});
+      router.push(`/lobby/${gameId}`);
+    } catch (e: any) {
+      setLobbyError(e.message ?? 'Failed to create lobby.');
+      setCreatingLobby(false);
+    }
+  };
+
   useEffect(() => setMounted(true), []);
   const [showModes, setShowModes] = useState(false);
   const [borderVisible, setBorderVisible] = useState(true);
@@ -631,13 +655,15 @@ export default function HomePage() {
                       Local
                     </button>
                     <button
-                      onClick={() => router.push(atGameLimit ? '/profile?tab=current-games&limit=1' : '/profile')}
-                      className={`w-full px-12 py-3 text-lg rounded-full transition-colors ${
-                        atGameLimit ? 'text-gray-400' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      onClick={() => void handleOnlinePlay()}
+                      disabled={creatingLobby}
+                      className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Online
+                      {creatingLobby ? 'Creating...' : 'Online'}
                     </button>
+                    {lobbyError && (
+                      <p className="text-sm text-red-500 text-center px-4">{lobbyError}</p>
+                    )}
                     <button
                       onClick={() => router.push('/practice')}
                       className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
