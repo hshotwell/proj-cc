@@ -697,7 +697,7 @@ function FriendsList() {
 
   const handleChallenge = useCallback(async (friendId: Id<"users">) => {
     try {
-      const gameId = await createLobby({ playerCount: 2, receiverId: friendId });
+      const gameId = await createLobby({ receiverId: friendId });
       router.push(`/lobby/${gameId}`);
     } catch (e) {
       console.error('Failed to create lobby:', e);
