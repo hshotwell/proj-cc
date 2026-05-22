@@ -83,10 +83,19 @@ function LobbyContent() {
   const inviteToLobbyMutation = useMutation(api.onlineGames.inviteToLobby);
   const cancelSlotInviteMutation = useMutation(api.onlineGames.cancelSlotInvite);
   const reorderPlayers = useMutation(api.onlineGames.reorderPlayers);
+  const setGameModeMutation = useMutation(api.onlineGames.setGameMode);
+  const setTeamModeMutation = useMutation(api.onlineGames.setTeamMode);
+  const setLayoutMutation = useMutation(api.onlineGames.setLayout);
+  const lobbyBoards = useQuery(
+    api.onlineGames.getLobbyBoards,
+    game !== undefined ? { gameId } : 'skip'
+  );
 
   const [aiDifficulty, setAiDifficulty] = useState<string>('medium');
   const [aiPersonality, setAiPersonality] = useState<string>('generalist');
   const [inviteSlot, setInviteSlot] = useState<number | null>(null);
+  const [showBoardSelector, setShowBoardSelector] = useState(false);
+  const [layoutResetNotice, setLayoutResetNotice] = useState(false);
   const favColorApplied = useRef(false);
 
   // Auto-select favorite color on lobby load
@@ -119,6 +128,16 @@ function LobbyContent() {
     void selectColor({ gameId, color: favoriteColor });
   }, [game, user?.id, gameId, selectColor]);
 
+  const prevSelectedLayoutId = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!game) return;
+    const current = (game as any).selectedLayoutId ?? undefined;
+    if (prevSelectedLayoutId.current !== undefined && current === undefined) {
+      setLayoutResetNotice(true);
+    }
+    prevSelectedLayoutId.current = current;
+  }, [(game as any)?.selectedLayoutId]);
+
   // Friends list for inviting (only query when host, skip until game loads)
   const isHost = game ? game.hostId === user?.id : false;
   const friends = useQuery(api.friends.listFriends, isHost ? {} : "skip");
@@ -134,7 +153,7 @@ function LobbyContent() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-500 mb-4">This lobby has been closed.</p>
-          <Link href="/profile" className="text-blue-600 hover:underline">Back to Profile</Link>
+          <Link href="/home" className="text-blue-600 hover:underline">Back to Home</Link>
         </div>
       </div>
     );
@@ -233,10 +252,29 @@ function LobbyContent() {
     }
   };
 
+  const handleSetGameMode = async (mode: 'normal' | 'turbo' | 'ghost' | 'big') => {
+    try { await setGameModeMutation({ gameId, mode }); }
+    catch (e) { console.error('Failed to set game mode:', e); }
+  };
+
+  const handleSetTeamMode = async (enabled: boolean) => {
+    try { await setTeamModeMutation({ gameId, teamMode: enabled }); }
+    catch (e) { console.error('Failed to set team mode:', e); }
+  };
+
+  const handleSetLayout = async (selectedLayoutId: string | null) => {
+    try {
+      await setLayoutMutation({ gameId, selectedLayoutId: selectedLayoutId as any });
+      setShowBoardSelector(false);
+      setLayoutResetNotice(false);
+    }
+    catch (e) { console.error('Failed to set layout:', e); }
+  };
+
   const handleLeave = async () => {
     try {
       await leaveLobby({ gameId });
-      router.push('/profile');
+      router.push('/home');
     } catch (e) {
       console.error('Failed to leave lobby:', e);
     }
@@ -246,18 +284,19 @@ function LobbyContent() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <Link href="/profile" className="text-blue-600 hover:underline text-sm">
-            &larr; Back to Profile
+          <Link href="/home" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
+            &larr; Home
           </Link>
         </div>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Game Lobby</h1>
 
-        {/* Board Config (host only) */}
-        {isHost && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Game Setup</h2>
+        {/* Game Config */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Game Setup</h2>
 
+          {/* Player Count (host only) */}
+          {isHost && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Players</label>
               <div className="flex gap-2">
@@ -276,35 +315,154 @@ function LobbyContent() {
                 ))}
               </div>
             </div>
+          )}
 
-            {/* AI Config for adding to empty slots */}
-            {hasEmptySlots && (
-              <div className="border-t pt-4 mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">AI Settings (for empty slots)</label>
-                <div className="flex gap-4 mb-2">
-                  <select
-                    value={aiDifficulty}
-                    onChange={(e) => setAiDifficulty(e.target.value)}
-                    className="px-3 py-1.5 border rounded-lg text-sm"
-                  >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                  </select>
-                  <select
-                    value={aiPersonality}
-                    onChange={(e) => setAiPersonality(e.target.value)}
-                    className="px-3 py-1.5 border rounded-lg text-sm"
-                  >
-                    <option value="generalist">Generalist</option>
-                    <option value="defensive">Defensive</option>
-                    <option value="aggressive">Aggressive</option>
-                  </select>
-                </div>
+          {/* Game Mode */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Game Mode</label>
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { value: 'normal' as const, label: 'Normal',   desc: 'Standard movement rules' },
+                { value: 'turbo'  as const, label: 'Turbo',    desc: 'Pieces scan past empty cells and hop the same distance on the other side' },
+                { value: 'ghost'  as const, label: 'Spectral', desc: 'Hop over an entire adjacent run, land in the first open cell after the run' },
+                { value: 'big'    as const, label: 'Blockade', desc: 'Opponents cannot jump over your pieces' },
+              ]).map(({ value, label, desc }) => (
+                <button
+                  key={value}
+                  disabled={!isHost}
+                  onClick={() => isHost && void handleSetGameMode(value)}
+                  title={desc}
+                  className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
+                    ((game as any).gameMode ?? 'normal') === value
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : isHost
+                        ? 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        : 'border-gray-200 bg-white text-gray-400 cursor-default'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Team Mode (4 or 6 players only) */}
+          {(game.playerCount === 4 || game.playerCount === 6) && (
+            <div className="mb-4 flex items-center gap-2">
+              <input
+                id="teamMode"
+                type="checkbox"
+                disabled={!isHost}
+                checked={(game as any).teamMode ?? false}
+                onChange={(e) => isHost && void handleSetTeamMode(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded border-gray-300 disabled:opacity-50"
+              />
+              <label
+                htmlFor="teamMode"
+                className={`text-sm font-medium ${isHost ? 'text-gray-700 cursor-pointer' : 'text-gray-400'}`}
+              >
+                Team mode — opposite players are teammates, both must finish to win
+              </label>
+            </div>
+          )}
+
+          {/* Board Selection */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Board</label>
+            {layoutResetNotice && isHost && (
+              <p className="text-xs text-amber-600 mb-2">Board reset — the player who owned that layout left the lobby.</p>
+            )}
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-700">
+                {(game as any).selectedLayoutId
+                  ? ((lobbyBoards ?? []) as any[]).find((b: any) => b._id === (game as any).selectedLayoutId)?.name ?? 'Custom Board'
+                  : 'Standard Board'}
+              </span>
+              {isHost && (
+                <button
+                  onClick={() => setShowBoardSelector((v) => !v)}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  {showBoardSelector ? 'Close' : 'Select Board'}
+                </button>
+              )}
+            </div>
+            {showBoardSelector && isHost && (
+              <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => void handleSetLayout(null)}
+                  className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 ${
+                    !(game as any).selectedLayoutId ? 'font-medium text-blue-700 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Standard Board
+                  <span className="ml-2 text-xs text-gray-400">2–6 players · 121 cells</span>
+                </button>
+                {((lobbyBoards ?? []) as any[]).length > 0 && (() => {
+                  const boards = (lobbyBoards ?? []) as any[];
+                  const byOwner = new Map<string, { ownerUsername: string; boards: any[] }>();
+                  for (const b of boards) {
+                    const entry = byOwner.get(b.ownerId) ?? { ownerUsername: b.ownerUsername, boards: [] as any[] };
+                    entry.boards.push(b);
+                    byOwner.set(b.ownerId, entry);
+                  }
+                  return [...byOwner.entries()].map(([ownerId, { ownerUsername, boards: ownerBoards }]) => (
+                    <div key={ownerId}>
+                      <div className="px-4 py-1.5 text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-100">
+                        {ownerUsername}&apos;s boards
+                      </div>
+                      {ownerBoards.map((board: any) => (
+                        <button
+                          key={board._id}
+                          onClick={() => void handleSetLayout(board._id)}
+                          className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 ${
+                            (game as any).selectedLayoutId === board._id
+                              ? 'font-medium text-blue-700 bg-blue-50'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {board.name}
+                          {board.playerCounts?.length > 0 && (
+                            <span className="ml-2 text-xs text-gray-400">
+                              {board.playerCounts.join('/')} players
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ));
+                })()}
               </div>
             )}
           </div>
-        )}
+
+          {/* AI Config for adding to empty slots (host only) */}
+          {isHost && hasEmptySlots && (
+            <div className="border-t pt-4 mt-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">AI Settings (for empty slots)</label>
+              <div className="flex gap-4">
+                <select
+                  value={aiDifficulty}
+                  onChange={(e) => setAiDifficulty(e.target.value)}
+                  className="px-3 py-1.5 border rounded-lg text-sm"
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+                <select
+                  value={aiPersonality}
+                  onChange={(e) => setAiPersonality(e.target.value)}
+                  className="px-3 py-1.5 border rounded-lg text-sm"
+                >
+                  <option value="generalist">Generalist</option>
+                  <option value="defensive">Defensive</option>
+                  <option value="aggressive">Aggressive</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Player Slots */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
