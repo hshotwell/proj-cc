@@ -945,3 +945,57 @@ export const setLayout = mutation({
     await ctx.db.patch(gameId, { selectedLayoutId });
   },
 });
+
+export const getLobbyBoards = query({
+  args: { gameId: v.id("onlineGames") },
+  handler: async (ctx, { gameId }) => {
+    const game = await ctx.db.get(gameId);
+    if (!game) return [];
+
+    // Collect unique human user IDs in the lobby
+    const players = game.players as any[];
+    const humanUserIds = [
+      ...new Set(
+        players
+          .filter((p: any) => p.type === "human" && p.userId)
+          .map((p: any) => p.userId as string)
+      ),
+    ];
+
+    // Fetch all layouts for these users
+    const allLayouts: any[] = [];
+    for (const uid of humanUserIds) {
+      const layouts = await ctx.db
+        .query("boardLayouts")
+        .withIndex("by_userId", (q) => q.eq("userId", uid as any))
+        .collect();
+      allLayouts.push(...layouts);
+    }
+
+    // Get usernames for grouping
+    const userMap = new Map<string, string>();
+    for (const uid of humanUserIds) {
+      const user = await ctx.db.get(uid as any);
+      const username = (user as any)?.username || (user as any)?.name || "Unknown";
+      userMap.set(uid, username);
+    }
+
+    // Determine valid player counts from each layout's startingPositions keys
+    return allLayouts.map((layout) => {
+      const counts = Object.keys(layout.startingPositions ?? {}).map(Number);
+      return {
+        _id: layout._id,
+        layoutId: layout.layoutId,
+        name: layout.name,
+        playerCounts: counts,
+        ownerId: layout.userId,
+        ownerUsername: userMap.get(layout.userId) ?? "Unknown",
+        cells: layout.cells,
+        startingPositions: layout.startingPositions,
+        goalPositions: layout.goalPositions,
+        walls: layout.walls,
+        isDefault: layout.isDefault,
+      };
+    });
+  },
+});
