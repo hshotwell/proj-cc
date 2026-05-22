@@ -737,12 +737,22 @@ export const leaveLobby = mutation({
     } else {
       // Guest leaves -> remove from players, delete their invite
       const players = game.players as any[];
+      const leavingPlayer = players.find((p: any) => p.userId === userId);
       const updated = players.map((p: any) =>
         p.userId === userId
           ? { slot: p.slot, type: "empty", color: p.color, isReady: false }
           : p
       );
-      await ctx.db.patch(gameId, { players: updated });
+
+      // Reset layout if the leaving player owns the selected layout
+      let patch: Record<string, any> = { players: updated };
+      if (game.selectedLayoutId) {
+        const layout = await ctx.db.get(game.selectedLayoutId);
+        if (layout && leavingPlayer && layout.userId === leavingPlayer.userId) {
+          patch = { ...patch, selectedLayoutId: undefined };
+        }
+      }
+      await ctx.db.patch(gameId, patch);
 
       // Delete invite
       const invite = await ctx.db
@@ -859,5 +869,79 @@ export const listMyActiveGames = query({
       count: games.length,
       atLimit: games.length >= MAX_ACTIVE_GAMES,
     };
+  },
+});
+
+export const setGameMode = mutation({
+  args: {
+    gameId: v.id("onlineGames"),
+    mode: v.union(
+      v.literal("normal"), v.literal("turbo"),
+      v.literal("ghost"), v.literal("big")
+    ),
+  },
+  handler: async (ctx, { gameId, mode }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.hostId !== userId) throw new Error("Only the host can change game mode");
+    if (game.status !== "lobby") throw new Error("Game is not in lobby");
+    await ctx.db.patch(gameId, { gameMode: mode });
+  },
+});
+
+export const setTeamMode = mutation({
+  args: {
+    gameId: v.id("onlineGames"),
+    teamMode: v.boolean(),
+  },
+  handler: async (ctx, { gameId, teamMode }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.hostId !== userId) throw new Error("Only the host can change team mode");
+    if (game.status !== "lobby") throw new Error("Game is not in lobby");
+    if (teamMode && game.playerCount !== 4 && game.playerCount !== 6) {
+      throw new Error("Team mode requires 4 or 6 players");
+    }
+    await ctx.db.patch(gameId, { teamMode });
+  },
+});
+
+export const setLayout = mutation({
+  args: {
+    gameId: v.id("onlineGames"),
+    selectedLayoutId: v.union(v.id("boardLayouts"), v.null()),
+  },
+  handler: async (ctx, { gameId, selectedLayoutId }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.hostId !== userId) throw new Error("Only the host can change the board");
+    if (game.status !== "lobby") throw new Error("Game is not in lobby");
+
+    if (selectedLayoutId === null) {
+      await ctx.db.patch(gameId, { selectedLayoutId: undefined });
+      return;
+    }
+
+    // Validate layout belongs to a current human player in the lobby
+    const layout = await ctx.db.get(selectedLayoutId);
+    if (!layout) throw new Error("Layout not found");
+
+    const players = game.players as any[];
+    const humanUserIds = new Set(
+      players
+        .filter((p: any) => p.type === "human" && p.userId)
+        .map((p: any) => p.userId)
+    );
+    if (!humanUserIds.has(layout.userId)) {
+      throw new Error("Layout must belong to a player in the lobby");
+    }
+
+    await ctx.db.patch(gameId, { selectedLayoutId });
   },
 });
