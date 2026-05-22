@@ -53,7 +53,12 @@ async function resolveGameStart(ctx: any, game: any): Promise<Record<string, any
         startingPositions: layout.startingPositions,
         goalPositions: layout.goalPositions,
         walls: layout.walls,
+        isDefault: layout.isDefault,
       };
+    } else {
+      console.warn(`[resolveGameStart] selectedLayoutId ${game.selectedLayoutId} not found, falling back to standard board`);
+      patch.boardType = "standard";
+      patch.customLayout = undefined;
     }
   } else {
     patch.boardType = "standard";
