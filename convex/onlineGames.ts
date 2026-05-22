@@ -34,6 +34,35 @@ async function countActiveGamesForUser(ctx: any, userId: any): Promise<number> {
   return hostedActive + participantActive;
 }
 
+async function resolveGameStart(ctx: any, game: any): Promise<Record<string, any>> {
+  const patch: Record<string, any> = {
+    status: "playing",
+    turns: [],
+    currentPlayerIndex: 0,
+    finishedPlayers: [],
+  };
+
+  if (game.selectedLayoutId) {
+    const layout = await ctx.db.get(game.selectedLayoutId);
+    if (layout) {
+      patch.boardType = "custom";
+      patch.customLayout = {
+        id: layout.layoutId,
+        name: layout.name,
+        cells: layout.cells,
+        startingPositions: layout.startingPositions,
+        goalPositions: layout.goalPositions,
+        walls: layout.walls,
+      };
+    }
+  } else {
+    patch.boardType = "standard";
+    patch.customLayout = undefined;
+  }
+
+  return patch;
+}
+
 export const createLobby = mutation({
   args: {
     playerCount: v.optional(v.number()),
@@ -485,13 +514,8 @@ export const toggleReady = mutation({
       .every((p: any) => p.isReady);
 
     if (!hasEmpty && allHumansReady) {
-      await ctx.db.patch(gameId, {
-        players: updated,
-        status: "playing",
-        turns: [],
-        currentPlayerIndex: 0,
-        finishedPlayers: [],
-      });
+      const startPatch = await resolveGameStart(ctx, game);
+      await ctx.db.patch(gameId, { players: updated, ...startPatch });
     } else {
       await ctx.db.patch(gameId, { players: updated });
     }
@@ -521,12 +545,8 @@ export const startGame = mutation({
     );
     if (unreadyHumans.length > 0) throw new Error("All human players must be ready");
 
-    await ctx.db.patch(gameId, {
-      status: "playing",
-      turns: [],
-      currentPlayerIndex: 0,
-      finishedPlayers: [],
-    });
+    const startPatch = await resolveGameStart(ctx, game);
+    await ctx.db.patch(gameId, startPatch);
   },
 });
 
