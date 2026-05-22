@@ -16,6 +16,12 @@ import {
   clearTrainingSession,
 } from '@/game/training';
 import type { TrainingSession } from '@/game/training';
+import { scoreGenomeOnPuzzles } from '@/game/training/endgameRunner';
+import { CURATED_PUZZLES } from '@/game/training/curatedPuzzles';
+
+// Puzzle score bonus weight: scales mean puzzle score (0–100+) into fitness points.
+// With pop=20 and 2 games/matchup, max game fitness ≈ 114. Weight 0.4 → max puzzle bonus ≈ 40.
+const PUZZLE_FITNESS_WEIGHT = 0.4;
 
 interface MatchupInfo {
   player1Index: number;
@@ -324,6 +330,12 @@ async function runTrainingLoop(
     }
 
     if (signal.aborted) return;
+
+    // Score each individual on curated endgame puzzles and add bonus to fitness
+    for (const ind of population) {
+      const puzzleScore = scoreGenomeOnPuzzles(ind.genome, CURATED_PUZZLES);
+      ind.fitness += puzzleScore * PUZZLE_FITNESS_WEIGHT;
+    }
 
     // Generation complete — summarize
     const sorted = [...population].sort((a, b) => b.fitness - a.fitness);
