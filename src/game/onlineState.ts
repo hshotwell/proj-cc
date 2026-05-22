@@ -33,6 +33,7 @@ export interface OnlineGameData {
   winner?: number;
   finishedPlayers?: number[];
   teamMode?: boolean;
+  gameMode?: 'normal' | 'turbo' | 'ghost' | 'big';
 }
 
 /**
@@ -108,6 +109,15 @@ export function reconstructGameState(onlineGame: OnlineGameData): GameState {
     state = createGameFromLayout(onlineGame.customLayout, playerColors, aiPlayers, playerNames, onlineGame.teamMode);
   } else {
     state = createGame(playerCount, undefined, playerColors, aiPlayers, playerNames, onlineGame.teamMode);
+  }
+
+  // Apply game mode to all players as playerPieceTypes
+  if (onlineGame.gameMode && onlineGame.gameMode !== 'normal') {
+    const pieceTypes: Partial<Record<number, 'normal' | 'turbo' | 'ghost' | 'big'>> = {};
+    for (const p of state.activePlayers) {
+      pieceTypes[p] = onlineGame.gameMode;
+    }
+    state = { ...state, playerPieceTypes: pieceTypes as any };
   }
 
   // 2. Replay each confirmed turn
