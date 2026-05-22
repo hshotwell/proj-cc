@@ -13,6 +13,7 @@ import { PLAYER_COLORS, EXTRA_COLORS_NO_GEMS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_O
 import { SpecialSwatch, ColorSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { areTooSimilar } from '@/game/colors';
+import { validateLayout } from '@/game/layoutValidation';
 
 const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...NEUTRAL_COLORS, ...EXTRA_COLORS_NO_GEMS, ...GEM_COLORS, ...ROW4_DISPLAY_ORDER, ...ROW5_DISPLAY_ORDER];
 const SLOT_COLORS_SET = new Set(["#ef4444", "#3b82f6", "#22d3ee", "#22c55e", "#facc15", "#a855f7"]);
@@ -86,9 +87,13 @@ function LobbyContent() {
   const setGameModeMutation = useMutation(api.onlineGames.setGameMode);
   const setTeamModeMutation = useMutation(api.onlineGames.setTeamMode);
   const setLayoutMutation = useMutation(api.onlineGames.setLayout);
-  const lobbyBoards = useQuery(
+  const lobbyBoardsRaw = useQuery(
     api.onlineGames.getLobbyBoards,
-    game !== undefined ? { gameId } : 'skip'
+    game != null ? { gameId } : 'skip'
+  );
+  // Filter to only valid layouts (client-side, same as play page)
+  const lobbyBoards = lobbyBoardsRaw?.filter(b =>
+    validateLayout(b as unknown as Parameters<typeof validateLayout>[0]).valid
   );
 
   const [aiDifficulty, setAiDifficulty] = useState<string>('medium');
@@ -262,9 +267,9 @@ function LobbyContent() {
     catch (e) { console.error('Failed to set team mode:', e); }
   };
 
-  const handleSetLayout = async (selectedLayoutId: string | null) => {
+  const handleSetLayout = async (selectedLayoutId: Id<'boardLayouts'> | null) => {
     try {
-      await setLayoutMutation({ gameId, selectedLayoutId: selectedLayoutId as any });
+      await setLayoutMutation({ gameId, selectedLayoutId });
       setShowBoardSelector(false);
       setLayoutResetNotice(false);
     }

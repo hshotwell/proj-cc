@@ -198,7 +198,8 @@ export const updateBoardConfig = mutation({
     for (let i = 0; i < playerCount; i++) {
       const existingHuman = existingHumans.find((_: any, idx: number) => idx === i);
       if (existingHuman) {
-        players.push({ ...existingHuman, slot: i, color: SLOT_COLORS[i], isReady: false });
+        // Preserve the human player's chosen color; only reset ready state
+        players.push({ ...existingHuman, slot: i, isReady: false });
       } else {
         players.push({
           slot: i,
@@ -214,6 +215,8 @@ export const updateBoardConfig = mutation({
       playerCount,
       customLayout: boardType === "custom" ? customLayout : undefined,
       players,
+      // Reset team mode when player count drops below 4 (team mode requires 4 or 6)
+      ...(playerCount < 4 ? { teamMode: false } : {}),
     });
 
     // Clean up orphaned invites for players that no longer have a slot
@@ -965,6 +968,15 @@ export const setLayout = mutation({
     );
     if (!humanUserIds.has(layout.userId)) {
       throw new Error("Layout must belong to a player in the lobby");
+    }
+
+    // Basic server-side validation: layout must have at least one player with starting positions
+    const startingPositions = layout.startingPositions as Record<string, string[]> | undefined;
+    const hasPlayers = startingPositions
+      ? Object.values(startingPositions).some((positions) => positions && positions.length > 0)
+      : false;
+    if (!hasPlayers) {
+      throw new Error("Layout has no starting positions and cannot be used");
     }
 
     await ctx.db.patch(gameId, { selectedLayoutId });
