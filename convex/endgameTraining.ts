@@ -152,6 +152,57 @@ export const getEndgameEvolvedGenome = query({
   },
 });
 
+export const setEndgameBenchmark = internalMutation({
+  args: {
+    genome: v.any(),
+    fitness: v.number(),
+    generation: v.number(),
+  },
+  handler: async (ctx, { genome, fitness, generation }) => {
+    const existing = await ctx.db.query('endgameBenchmark').first();
+    if (existing) return; // Never overwrite — benchmark is a one-time snapshot
+    await ctx.db.insert('endgameBenchmark', {
+      genome,
+      fitness,
+      generation,
+      scoredAt: Date.now(),
+    });
+  },
+});
+
+export const getEndgameBenchmark = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query('endgameBenchmark').first();
+  },
+});
+
+/** Public query — returns the best endgame genome for in-game use.
+ *  Uses the benchmark genome until new training surpasses it. */
+export const getActiveEndgameGenome = query({
+  args: {},
+  handler: async (ctx) => {
+    const benchmark = await ctx.db.query('endgameBenchmark').first();
+    const current = await ctx.db.query('endgameEvolvedGenome').first();
+
+    if (!current) return benchmark ?? null;
+    if (!benchmark) return current;
+
+    // Return current only if it has surpassed the benchmark
+    return current.fitness >= benchmark.fitness ? current : benchmark;
+  },
+});
+
+export const resetTrainingState = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const state = await ctx.db.query('endgameTrainingState').first();
+    if (state) await ctx.db.delete(state._id);
+    const genome = await ctx.db.query('endgameEvolvedGenome').first();
+    if (genome) await ctx.db.delete(genome._id);
+  },
+});
+
 /** Public query — basic stats for a dashboard / debug view. */
 export const getEndgameTrainingStats = query({
   args: {},

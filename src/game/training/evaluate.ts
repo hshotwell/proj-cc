@@ -123,6 +123,56 @@ export function computeVanguardBonus(
   return Math.exp(-((gap - 3) ** 2) / 8);
 }
 
+/**
+ * Like computeChainDepth but only for pieces NOT in the goal zone.
+ * Rewards straggler pieces that have a jump chain set up.
+ * Exported for testing.
+ */
+export function computeStragglersChainDepth(
+  pieces: CubeCoord[],
+  goalSet: Set<string>,
+  board: Map<string, CellContent>
+): number {
+  let total = 0;
+  for (const piece of pieces) {
+    if (goalSet.has(coordKey(piece))) continue;
+    total += getMaxChainDepth(piece, board, new Set());
+  }
+  return total;
+}
+
+/**
+ * For each non-goal piece, checks if it can jump into a goal cell in one hop
+ * (adjacent piece exists, landing cell is a goal cell, landing cell is empty).
+ * Returns total count of such goal-entry opportunities.
+ * Exported for testing.
+ */
+export function computeGoalEntryBonus(
+  pieces: CubeCoord[],
+  goalSet: Set<string>,
+  board: Map<string, CellContent>
+): number {
+  let count = 0;
+  for (const piece of pieces) {
+    if (goalSet.has(coordKey(piece))) continue;
+    for (const dir of DIRECTIONS) {
+      const over = cubeAdd(piece, dir);
+      const land = cubeAdd(over, dir);
+      const landKey = coordKey(land);
+      const overContent = board.get(coordKey(over));
+      const landContent = board.get(landKey);
+      if (
+        overContent?.type === 'piece' &&
+        goalSet.has(landKey) &&
+        landContent?.type === 'empty'
+      ) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
 // Default genome: extracted from hard/generalist values
 export const DEFAULT_GENOME: Genome = {
   // Evaluation weights (generalist personality)
@@ -148,6 +198,9 @@ export const DEFAULT_GENOME: Genome = {
   repetitionPenalty: 80,
   cyclePenalty: 50,
   endgameThreshold: 7,
+  stragglerChainMultiplier: 2.0,
+  goalEntryBonus: 8.0,
+  lastPieceMultiplier: 3.0,
 };
 
 export function evaluateWithGenome(
@@ -233,8 +286,6 @@ export function evaluateWithGenome(
   // Endgame focus
   const endgame = inGoal >= genome.endgameThreshold || state.winner !== null;
   const wProgress = endgame ? genome.progress * 2 : genome.progress;
-  const wGoalDist = endgame ? genome.goalDistance * 2 : genome.goalDistance;
-  const wStraggler = endgame ? 3.0 : 1.5;
   const wCenter = endgame ? 0 : genome.centerControl;
   const wBlocking = endgame ? 0 : genome.blocking;
   const wJumpPotential = endgame ? 0 : genome.jumpPotential;
@@ -242,6 +293,20 @@ export function evaluateWithGenome(
   const wPathClearance = endgame ? genome.pathClearance * 1.5 : genome.pathClearance;
   const wFormationSpread = genome.formationSpread;
   const wVanguard = genome.vanguardBonus;
+  const wStraggler = endgame ? 3.0 : 1.5;
+
+  // Endgame straggler signals
+  const lastPieceFactor =
+    endgame && pieces.length - inGoal === 1 ? genome.lastPieceMultiplier : 1.0;
+  const wGoalDist = endgame
+    ? genome.goalDistance * 2 * lastPieceFactor
+    : genome.goalDistance;
+  const stragglersChainScore = endgame
+    ? computeStragglersChainDepth(pieces, goalSet, state.board)
+    : 0;
+  const goalEntryCount = endgame
+    ? computeGoalEntryBonus(pieces, goalSet, state.board)
+    : 0;
 
   return (
     wProgress * progressScore +
@@ -253,7 +318,9 @@ export function evaluateWithGenome(
     wChainDepth * chainDepthScore +
     wPathClearance * pathClearanceScore -
     wFormationSpread * spreadScore +
-    wVanguard * vanguardScore
+    wVanguard * vanguardScore +
+    genome.stragglerChainMultiplier * lastPieceFactor * stragglersChainScore +
+    genome.goalEntryBonus * goalEntryCount
   );
 }
 

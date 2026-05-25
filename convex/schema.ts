@@ -190,4 +190,12 @@ export default defineSchema({
     puzzleCount: v.number(),
     lastUpdated: v.number(),
   }),
+
+  // One-time benchmark snapshot taken at V2 deploy (never overwritten).
+  endgameBenchmark: defineTable({
+    genome: v.any(),
+    fitness: v.number(),
+    generation: v.number(),
+    scoredAt: v.number(),
+  }),
 });

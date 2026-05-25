@@ -23,6 +23,9 @@ const GENE_RANGES: Record<keyof Genome, [number, number]> = {
   repetitionPenalty: [20, 150],
   cyclePenalty: [10, 100],
   endgameThreshold: [4, 9],
+  stragglerChainMultiplier: [0, 5],
+  goalEntryBonus: [0, 30],
+  lastPieceMultiplier: [1, 6],
 };
 
 const GENOME_KEYS = Object.keys(DEFAULT_GENOME) as (keyof Genome)[];

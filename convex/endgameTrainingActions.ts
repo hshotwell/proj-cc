@@ -7,6 +7,7 @@ import {
   evolveGeneration,
 } from "../src/game/training/evolution";
 import { scoreGenomeOnPuzzles } from "../src/game/training/endgameRunner";
+import { DEFAULT_GENOME } from "../src/game/training/evaluate";
 import type { Individual } from "../src/types/training";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -19,9 +20,9 @@ const CONFIG = {
   eliteCount: 2,
   tournamentSize: 3,
   // How many generations to run per action invocation
-  generationsPerBatch: 5,
+  generationsPerBatch: 3,
   // Safety cut-off: stop the batch early if we approach Convex's 2-min limit
-  batchTimeLimitMs: 50_000, // 50 s — generous with only 5 gens of fast puzzle runs
+  batchTimeLimitMs: 90_000, // 90 s
 };
 
 // ── Seed puzzles ──────────────────────────────────────────────────────────────
@@ -208,6 +209,48 @@ export const runEndgameTrainingStep = internalAction({
     const startTime = Date.now();
 
     try {
+      // ── 0. Benchmark snapshot + reset (runs once after V2 deploy) ──────
+      const existingBenchmark = await ctx.runQuery(
+        internal.endgameTraining.getEndgameBenchmark
+      );
+
+      if (!existingBenchmark) {
+        // Take a snapshot of the current best genome scored on new puzzles
+        const v1Best: { genome: any; generation: number } | null =
+          await ctx.runQuery(api.endgameTraining.getEndgameEvolvedGenome);
+
+        if (v1Best) {
+          // Load puzzles for scoring (seed first if needed)
+          await ctx.runMutation(internal.endgameTraining.addMissingPuzzles, {
+            puzzles: SEED_PUZZLES.map((p) => ({ ...p, createdAt: Date.now() })),
+          });
+          const puzzlesForBenchmark: Array<{
+            positions: string[];
+            goalPositions: string[];
+            par: number;
+            source?: string;
+          }> = await ctx.runQuery(internal.endgameTraining.getPuzzles);
+
+          const backfilledGenome = { ...DEFAULT_GENOME, ...v1Best.genome };
+          const benchmarkFitness = scoreGenomeOnPuzzles(
+            backfilledGenome,
+            puzzlesForBenchmark
+          );
+
+          await ctx.runMutation(internal.endgameTraining.setEndgameBenchmark, {
+            genome: backfilledGenome,
+            fitness: benchmarkFitness,
+            generation: v1Best.generation,
+          });
+        }
+
+        // Reset training state so V2 starts fresh
+        await ctx.runMutation(internal.endgameTraining.resetTrainingState);
+
+        console.log('[EndgameTraining] V2 transition: benchmark saved, state reset');
+        return;
+      }
+
       // ── 1. Seed puzzles if needed ──────────────────────────────────────
       const puzzleCount: number = await ctx.runQuery(
         internal.endgameTraining.getPuzzleCount
@@ -252,9 +295,9 @@ export const runEndgameTrainingStep = internalAction({
         );
         population = createInitialPopulation(CONFIG.populationSize);
         if (generalBest?.genome) {
-          // Replace the first individual with the best general genome
+          // Replace the first individual with the best general genome (backfill missing keys)
           population[0] = {
-            genome: generalBest.genome,
+            genome: { ...DEFAULT_GENOME, ...generalBest.genome },
             fitness: 0,
             wins: 0,
             gamesPlayed: 0,

@@ -22,6 +22,9 @@ export interface Genome {
   repetitionPenalty: number;
   cyclePenalty: number;
   endgameThreshold: number;
+  stragglerChainMultiplier: number;
+  goalEntryBonus: number;
+  lastPieceMultiplier: number;
 }
 
 export interface Individual {

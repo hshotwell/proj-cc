@@ -15,8 +15,8 @@ export interface PuzzleResult {
   turnsUsed: number;
 }
 
-const BEAM_WIDTH = 3;
-const BEAM_DEPTH = 3;
+const BEAM_WIDTH = 5;
+const BEAM_DEPTH = 5;
 
 /** Score a single move from state; returns -Infinity for vetoed moves. */
 function scoreMoveForBeam(
@@ -152,6 +152,7 @@ export interface StoredPuzzle {
   positions: string[];
   goalPositions: string[];
   par: number;
+  source?: string;
 }
 
 /**
@@ -174,22 +175,35 @@ export function scorePuzzleResult(
 
 /**
  * Score a genome across a set of puzzles.
- * Returns the mean score across all puzzles.
+ * Curated puzzles are weighted at 60%, seeded at 40%.
+ * Falls back to unweighted mean if only one category is present.
  */
 export function scoreGenomeOnPuzzles(
   genome: Genome,
   puzzles: StoredPuzzle[]
 ): number {
   if (puzzles.length === 0) return 0;
-  let total = 0;
-  for (const puzzle of puzzles) {
-    const { solved, turnsUsed } = runEndgamePuzzle(
-      puzzle.positions,
-      puzzle.goalPositions,
-      puzzle.par,
-      genome
-    );
-    total += scorePuzzleResult(solved, turnsUsed, puzzle.par);
+
+  const curated = puzzles.filter((p) => p.source === 'curated');
+  const seeded = puzzles.filter((p) => p.source !== 'curated');
+
+  function meanScore(ps: StoredPuzzle[]): number {
+    if (ps.length === 0) return 0;
+    let total = 0;
+    for (const puzzle of ps) {
+      const { solved, turnsUsed } = runEndgamePuzzle(
+        puzzle.positions,
+        puzzle.goalPositions,
+        puzzle.par,
+        genome
+      );
+      total += scorePuzzleResult(solved, turnsUsed, puzzle.par);
+    }
+    return total / ps.length;
   }
-  return total / puzzles.length;
+
+  if (curated.length === 0) return meanScore(seeded);
+  if (seeded.length === 0) return meanScore(curated);
+
+  return 0.6 * meanScore(curated) + 0.4 * meanScore(seeded);
 }
