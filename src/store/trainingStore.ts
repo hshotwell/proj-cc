@@ -18,6 +18,7 @@ import {
 import type { TrainingSession } from '@/game/training';
 import { scoreGenomeOnPuzzles } from '@/game/training/endgameRunner';
 import { CURATED_PUZZLES } from '@/game/training/curatedPuzzles';
+import { buildEndgameTablebase } from '@/game/training/tablebaseBuilder';
 
 // Puzzle score bonus weight: scales mean puzzle score (0–100+) into fitness points.
 // With pop=20 and 2 games/matchup, max game fitness ≈ 114. Weight 0.4 → max puzzle bonus ≈ 40.
@@ -45,12 +46,16 @@ interface TrainingStore {
   currentGameState: GameState | null;
   currentMatchup: MatchupInfo | null;
 
+  isBuildingTablebase: boolean;
+  tablebaseBuildProgress: { solved: number; total: number; sizeBytes: number } | null;
+
   startTraining: (config: TrainingConfig) => void;
   resumeSession: () => void;
   pauseTraining: () => void;
   resumeTraining: () => void;
   stopTraining: () => void;
   applyBestGenome: () => void;
+  buildTablebase: () => void;
 }
 
 // Handle for the current training loop so we can cancel it
@@ -85,6 +90,8 @@ export const useTrainingStore = create<TrainingStore>()((set, get) => ({
   statusMessage: 'Ready to start training',
   currentGameState: null,
   currentMatchup: null,
+  isBuildingTablebase: false,
+  tablebaseBuildProgress: null,
 
   startTraining: (config: TrainingConfig) => {
     abortController?.abort();
@@ -182,6 +189,24 @@ export const useTrainingStore = create<TrainingStore>()((set, get) => ({
       saveEvolvedGenome(bestGenome);
       set({ statusMessage: 'Evolved AI saved!' });
     }
+  },
+
+  buildTablebase: () => {
+    const { bestGenome } = get();
+    if (!bestGenome) return;
+
+    set({ isBuildingTablebase: true, tablebaseBuildProgress: { solved: 0, total: 1, sizeBytes: 0 } });
+
+    buildEndgameTablebase(
+      bestGenome,
+      (solved, total, sizeBytes) => {
+        set({ tablebaseBuildProgress: { solved, total, sizeBytes } });
+      }
+    ).then(() => {
+      set({ isBuildingTablebase: false });
+    }).catch(() => {
+      set({ isBuildingTablebase: false });
+    });
   },
 }));
 

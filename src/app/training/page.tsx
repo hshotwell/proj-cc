@@ -27,6 +27,9 @@ export default function TrainingPage() {
     stopTraining,
     applyBestGenome,
     config: activeConfig,
+    isBuildingTablebase,
+    tablebaseBuildProgress,
+    buildTablebase,
   } = useTrainingStore();
 
   const [config, setConfig] = useState<TrainingConfig>(DEFAULT_TRAINING_CONFIG);
@@ -191,6 +194,48 @@ export default function TrainingPage() {
                 )}
               </div>
             </div>
+
+            {/* Endgame Tablebase */}
+            {(isComplete || hasExistingGenome) && (
+              <div className="bg-white rounded-xl shadow p-6 mt-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                  Endgame Tablebase
+                </h2>
+                <p className="text-sm text-gray-500 mb-3">
+                  Solve 1–2 piece endgame positions using the best genome. Takes several minutes.
+                </p>
+                <button
+                  onClick={buildTablebase}
+                  disabled={isBuildingTablebase || isRunning}
+                  className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg font-medium
+                             hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isBuildingTablebase ? 'Building...' : 'Build Endgame Table'}
+                </button>
+                {isBuildingTablebase && tablebaseBuildProgress && (
+                  <div className="mt-3">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-purple-600 h-2 rounded-full transition-all"
+                        style={{
+                          width: `${Math.round((tablebaseBuildProgress.solved / tablebaseBuildProgress.total) * 100)}%`
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 text-center">
+                      {tablebaseBuildProgress.solved} / {tablebaseBuildProgress.total} positions
+                      ({(tablebaseBuildProgress.sizeBytes / 1024).toFixed(0)} KB)
+                    </p>
+                  </div>
+                )}
+                {!isBuildingTablebase && tablebaseBuildProgress?.solved === tablebaseBuildProgress?.total
+                  && (tablebaseBuildProgress?.total ?? 0) > 0 && (
+                  <p className="text-sm text-green-600 mt-2 text-center">
+                    Table built — {((tablebaseBuildProgress?.sizeBytes ?? 0) / 1024).toFixed(0)} KB saved
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Center column: Live game board */}
