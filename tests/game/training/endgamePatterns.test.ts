@@ -165,3 +165,42 @@ describe('runEndgamePuzzle (beam search)', () => {
     expect(result.turnsUsed).toBeLessThanOrEqual(6);
   });
 });
+
+import { findEndgameMove } from '@/game/ai/endgame';
+import { createGameFromLayout } from '@/game/setup';
+import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
+import type { PlayerIndex } from '@/types/game';
+
+describe('findEndgameMove (stripped fast-path)', () => {
+  const PLAYER: PlayerIndex = 0;
+  // Standard player-0 goal positions (top triangle)
+  const GOAL = ['4,-8','3,-7','4,-7','2,-6','3,-6','4,-6','1,-5','2,-5','3,-5','4,-5'];
+
+  function makeState(positions: string[]) {
+    return createGameFromLayout({
+      id: 'test', name: 'test', cells: DEFAULT_BOARD_LAYOUT.cells,
+      startingPositions: { [PLAYER]: positions } as Record<PlayerIndex, string[]>,
+      goalPositions: { [PLAYER]: GOAL } as Record<PlayerIndex, string[]>,
+      createdAt: 0,
+    });
+  }
+
+  it('returns a direct goal entry when one is available', () => {
+    // 9 pieces in goal, straggler at 3,-4 (close to goal, can step into 3,-5)
+    const positions = ['4,-8','3,-7','4,-7','2,-6','3,-6','4,-6','1,-5','2,-5','4,-5','3,-4'];
+    const state = makeState(positions);
+    const move = findEndgameMove(state, PLAYER);
+    expect(move).not.toBeNull();
+    if (move) {
+      expect(GOAL).toContain(`${move.to.q},${move.to.r}`);
+    }
+  });
+
+  it('returns null when neither direct entry nor deeper-in-goal is possible', () => {
+    // All pieces outside goal (midgame-like), none adjacent to goal
+    const positions = ['0,0','1,0','-1,0','0,1','0,-1','1,-1','-1,1','2,0','-2,0','0,2'];
+    const state = makeState(positions);
+    const move = findEndgameMove(state, PLAYER);
+    expect(move).toBeNull();
+  });
+});
