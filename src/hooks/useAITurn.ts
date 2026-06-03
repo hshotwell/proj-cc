@@ -14,6 +14,7 @@ import { useOpeningStore } from '@/store/openingStore';
 import { AI_STANDARD_MOVES, AI_STANDARD_MIRROR_MOVES, getMovesForOpening } from '@/game/ai/openingBook';
 import { lookupTablebase } from '@/game/ai/tablebase';
 import { getPiecesOutsideGoal, getEmptyGoalsByDepth } from '@/game/ai/endgame';
+import { getSerializedPatternCache } from '@/game/training/patternCache';
 
 export function useAITurn(enabled: boolean = true) {
   const {
@@ -168,6 +169,7 @@ export function useAITurn(enabled: boolean = true) {
         difficulty: currentAI.difficulty,
         personality: currentAI.personality,
         openingMoves,
+        patternCache: getSerializedPatternCache(),
       });
     }, AI_THINK_DELAY);
 

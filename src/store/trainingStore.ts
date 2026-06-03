@@ -441,7 +441,7 @@ async function playGameStepByStep(
 
   let totalMoves = 0;
   // Collect (features, playerIndex) pairs to update with outcome after game ends
-  const recordedFeatures: Array<{ features: ReturnType<typeof extractMoveFeatures>; player: number }> = [];
+  const recordedFeatures: Array<{ features: import('@/game/training/patternCache').MoveFeatures; player: number }> = [];
 
   useTrainingStore.setState({ currentGameState: state });
 

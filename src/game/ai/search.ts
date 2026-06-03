@@ -11,6 +11,13 @@ import { computeStrategicScore, isEndgame, findOpponentJumpThreats } from './str
 import { findEndgameMove, isLateEndgame, scoreEndgameMove } from './endgame';
 import { getOpeningMove } from './openingBook';
 
+// Module-level pattern cache (set by worker.ts before each search)
+let _patternCache: Record<string, number> = {};
+
+export function setPatternCache(cache: Record<string, number>): void {
+  _patternCache = cache;
+}
+
 // Track recent board states to detect loops at the game state level
 const recentBoardStates = new Map<string, number>(); // hash -> count
 const MAX_STATE_HISTORY = 20;
@@ -550,6 +557,25 @@ function getTopMoves(
       score += endgameScore; // Can add up to 1000+ for direct goal entries
     }
 
+    // Apply pattern cache score deltas for move ordering
+    if (Object.keys(_patternCache).length > 0) {
+      const goalPositions = getGoalPositionsForState(state, player);
+      const goalKeysForPattern = new Set(goalPositions.map(g => coordKey(g)));
+      const goalCenterForPattern = centroid(goalPositions);
+      const inGoal = countPiecesInGoal(state, player);
+      const inGoalBucket = inGoal >= 3 && inGoal <= 5 ? '3-5' : inGoal >= 6 && inGoal <= 7 ? '6-7' : inGoal === 8 ? '8' : null;
+      if (inGoalBucket) {
+        const chainLen = move.jumpPath?.length ?? 1;
+        const isChainJump = move.isJump && chainLen > 1;
+        const lenBucket = chainLen >= 3 ? '3+' : String(chainLen);
+        const isDGE = !goalKeysForPattern.has(coordKey(move.from)) && goalKeysForPattern.has(coordKey(move.to));
+        const dist = cubeDistance(move.from, goalCenterForPattern);
+        const db = dist <= 3 ? 'near' : dist <= 6 ? 'mid' : 'far';
+        const patternKey = `${inGoalBucket}_${isChainJump ? 'cj' : 'nj'}_${lenBucket}_${isDGE ? 'dge' : 'ndge'}_${db}`;
+        score += _patternCache[patternKey] ?? 0;
+      }
+    }
+
     // Prefer longer chain jumps for move ordering
     if (move.isJump && move.jumpPath && move.jumpPath.length > 1) {
       score += (move.jumpPath.length - 1) * 50;
@@ -1075,6 +1101,25 @@ function getTopMovesFromList(
     if (inLateEndgame) {
       const endgameScore = scoreEndgameMove(state, move, player);
       score += endgameScore;
+    }
+
+    // Apply pattern cache score deltas for move ordering
+    if (Object.keys(_patternCache).length > 0) {
+      const goalPositions = getGoalPositionsForState(state, player);
+      const goalKeysForPattern = new Set(goalPositions.map(g => coordKey(g)));
+      const goalCenterForPattern = centroid(goalPositions);
+      const inGoal = countPiecesInGoal(state, player);
+      const inGoalBucket = inGoal >= 3 && inGoal <= 5 ? '3-5' : inGoal >= 6 && inGoal <= 7 ? '6-7' : inGoal === 8 ? '8' : null;
+      if (inGoalBucket) {
+        const chainLen = move.jumpPath?.length ?? 1;
+        const isChainJump = move.isJump && chainLen > 1;
+        const lenBucket = chainLen >= 3 ? '3+' : String(chainLen);
+        const isDGE = !goalKeysForPattern.has(coordKey(move.from)) && goalKeysForPattern.has(coordKey(move.to));
+        const dist = cubeDistance(move.from, goalCenterForPattern);
+        const db = dist <= 3 ? 'near' : dist <= 6 ? 'mid' : 'far';
+        const patternKey = `${inGoalBucket}_${isChainJump ? 'cj' : 'nj'}_${lenBucket}_${isDGE ? 'dge' : 'ndge'}_${db}`;
+        score += _patternCache[patternKey] ?? 0;
+      }
     }
 
     // Prefer longer chain jumps for move ordering
