@@ -1,8 +1,7 @@
 import type { Move, GameState, PlayerIndex, CubeCoord } from '@/types/game';
 import type { AIDifficulty, AIPersonality } from '@/types/ai';
-import { AI_DEPTH, AI_OPENING_DEPTH, AI_ENDGAME_DEPTH, AI_MOVE_LIMIT } from '@/types/ai';
 import { getAllValidMoves, canJumpOver } from '../moves';
-import { applyMove, getGoalPositionsForState } from '../state';
+import { applyMove, getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
 import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
@@ -122,6 +121,49 @@ export function recordBoardState(state: GameState): void {
  */
 export function clearStateHistory(): void {
   recentBoardStates.clear();
+}
+
+/**
+ * Compute search depth and move limit based on how many pieces are in the goal.
+ * Depth scales steeply as the endgame simplifies — more pieces in goal = fewer
+ * branching factor = we can afford deeper search.
+ */
+export function computeSearchParams(
+  state: GameState,
+  player: PlayerIndex,
+  difficulty: AIDifficulty
+): { depth: number; moveLimit: number } {
+  const inGoal = countPiecesInGoal(state, player);
+
+  if (inGoal >= 9) {
+    return {
+      depth:     difficulty === 'hard' ? 9 : difficulty === 'medium' ? 7 : 4,
+      moveLimit: difficulty === 'hard' ? 6 : difficulty === 'medium' ? 4 : 3,
+    };
+  }
+  if (inGoal === 8) {
+    return {
+      depth:     difficulty === 'hard' ? 7 : difficulty === 'medium' ? 5 : 3,
+      moveLimit: difficulty === 'hard' ? 8 : difficulty === 'medium' ? 6 : 4,
+    };
+  }
+  if (inGoal === 7) {
+    return {
+      depth:     difficulty === 'hard' ? 5 : difficulty === 'medium' ? 4 : 3,
+      moveLimit: difficulty === 'hard' ? 12 : difficulty === 'medium' ? 10 : 6,
+    };
+  }
+  if (inGoal >= 4) {
+    return {
+      depth:     difficulty === 'hard' ? 3 : 2,
+      moveLimit: difficulty === 'hard' ? 16 : difficulty === 'medium' ? 12 : 8,
+    };
+  }
+  // 0–3 in goal — midgame
+  return {
+    depth: 2,
+    moveLimit: difficulty === 'hard' ? 20 : difficulty === 'medium' ? 15 : 10,
+  };
 }
 
 /**
