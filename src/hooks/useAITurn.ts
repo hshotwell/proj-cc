@@ -12,6 +12,8 @@ import { getValidMoves } from '@/game/moves';
 import { coordKey } from '@/game/coordinates';
 import { useOpeningStore } from '@/store/openingStore';
 import { AI_STANDARD_MOVES, AI_STANDARD_MIRROR_MOVES, getMovesForOpening } from '@/game/ai/openingBook';
+import { lookupTablebase } from '@/game/ai/tablebase';
+import { getPiecesOutsideGoal, getEmptyGoalsByDepth } from '@/game/ai/endgame';
 
 export function useAITurn(enabled: boolean = true) {
   const {
@@ -138,6 +140,28 @@ export function useAITurn(enabled: boolean = true) {
           ? AI_STANDARD_MIRROR_MOVES
           : AI_STANDARD_MOVES;
       }
+
+      // --- Tablebase lookup (main thread — localStorage not available in worker) ---
+      const tbPlayer = current.gameState.currentPlayer;
+      const outsidePieces = getPiecesOutsideGoal(current.gameState, tbPlayer);
+      if (outsidePieces.length >= 1 && outsidePieces.length <= 2) {
+        const emptyGoals = getEmptyGoalsByDepth(current.gameState, tbPlayer);
+        const tbEntry = lookupTablebase(outsidePieces, emptyGoals);
+        if (tbEntry) {
+          const fromCoord = { q: tbEntry.from.q, r: tbEntry.from.r, s: -tbEntry.from.q - tbEntry.from.r };
+          const tbMoves = getValidMoves(current.gameState, fromCoord);
+          const tbMove = tbMoves.find(m => m.to.q === tbEntry.to.q && m.to.r === tbEntry.to.r);
+          if (tbMove) {
+            useGameStore.getState().selectPiece(tbMove.from);
+            setTimeout(() => {
+              const animate = useSettingsStore.getState().animateMoves;
+              useGameStore.getState().makeMove(tbMove.to, animate);
+            }, 50);
+            return;
+          }
+        }
+      }
+      // --- End tablebase lookup ---
 
       worker.postMessage({
         state: serialized,
