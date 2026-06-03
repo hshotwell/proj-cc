@@ -37,42 +37,6 @@ export function clearTranspositionTable(): void {
   transpositionTable.clear();
 }
 
-// ── Game phase detection ────────────────────────────────────────────────────
-type GamePhase = 'early' | 'mid' | 'end';
-
-/**
- * Detect game phase for depth-scaling purposes.
- * early: pieces haven't converged yet (no opponent within 4 cells of any own piece)
- * end:   pieces have passed each other (same condition but progress > 40%)
- * mid:   active contest — default
- */
-function detectPhase(state: GameState, player: PlayerIndex): GamePhase {
-  const myPieces = getPlayerPieces(state, player);
-  const opponentPieces: CubeCoord[] = [];
-  for (const [key, content] of state.board) {
-    if (content.type !== 'piece' || content.player === player) continue;
-    const [q, r] = key.split(',').map(Number);
-    opponentPieces.push({ q, r, s: -q - r });
-  }
-
-  if (opponentPieces.length === 0) return 'mid';
-
-  let opponentNearby = false;
-  outer: for (const myPiece of myPieces) {
-    for (const opPiece of opponentPieces) {
-      if (cubeDistance(myPiece, opPiece) <= 4) {
-        opponentNearby = true;
-        break outer;
-      }
-    }
-  }
-
-  if (!opponentNearby) {
-    return computePlayerProgress(state, player) < 40 ? 'early' : 'end';
-  }
-  return 'mid';
-}
-
 /**
  * Generate a hash of the board state for loop detection.
  */
@@ -606,7 +570,8 @@ function minimax(
   beta: number,
   maximizingPlayer: PlayerIndex,
   personality: AIPersonality,
-  difficulty: AIDifficulty
+  difficulty: AIDifficulty,
+  moveLimit: number
 ): number {
   const origAlpha = alpha;
   const origBeta = beta;
@@ -629,8 +594,7 @@ function minimax(
 
   const currentPlayer = state.currentPlayer;
   const isMaximizing = currentPlayer === maximizingPlayer;
-  const limit = AI_MOVE_LIMIT[difficulty];
-  const moves = getTopMoves(state, currentPlayer, personality, difficulty, limit);
+  const moves = getTopMoves(state, currentPlayer, personality, difficulty, moveLimit);
 
   if (moves.length === 0) {
     return evaluatePosition(state, maximizingPlayer, personality, difficulty);
@@ -642,7 +606,7 @@ function minimax(
     score = -Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty);
+      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty, moveLimit);
       if (eval_ > score) score = eval_;
       if (score > alpha) alpha = score;
       if (alpha >= beta) break;
@@ -651,7 +615,7 @@ function minimax(
     score = Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty);
+      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty, moveLimit);
       if (eval_ < score) score = eval_;
       if (score < beta) beta = score;
       if (alpha >= beta) break;
@@ -673,15 +637,15 @@ function maxn(
   depth: number,
   aiPlayer: PlayerIndex,
   personality: AIPersonality,
-  difficulty: AIDifficulty
+  difficulty: AIDifficulty,
+  moveLimit: number
 ): number {
   if (depth === 0) {
     return evaluatePosition(state, aiPlayer, personality, difficulty);
   }
 
   const currentPlayer = state.currentPlayer;
-  const limit = AI_MOVE_LIMIT[difficulty];
-  const moves = getTopMoves(state, currentPlayer, personality, difficulty, limit);
+  const moves = getTopMoves(state, currentPlayer, personality, difficulty, moveLimit);
 
   if (moves.length === 0) {
     return evaluatePosition(state, aiPlayer, personality, difficulty);
@@ -692,7 +656,7 @@ function maxn(
     let best = -Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty);
+      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty, moveLimit);
       best = Math.max(best, score);
     }
     return best;
@@ -702,7 +666,7 @@ function maxn(
     let worst = Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty);
+      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty, moveLimit);
       worst = Math.min(worst, score);
     }
     return worst;
@@ -964,12 +928,7 @@ export function findBestMove(
   }
 
   // Standard layouts use the full search with penalties
-  const phase = detectPhase(state, player);
-  const depth =
-    phase === 'mid'   ? AI_DEPTH[difficulty] :
-    phase === 'early' ? AI_OPENING_DEPTH[difficulty] :
-                        AI_ENDGAME_DEPTH[difficulty];
-  const limit = AI_MOVE_LIMIT[difficulty];
+  const { depth, moveLimit: limit } = computeSearchParams(state, player, difficulty);
   const allMoves = getAllValidMoves(state, player);
 
   if (allMoves.length === 0) return null;
@@ -1054,9 +1013,9 @@ export function findBestMove(
     let score: number;
 
     if (is2Player) {
-      score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty);
+      score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty, limit);
     } else {
-      score = maxn(next, depth - 1, player, personality, difficulty);
+      score = maxn(next, depth - 1, player, personality, difficulty, limit);
     }
 
     score -= penalty;
