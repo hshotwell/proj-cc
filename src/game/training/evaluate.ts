@@ -466,14 +466,16 @@ function minimaxWithGenome(
 }
 
 // Find best move using genome-based evaluation
-// depth 2 + limit 12 for server training (balances quality vs compute time)
+// Default depth 2 + limit 12 for training (balances quality vs compute time).
+// Tablebase builder passes higher depth for deep solve.
 export function findBestMoveWithGenome(
   state: GameState,
-  genome: Genome
+  genome: Genome,
+  searchDepth = 2,
+  moveLimit = 12
 ): Move | null {
   const player = state.currentPlayer;
-  const depth = 2;
-  const moveLimit = 12;
+  const depth = searchDepth;
   const moves = getTopMovesWithGenome(state, player, genome, moveLimit);
 
   if (moves.length === 0) return null;
