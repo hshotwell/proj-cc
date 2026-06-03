@@ -19,6 +19,12 @@ import type { TrainingSession } from '@/game/training';
 import { scoreGenomeOnPuzzles } from '@/game/training/endgameRunner';
 import { CURATED_PUZZLES } from '@/game/training/curatedPuzzles';
 import { buildEndgameTablebase } from '@/game/training/tablebaseBuilder';
+import {
+  extractMoveFeatures,
+  accumulatePattern,
+  incrementGamesRecorded,
+  flushPatternCache,
+} from '@/game/training/patternCache';
 
 // Puzzle score bonus weight: scales mean puzzle score (0–100+) into fitness points.
 // With pop=20 and 2 games/matchup, max game fitness ≈ 114. Weight 0.4 → max puzzle bonus ≈ 40.
@@ -386,6 +392,9 @@ async function runTrainingLoop(
       statusMessage: `Generation ${gen + 1} complete. Best fitness: ${best.fitness.toFixed(1)} (auto-saved)`,
     });
 
+    // Flush pattern cache after each generation
+    flushPatternCache();
+
     // Save progress at generation boundary
     persistProgress(
       config, gen + 1, population, best.genome,
@@ -431,6 +440,8 @@ async function playGameStepByStep(
   };
 
   let totalMoves = 0;
+  // Collect (features, playerIndex) pairs to update with outcome after game ends
+  const recordedFeatures: Array<{ features: ReturnType<typeof extractMoveFeatures>; player: number }> = [];
 
   useTrainingStore.setState({ currentGameState: state });
 
@@ -449,6 +460,12 @@ async function playGameStepByStep(
     // Compute one move — this is the expensive part (~0.5-2s)
     const move = findBestMoveWithGenome(state, genome);
     if (!move) break;
+
+    // Record features before applying (needs pre-move state)
+    const features = extractMoveFeatures(state, move, currentPlayer);
+    if (features) {
+      recordedFeatures.push({ features, player: currentPlayer });
+    }
 
     state = applyMove(state, move);
     totalMoves++;
@@ -469,6 +486,15 @@ async function playGameStepByStep(
   if (state.finishedPlayers.length > 0) {
     const winnerPlayer = state.finishedPlayers[0].player;
     winner = winnerPlayer === players[0] ? 0 : 1;
+  }
+
+  // Update pattern cache with game outcome
+  if (recordedFeatures.length > 0) {
+    const winnerPlayerIndex = winner !== null ? players[winner] : null;
+    for (const { features, player } of recordedFeatures) {
+      accumulatePattern(features, player === winnerPlayerIndex);
+    }
+    incrementGamesRecorded();
   }
 
   return { winner };
