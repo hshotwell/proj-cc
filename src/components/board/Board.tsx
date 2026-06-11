@@ -53,9 +53,13 @@ interface BoardProps {
   fixedRotationPlayer?: PlayerIndex;
   /** When false, suppress spinning highlights on pieces (online: not your turn) */
   isLocalPlayerTurn?: boolean;
+  /** When provided, all cell/piece clicks call this instead of the game selectPiece flow. */
+  onCellClick?: (coord: CubeCoord) => void;
+  /** When provided, render this cell with the selected-piece highlight style. */
+  highlightCoord?: CubeCoord;
 }
 
-export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {}) {
+export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, highlightCoord }: BoardProps = {}) {
   // Replay store
   const {
     isReplayActive,
@@ -624,6 +628,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
   }, [showLastMoves, lastMoveInfo, gameState, isReplayActive, replayStep, replayMoves]);
 
   const handleCellClick = (coord: CubeCoord) => {
+    if (onCellClick) { onCellClick(coord); return; }
     if (isReplayActive) return;
     if (!gameState) return;
     // Allow confirming a pending move even if the game just ended (winning move)
@@ -684,6 +689,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
   };
 
   const handlePieceClick = (coord: CubeCoord) => {
+    if (onCellClick) { onCellClick(coord); return; }
     if (isReplayActive) return;
     if (!gameState) return;
     if (isGameFullyOver(gameState) && !pendingConfirmation) return;
@@ -1352,7 +1358,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn }: BoardProps = {
                 player={player}
                 isCurrentPlayer={!isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer && (isLocalPlayerTurn === undefined || player === fixedRotationPlayer)}
                 isSelected={
-                  !isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)
+                  (!isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)) ||
+                  (highlightCoord != null && cubeEquals(highlightCoord, coord))
                 }
                 onClick={() => handlePieceClick(coord)}
                 size={HEX_SIZE}
