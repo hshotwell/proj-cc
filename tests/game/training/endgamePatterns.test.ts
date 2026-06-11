@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { CubeCoord } from '@/types/game';
+import type { CubeCoord, CellContent, PlayerIndex } from '@/types/game';
 import {
   computeChainDepth,
   computePathClearance,
@@ -10,10 +10,10 @@ import {
 import { scorePuzzleResult, runEndgamePuzzle } from '@/game/training/endgameRunner';
 
 function makeBoard(
-  pieces: Array<{ q: number; r: number; player: number }>,
+  pieces: Array<{ q: number; r: number; player: PlayerIndex }>,
   emptyCells: Array<{ q: number; r: number }> = []
-) {
-  const board = new Map<string, { type: string; player?: number }>();
+): Map<string, CellContent> {
+  const board = new Map<string, CellContent>();
   for (const p of pieces) {
     board.set(`${p.q},${p.r}`, { type: 'piece', player: p.player });
   }
@@ -169,7 +169,6 @@ describe('runEndgamePuzzle (beam search)', () => {
 import { findEndgameMove } from '@/game/ai/endgame';
 import { createGameFromLayout } from '@/game/setup';
 import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
-import type { PlayerIndex } from '@/types/game';
 
 describe('findEndgameMove (stripped fast-path)', () => {
   const PLAYER: PlayerIndex = 0;

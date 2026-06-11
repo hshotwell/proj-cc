@@ -275,38 +275,32 @@ function enablesGoalFill(
   // Simulate the state after the move (the goal position is now empty)
   const nextState = applyMove(state, move);
 
-  // Check if any friendly piece can now jump INTO the vacated goal position
+  // Check if any friendly piece can now step or jump INTO the vacated goal position
   for (const dir of DIRECTIONS) {
-    // Position where a jumping piece would be (2 steps away from the vacated goal)
+    const adjPos = {
+      q: move.from.q - dir.q,
+      r: move.from.r - dir.r,
+      s: move.from.s - dir.s,
+    };
+    const adjContent = nextState.board.get(coordKey(adjPos));
+
+    // Step entry: friendly piece is adjacent to the now-vacant goal cell
+    if (adjContent?.type === 'piece' && adjContent.player === player) {
+      return true;
+    }
+
+    // Jump entry: friendly piece is 2 steps away with something to jump over
     const jumperPos = {
       q: move.from.q - dir.q * 2,
       r: move.from.r - dir.r * 2,
       s: move.from.s - dir.s * 2,
     };
-    const jumperKey = coordKey(jumperPos);
-
-    // Check if there's a friendly piece there
-    const jumperContent = state.board.get(jumperKey);
+    const jumperContent = state.board.get(coordKey(jumperPos));
     if (jumperContent?.type !== 'piece' || jumperContent.player !== player) continue;
 
-    // Position that would be jumped over (between jumper and goal)
-    const overPos = {
-      q: move.from.q - dir.q,
-      r: move.from.r - dir.r,
-      s: move.from.s - dir.s,
-    };
-    const overKey = coordKey(overPos);
-
-    // Check if there's a piece to jump over (could be the moving piece's new position or another piece)
-    const overContent = nextState.board.get(overKey);
-    if (overContent?.type !== 'piece') continue;
-
-    // The vacated goal position should now be empty
-    const goalContent = nextState.board.get(fromKey);
-    if (goalContent?.type !== 'empty') continue;
-
-    // A piece can jump into the vacated goal!
-    return true;
+    if (adjContent?.type === 'piece') {
+      return true;
+    }
   }
 
   return false;
@@ -424,8 +418,9 @@ export function computeRegressionPenalty(
     ).length;
     const isEndgame = piecesInGoals >= 6; // 6+ pieces in goal = endgame
 
-    // Hard veto: never leave goal once 7+ pieces are already secured there
-    if (piecesInGoals >= 7) return Infinity;
+    // Hard veto: never leave goal once 7+ pieces are already secured there,
+    // UNLESS vacating this cell directly enables an outside piece to enter.
+    if (piecesInGoals >= 7 && !allowsGoalFill) return Infinity;
 
     if (allowsGoalFill) {
       // Vacating goal so another piece can fill it - GOOD in endgame
