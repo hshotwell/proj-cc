@@ -332,12 +332,17 @@ function OnlineGamesSubTab({ showLimitNotice }: { showLimitNotice: boolean }) {
   const router = useRouter();
   const result = useQuery(api.onlineGames.listMyActiveGames);
   const abandonGame = useMutation(api.onlineGames.abandonGame);
+  const leaveLobby = useMutation(api.onlineGames.leaveLobby);
 
   if (!result) {
     return <div className="bg-white rounded-xl shadow-lg p-6 text-sm text-gray-500">Loading...</div>;
   }
 
-  const { games, count, atLimit } = result;
+  const { games: allGames, count, atLimit } = result;
+  // Hide solo lobbies (games in lobby state where no other human has joined yet)
+  const games = allGames.filter(
+    (g) => !(g.status === 'lobby' && g.opponentNames.length === 0)
+  );
 
   return (
     <div className="space-y-3">
@@ -388,9 +393,9 @@ function OnlineGamesSubTab({ showLimitNotice }: { showLimitNotice: boolean }) {
                     </div>
                   </button>
                   <button
-                    onClick={() => void abandonGame({ gameId: game.id })}
+                    onClick={() => void (isLobby ? leaveLobby({ gameId: game.id }) : abandonGame({ gameId: game.id }))}
                     className="text-gray-400 hover:text-red-500 transition-colors p-1 flex-shrink-0"
-                    title="Abandon game"
+                    title={isLobby ? 'Leave lobby' : 'Abandon game'}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
