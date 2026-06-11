@@ -41,6 +41,7 @@ export function ReviewControls({ gameId }: { gameId: string | null }) {
     // Only capture once per turn (guard against re-renders)
     if (prevTurnRef.current === gameState.turnNumber) return;
     prevTurnRef.current = gameState.turnNumber;
+    if (modalOpen) return;
 
     const captured: CapturedAIMove = {
       gameId,
@@ -56,7 +57,7 @@ export function ReviewControls({ gameId }: { gameId: string | null }) {
       boardAfter: buildBoardSnapshot(gameState),
     };
     setFlaggable(captured);
-  }, [lastMoveInfo, gameState?.turnNumber, gameState, gameId]);
+  }, [lastMoveInfo, gameState?.turnNumber, gameId]);
 
   const hasAI = gameState != null &&
     gameState.activePlayers.some((p) => gameState.aiPlayers?.[p] != null);
