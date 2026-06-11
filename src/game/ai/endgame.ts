@@ -158,32 +158,33 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   // point for an outside piece over moves that merely maximise depth gain.
   const piecesOutside = getPiecesOutsideGoal(state, player);
 
-  const deeperMoves = allMoves
+  const goalMoves = allMoves
     .filter(m => {
       if (!goalKeys.has(coordKey(m.from)) || !goalKeys.has(coordKey(m.to))) return false;
-      return getGoalPositionDepth(m.to) > getGoalPositionDepth(m.from);
+      if (getGoalPositionDepth(m.to) < getGoalPositionDepth(m.from)) return false; // never shallower
+      return true;
     })
     .map(m => {
-      // Does vacating m.from let an outside piece enter on the very next turn?
       const unblocksJump = couldEnterGoalIfEmpty(state, m.from, player, piecesOutside) !== null;
       const unblocksStep = piecesOutside.some(p =>
         DIRECTIONS.some(dir =>
           p.q === m.from.q + dir.q && p.r === m.from.r + dir.r
         )
       );
-      return {
-        move: m,
-        gain: getGoalPositionDepth(m.to) - getGoalPositionDepth(m.from),
-        unblocksEntry: unblocksJump || unblocksStep,
-      };
+      const unblocksEntry = unblocksJump || unblocksStep;
+      const gain = getGoalPositionDepth(m.to) - getGoalPositionDepth(m.from);
+      return { move: m, gain, unblocksEntry };
     })
+    // Only keep lateral (gain === 0) moves that unblock entry — pure laterals without
+    // a clear purpose are handled by the minimax, not the fast-path.
+    .filter(m => m.gain > 0 || m.unblocksEntry)
     .sort((a, b) => {
-      // Entry-unblocking moves first, then largest depth gain
+      // Entry-unblocking first, then largest depth gain
       if (a.unblocksEntry !== b.unblocksEntry) return a.unblocksEntry ? -1 : 1;
       return b.gain - a.gain;
     });
 
-  if (deeperMoves.length > 0) return deeperMoves[0].move;
+  if (goalMoves.length > 0) return goalMoves[0].move;
 
   return null;
 }
@@ -271,6 +272,15 @@ export function scoreEndgameMove(state: GameState, move: Move, player: PlayerInd
       }
     } else if (toDepth < fromDepth) {
       score -= 100000;
+    } else {
+      // Lateral (same depth): only valuable if it directly frees an entry for an outside piece
+      const unblocksStep = piecesOutside.some(p =>
+        DIRECTIONS.some(dir => p.q === move.from.q + dir.q && p.r === move.from.r + dir.r)
+      );
+      const unblocksJump = couldEnterGoalIfEmpty(state, move.from, player, piecesOutside) !== null;
+      if (unblocksStep || unblocksJump) {
+        score += 25000; // Lateral that opens an immediate entry is high priority
+      }
     }
   }
 
