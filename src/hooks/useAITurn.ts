@@ -15,6 +15,7 @@ import { AI_STANDARD_MOVES, AI_STANDARD_MIRROR_MOVES, getMovesForOpening } from 
 import { lookupTablebase } from '@/game/ai/tablebase';
 import { getPiecesOutsideGoal, getEmptyGoalsByDepth } from '@/game/ai/endgame';
 import { getSerializedPatternCache } from '@/game/training/patternCache';
+import { useReviewStore } from '@/store/reviewStore';
 
 export function useAITurn(enabled: boolean = true) {
   const {
@@ -22,6 +23,8 @@ export function useAITurn(enabled: boolean = true) {
     pendingConfirmation,
     animatingPiece,
   } = useGameStore();
+
+  const isPaused = useReviewStore((s) => s.isPaused);
 
   const thinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +46,7 @@ export function useAITurn(enabled: boolean = true) {
 
   const isAITurn =
     enabled &&
+    !isPaused &&
     gameState != null &&
     !isGameFullyOver(gameState) &&
     gameState.aiPlayers?.[gameState.currentPlayer] != null;
@@ -179,7 +183,7 @@ export function useAITurn(enabled: boolean = true) {
         thinkTimerRef.current = null;
       }
     };
-  }, [isAITurn, pendingConfirmation, animatingPiece, gameState?.currentPlayer, gameState?.turnNumber]);
+  }, [isAITurn, pendingConfirmation, animatingPiece, gameState?.currentPlayer, gameState?.turnNumber, isPaused]);
 
   // Phase 2: Pending + not animating + AI turn -> auto-confirm after delay
   useEffect(() => {
@@ -198,7 +202,7 @@ export function useAITurn(enabled: boolean = true) {
         confirmTimerRef.current = null;
       }
     };
-  }, [isAITurn, pendingConfirmation, animatingPiece]);
+  }, [isAITurn, pendingConfirmation, animatingPiece, isPaused]);
 
   return { isAITurn };
 }
