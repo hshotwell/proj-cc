@@ -15,25 +15,30 @@ import { AI_STANDARD_MOVES, AI_STANDARD_MIRROR_MOVES, getMovesForOpening } from 
 import { lookupTablebase } from '@/game/ai/tablebase';
 import { getPiecesOutsideGoal, getEmptyGoalsByDepth } from '@/game/ai/endgame';
 import { getSerializedPatternCache } from '@/game/training/patternCache';
-import { useReviewStore } from '@/store/reviewStore';
 
-export function useAITurn(enabled: boolean = true) {
+/**
+ * @param enabled     Set false to disable AI entirely (e.g. during tutorial).
+ * @param isPaused    Reactive pause flag — prevents new think timers when true.
+ * @param isPausedRef Ref mirror of isPaused — checked inside worker.onmessage to
+ *                    discard results that arrive after the user paused mid-flight.
+ */
+export function useAITurn(
+  enabled: boolean = true,
+  isPaused: boolean = false,
+  isPausedRef?: React.RefObject<boolean>,
+) {
   const {
     gameState,
     pendingConfirmation,
     animatingPiece,
   } = useGameStore();
 
-  const isPaused = useReviewStore((s) => s.isPaused);
-
   const thinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerRef = useRef<Worker | null>(null);
-  // AI opening variant: picked once per game (standard or mirrored)
   const openingVariantRef = useRef<'standard' | 'standard-mirror' | null>(null);
   const prevTurnRef = useRef<number>(Infinity);
 
-  // Create / tear-down the worker once on mount
   useEffect(() => {
     workerRef.current = new Worker(
       new URL('../game/ai/worker.ts', import.meta.url)
@@ -51,12 +56,10 @@ export function useAITurn(enabled: boolean = true) {
     !isGameFullyOver(gameState) &&
     gameState.aiPlayers?.[gameState.currentPlayer] != null;
 
-  // Phase 1: AI's turn, not pending, not animating -> think and make a move
   useEffect(() => {
     if (!isAITurn || pendingConfirmation || animatingPiece) return;
     if (!gameState) return;
 
-    // Snapshot identifying state at dispatch time
     const turnSnapshot = gameState.turnNumber;
     const playerSnapshot = gameState.currentPlayer;
 
@@ -64,7 +67,6 @@ export function useAITurn(enabled: boolean = true) {
       const worker = workerRef.current;
       if (!worker) return;
 
-      // Re-check state to avoid stale closure
       const current = useGameStore.getState();
       if (
         !current.gameState ||
@@ -84,7 +86,9 @@ export function useAITurn(enabled: boolean = true) {
         let { move } = e.data;
         if (!move) return;
 
-        // Guard against stale results (user may have clicked undo/reset)
+        // Discard result if user paused after this think was dispatched
+        if (isPausedRef?.current) return;
+
         const latest = useGameStore.getState();
         if (
           !latest.gameState ||
@@ -97,7 +101,6 @@ export function useAITurn(enabled: boolean = true) {
           return;
         }
 
-        // Tutorial: if the selected move is from the blocked piece, pick an alternative
         const blockedKey = useTutorialStore.getState().blockedPieceKey;
         if (blockedKey && coordKey(move.from) === blockedKey) {
           const gs = latest.gameState;
@@ -112,27 +115,21 @@ export function useAITurn(enabled: boolean = true) {
           if (altMoves.length > 0) {
             move = altMoves[Math.floor(Math.random() * altMoves.length)];
           }
-          // If no alternative, fall through and allow the blocked piece to move
         }
 
         latest.selectPiece(move.from);
-        // Small delay to let selectPiece state settle
         setTimeout(() => {
           const animate = useSettingsStore.getState().animateMoves;
           useGameStore.getState().makeMove(move.to, animate);
         }, 50);
       };
 
-      // Pick opening variant once per game; reset when turn number decreases (new game)
       const turn = current.gameState.turnNumber;
       if (openingVariantRef.current === null || turn < prevTurnRef.current) {
         openingVariantRef.current = Math.random() < 0.5 ? 'standard' : 'standard-mirror';
       }
       prevTurnRef.current = turn;
 
-      // Resolve opening moves to pass directly to the worker.
-      // For non-normal modes, pick a random custom opening tagged for that mode.
-      // For normal mode, use the AI-internal standard opening (first 4 moves).
       const variant = current.gameState.playerPieceTypes?.[current.gameState.currentPlayer] ?? 'normal';
       const { customOpenings } = useOpeningStore.getState();
       const matching = customOpenings.filter((o) => (o.gameMode ?? 'normal') === variant);
@@ -146,7 +143,6 @@ export function useAITurn(enabled: boolean = true) {
           : AI_STANDARD_MOVES;
       }
 
-      // --- Tablebase lookup (main thread — localStorage not available in worker) ---
       const tbPlayer = current.gameState.currentPlayer;
       const outsidePieces = getPiecesOutsideGoal(current.gameState, tbPlayer);
       if (outsidePieces.length >= 1 && outsidePieces.length <= 2) {
@@ -157,6 +153,7 @@ export function useAITurn(enabled: boolean = true) {
           const tbMoves = getValidMoves(current.gameState, fromCoord);
           const tbMove = tbMoves.find(m => m.to.q === tbEntry.to.q && m.to.r === tbEntry.to.r);
           if (tbMove) {
+            if (isPausedRef?.current) return;
             useGameStore.getState().selectPiece(tbMove.from);
             setTimeout(() => {
               const animate = useSettingsStore.getState().animateMoves;
@@ -166,7 +163,6 @@ export function useAITurn(enabled: boolean = true) {
           }
         }
       }
-      // --- End tablebase lookup ---
 
       worker.postMessage({
         state: serialized,
@@ -185,7 +181,6 @@ export function useAITurn(enabled: boolean = true) {
     };
   }, [isAITurn, pendingConfirmation, animatingPiece, gameState?.currentPlayer, gameState?.turnNumber, isPaused]);
 
-  // Phase 2: Pending + not animating + AI turn -> auto-confirm after delay
   useEffect(() => {
     if (!isAITurn || !pendingConfirmation || animatingPiece) return;
 
