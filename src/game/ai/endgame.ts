@@ -10,7 +10,7 @@
  */
 
 import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
-import { coordKey, cubeEquals, cubeDistance, centroid } from '../coordinates';
+import { coordKey, cubeEquals, cubeDistance } from '../coordinates';
 import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
 import { getAllValidMoves, canJumpOver } from '../moves';
@@ -172,6 +172,50 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   return null;
 }
 
+// Cache: empty-goal-set key → per-cell step-distance to nearest empty goal.
+// Keyed on goal configuration only (pieces are ignored — they can be jumped
+// over, so topology is all that matters for approach routing).
+const _bfsDistCache = new Map<string, Map<string, number>>();
+
+/**
+ * Multi-source BFS backward from all empty goal cells over board topology
+ * (pieces ignored). Returns a Map<coordKey, steps> for every reachable cell.
+ * Cached by the set of empty goal cells so repeated calls within a search
+ * are O(1) after the first.
+ */
+function bfsDistancesToGoal(
+  state: GameState,
+  emptyGoals: CubeCoord[]
+): Map<string, number> {
+  const cacheKey = emptyGoals.map(g => coordKey(g)).sort().join('|');
+  const cached = _bfsDistCache.get(cacheKey);
+  if (cached) return cached;
+
+  const dist = new Map<string, number>();
+  const queue: Array<[CubeCoord, number]> = [];
+
+  for (const goal of emptyGoals) {
+    dist.set(coordKey(goal), 0);
+    queue.push([goal, 0]);
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const [pos, d] = queue[head++];
+    for (const dir of DIRECTIONS) {
+      const next: CubeCoord = { q: pos.q + dir.q, r: pos.r + dir.r, s: pos.s + dir.s };
+      const nk = coordKey(next);
+      if (dist.has(nk) || !state.board.has(nk)) continue;
+      dist.set(nk, d + 1);
+      queue.push([next, d + 1]);
+    }
+  }
+
+  if (_bfsDistCache.size >= 32) _bfsDistCache.clear();
+  _bfsDistCache.set(cacheKey, dist);
+  return dist;
+}
+
 /**
  * Score a move for endgame purposes.
  * Used when findEndgameMove returns null but we're still in late endgame.
@@ -181,7 +225,6 @@ export function scoreEndgameMove(state: GameState, move: Move, player: PlayerInd
   const goalPositions = getGoalPositionsForState(state, player);
   const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
   const emptyGoals = getEmptyGoalsByDepth(state, player);
-  const goalCenter = centroid(goalPositions);
   const piecesOutside = getPiecesOutsideGoal(state, player);
 
   let score = 0;
@@ -255,18 +298,21 @@ export function scoreEndgameMove(state: GameState, move: Move, player: PlayerInd
     }
   }
 
-  // Outside goal: bonus for approaching deepest empty goal
+  // Outside goal: reward moves that genuinely reduce steps to goal entry.
+  // BFS over board topology gives accurate routing; pieces are ignored since
+  // they act as stepping stones in endgame jump chains.
   if (!fromInGoal && !toInGoal && emptyGoals.length > 0) {
-    const target = emptyGoals[0];
-    const improvement = cubeDistance(move.from, target) - cubeDistance(move.to, target);
-    score += improvement * 1000;
+    const distMap = bfsDistancesToGoal(state, emptyGoals);
+    const distBefore = distMap.get(coordKey(move.from)) ?? 999;
+    const distAfter = distMap.get(coordKey(move.to)) ?? 999;
+    score += (distBefore - distAfter) * 1000;
 
     if (move.jumpPath && move.jumpPath.length > 0) {
       score += move.jumpPath.length * 500;
     }
 
-    const distFromGoal = cubeDistance(move.from, goalCenter);
-    score += distFromGoal * 100;
+    // Straggler urgency: farther pieces score higher so they get moved first
+    score += distBefore * 100;
   }
 
   // Check if this move enables goal entry next turn
