@@ -25,7 +25,7 @@ export const useReviewStore = create<ReviewStore>()(
       addFlag: (flag) => {
         const entry: FlaggedMove = {
           ...flag,
-          id: Math.random().toString(36).slice(2, 10),
+          id: crypto.randomUUID(),
           timestamp: Date.now(),
         };
         set((s) => ({ flags: [...s.flags, entry] }));

@@ -36,7 +36,7 @@ describe('reviewStore', () => {
     useReviewStore.getState().addFlag(baseFlag);
     const { flags } = useReviewStore.getState();
     expect(flags).toHaveLength(1);
-    expect(flags[0].id).toMatch(/^[a-z0-9]{8}$/);
+    expect(flags[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(flags[0].timestamp).toBeGreaterThan(0);
   });
 
