@@ -154,18 +154,34 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
 
   if (directEntries.length > 0) return directEntries[0].move;
 
-  // Priority 2: Move deeper within goal — piece advances to a deeper goal cell.
-  // Always a strict positional improvement; no search needed.
+  // Priority 2: Move deeper within goal — prefer moves that unblock an entry
+  // point for an outside piece over moves that merely maximise depth gain.
+  const piecesOutside = getPiecesOutsideGoal(state, player);
+
   const deeperMoves = allMoves
     .filter(m => {
       if (!goalKeys.has(coordKey(m.from)) || !goalKeys.has(coordKey(m.to))) return false;
       return getGoalPositionDepth(m.to) > getGoalPositionDepth(m.from);
     })
-    .map(m => ({
-      move: m,
-      gain: getGoalPositionDepth(m.to) - getGoalPositionDepth(m.from),
-    }))
-    .sort((a, b) => b.gain - a.gain);
+    .map(m => {
+      // Does vacating m.from let an outside piece enter on the very next turn?
+      const unblocksJump = couldEnterGoalIfEmpty(state, m.from, player, piecesOutside) !== null;
+      const unblocksStep = piecesOutside.some(p =>
+        DIRECTIONS.some(dir =>
+          p.q === m.from.q + dir.q && p.r === m.from.r + dir.r
+        )
+      );
+      return {
+        move: m,
+        gain: getGoalPositionDepth(m.to) - getGoalPositionDepth(m.from),
+        unblocksEntry: unblocksJump || unblocksStep,
+      };
+    })
+    .sort((a, b) => {
+      // Entry-unblocking moves first, then largest depth gain
+      if (a.unblocksEntry !== b.unblocksEntry) return a.unblocksEntry ? -1 : 1;
+      return b.gain - a.gain;
+    });
 
   if (deeperMoves.length > 0) return deeperMoves[0].move;
 
