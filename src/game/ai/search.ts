@@ -275,28 +275,32 @@ function enablesGoalFill(
   // Simulate the state after the move (the goal position is now empty)
   const nextState = applyMove(state, move);
 
-  // Check if any friendly piece can now step or jump INTO the vacated goal position
+  // Check if any OUTSIDE piece can now step or jump INTO the vacated goal position.
+  // Must be outside goal — an already-in-goal neighbor gains nothing from re-entering.
   for (const dir of DIRECTIONS) {
     const adjPos = {
       q: move.from.q - dir.q,
       r: move.from.r - dir.r,
       s: move.from.s - dir.s,
     };
-    const adjContent = nextState.board.get(coordKey(adjPos));
+    const adjKey = coordKey(adjPos);
+    const adjContent = nextState.board.get(adjKey);
 
-    // Step entry: friendly piece is adjacent to the now-vacant goal cell
-    if (adjContent?.type === 'piece' && adjContent.player === player) {
+    // Step entry: outside piece is adjacent to the now-vacant goal cell
+    if (adjContent?.type === 'piece' && adjContent.player === player && !goalKeySet.has(adjKey)) {
       return true;
     }
 
-    // Jump entry: friendly piece is 2 steps away with something to jump over
+    // Jump entry: outside piece is 2 steps away with something to jump over
     const jumperPos = {
       q: move.from.q - dir.q * 2,
       r: move.from.r - dir.r * 2,
       s: move.from.s - dir.s * 2,
     };
-    const jumperContent = state.board.get(coordKey(jumperPos));
+    const jumperKey = coordKey(jumperPos);
+    const jumperContent = state.board.get(jumperKey);
     if (jumperContent?.type !== 'piece' || jumperContent.player !== player) continue;
+    if (goalKeySet.has(jumperKey)) continue; // jumper already in goal — not helpful
 
     if (adjContent?.type === 'piece') {
       return true;
