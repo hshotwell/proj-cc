@@ -438,13 +438,6 @@ export function computeRegressionPenalty(
     }
   }
 
-  // Hard veto: no backward/lateral moves within goal when 7+ pieces already secured
-  if (fromIsGoal && toIsGoal && progressDelta <= 0) {
-    const piecesInGoalsForBackward = Array.from(state.board.entries()).filter(([key, content]) =>
-      content.type === 'piece' && content.player === player && goalKeySet.has(key)
-    ).length;
-    if (piecesInGoalsForBackward >= 7) return Infinity;
-  }
 
   // State repetition - ABSOLUTE VETO
   const { repeats, count } = wouldRepeatState(state, move);
