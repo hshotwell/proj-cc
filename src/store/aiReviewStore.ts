@@ -15,6 +15,7 @@ interface AIReviewStore {
   captureFrom: CubeCoord | null;
   captureTo: CubeCoord | null;
   flags: FlaggedMove[];
+  rewindSignal: number;
 
   togglePause: () => void;
   pushHistory: (state: GameState) => void;
@@ -40,6 +41,7 @@ export const useAIReviewStore = create<AIReviewStore>()(
       captureFrom: null,
       captureTo: null,
       flags: [],
+      rewindSignal: 0,
 
       togglePause: () => set((s) => ({ isPaused: !s.isPaused })),
 
@@ -54,7 +56,7 @@ export const useAIReviewStore = create<AIReviewStore>()(
         const { stateHistory } = get();
         if (stateHistory.length === 0) return null;
         const prev = stateHistory[stateHistory.length - 1];
-        set({ stateHistory: stateHistory.slice(0, -1) });
+        set({ stateHistory: stateHistory.slice(0, -1), rewindSignal: get().rewindSignal + 1 });
         return prev;
       },
 

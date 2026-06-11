@@ -42,6 +42,7 @@ export function TrainingMatchContainer() {
     captureMode,
     captureFrom,
     captureCell,
+    rewindSignal,
   } = useAIReviewStore();
 
   // Ref mirror of isPaused — checked inside worker.onmessage to discard
@@ -57,6 +58,17 @@ export function TrainingMatchContainer() {
 
   // Capture pre-move game state when AI turn starts (before the move executes).
   const preMoveRef = useRef<typeof gameState>(null);
+
+  // Detect completed AI moves and surface them as pending flags.
+  const prevTurnRef = useRef<number | null>(null);
+
+  // Clear stale refs whenever a rewind occurs so the AI's replayed turn
+  // is captured and flagged correctly.
+  useEffect(() => {
+    preMoveRef.current = null;
+    prevTurnRef.current = null;
+  }, [rewindSignal]);
+
   useEffect(() => {
     if (isAITurn && gameState) {
       preMoveRef.current = gameState;
@@ -71,9 +83,6 @@ export function TrainingMatchContainer() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.turnNumber]);
-
-  // Detect completed AI moves and surface them as pending flags.
-  const prevTurnRef = useRef<number | null>(null);
   useEffect(() => {
     if (!gameState || !lastMoveInfo) return;
     const { player } = lastMoveInfo;
