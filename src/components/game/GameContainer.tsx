@@ -11,11 +11,14 @@ import { useAITurn } from '@/hooks/useAITurn';
 import { usePlayerOpening } from '@/hooks/usePlayerOpening';
 import { useLocalGameSync } from '@/hooks/useLocalGameSync';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
+import { useGameStore } from '@/store/gameStore';
+import { ReviewControls } from './ReviewControls';
 
 export function GameContainer() {
   useAITurn();
   usePlayerOpening();
   useLocalGameSync();
+  const gameId = useGameStore((s) => s.gameId);
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
@@ -39,6 +42,9 @@ export function GameContainer() {
         <div className="mt-2 sm:mt-4">
           <TurnIndicator />
         </div>
+
+        {/* AI Review Controls */}
+        <ReviewControls gameId={gameId} />
       </div>
 
       {/* Game Over Dialog */}
