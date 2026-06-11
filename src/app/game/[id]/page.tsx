@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { GameContainer } from '@/components/game';
+import { TrainingMatchContainer } from '@/components/training/TrainingMatchContainer';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { reconstructGameStates } from '@/game/replay';
@@ -77,5 +78,6 @@ export default function GamePage() {
     );
   }
 
-  return <GameContainer />;
+  const isTrainingMode = useGameStore((s) => s.isTrainingMode);
+  return isTrainingMode ? <TrainingMatchContainer /> : <GameContainer />;
 }

@@ -98,6 +98,7 @@ export default function PlayPage() {
   const [gameMode, setGameMode] = useState<PieceVariant>('normal');
   const [customPlayerCount, setCustomPlayerCount] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<PlayerIndex | null>(null);
+  const [trainingMode, setTrainingMode] = useState(false);
 
   const layoutKeyRef = useRef('');
 
@@ -187,7 +188,8 @@ export default function PlayPage() {
         hasAI ? aiConfig : undefined,
         hasCustomNames ? playerNames : undefined,
         effectiveTeamMode,
-        effectivePieceTypes
+        effectivePieceTypes,
+        trainingMode,
       );
     } else {
       gameId = startGame(
@@ -197,7 +199,8 @@ export default function PlayPage() {
         hasAI ? aiConfig : undefined,
         hasCustomNames ? playerNames : undefined,
         effectiveTeamMode,
-        effectivePieceTypes
+        effectivePieceTypes,
+        trainingMode,
       );
     }
 
@@ -700,6 +703,35 @@ export default function PlayPage() {
             Create or edit layouts in the Board Editor &rarr;
           </Link>
         )}
+
+        {/* Training Mode toggle */}
+              {(() => {
+                const hasAnyAI = Object.keys(aiConfig).length > 0;
+                return (
+                  <div className={`flex items-center gap-3 py-2 ${!hasAnyAI ? 'opacity-40 pointer-events-none' : ''}`}>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={trainingMode}
+                      onClick={() => setTrainingMode((v) => !v)}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                        trainingMode ? 'bg-blue-600' : 'bg-gray-300'
+                      }`}
+                      title={hasAnyAI ? undefined : 'Add an AI player to enable training mode'}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          trainingMode ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-sm text-gray-700">Training Mode</span>
+                    {trainingMode && (
+                      <span className="text-xs text-blue-600">Pause · rewind · flag moves</span>
+                    )}
+                  </div>
+                );
+              })()}
 
         {/* Start button */}
         <button
