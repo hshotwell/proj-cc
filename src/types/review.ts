@@ -7,10 +7,11 @@ export interface BoardSnapshot {
 export interface FlaggedMove {
   id: string;
   gameId: string | null;
+  moveIndex?: number;
   turnNumber: number;
   player: PlayerIndex;
-  difficulty: string;
-  personality: string;
+  difficulty?: string;
+  personality?: string;
   piecesInGoal: number;
   actualMove: { from: { q: number; r: number }; to: { q: number; r: number } };
   suggestedMove?: { from: { q: number; r: number }; to: { q: number; r: number } };

@@ -24,6 +24,7 @@ beforeEach(() => {
     captureFrom: null,
     captureTo: null,
     flags: [],
+    activeGameId: null,
   });
 });
 
@@ -138,5 +139,60 @@ describe('exportText', () => {
     const text = useAIReviewStore.getState().exportText();
     expect(text).toContain('Suggested:');
     expect(text).toContain('(3,-6)');
+  });
+});
+
+describe('activeGameId', () => {
+  it('setActiveGameId sets and clears activeGameId', () => {
+    useAIReviewStore.getState().setActiveGameId('game-abc');
+    expect(useAIReviewStore.getState().activeGameId).toBe('game-abc');
+    useAIReviewStore.getState().setActiveGameId(null);
+    expect(useAIReviewStore.getState().activeGameId).toBeNull();
+  });
+});
+
+describe('updateFlag', () => {
+  it('patches note on an existing flag', () => {
+    useAIReviewStore.getState().addFlag(baseFlag);
+    const id = useAIReviewStore.getState().flags[0].id;
+    useAIReviewStore.getState().updateFlag(id, { note: 'updated note' });
+    expect(useAIReviewStore.getState().flags[0].note).toBe('updated note');
+  });
+
+  it('patches suggestedMove on an existing flag', () => {
+    useAIReviewStore.getState().addFlag(baseFlag);
+    const id = useAIReviewStore.getState().flags[0].id;
+    const suggested = { from: { q: 1, r: -2 }, to: { q: 2, r: -3 } };
+    useAIReviewStore.getState().updateFlag(id, { suggestedMove: suggested });
+    expect(useAIReviewStore.getState().flags[0].suggestedMove).toEqual(suggested);
+  });
+
+  it('does nothing for unknown id', () => {
+    useAIReviewStore.getState().addFlag(baseFlag);
+    useAIReviewStore.getState().updateFlag('nonexistent', { note: 'x' });
+    expect(useAIReviewStore.getState().flags[0].note).toBe('bad move');
+  });
+});
+
+describe('exportText with gameId filter', () => {
+  it('returns sentinel when no flags match gameId', () => {
+    useAIReviewStore.getState().addFlag({ ...baseFlag, gameId: 'other-game' });
+    expect(useAIReviewStore.getState().exportText('g1')).toBe('(no flags recorded)');
+  });
+
+  it('filters to matching gameId only', () => {
+    useAIReviewStore.getState().addFlag({ ...baseFlag, gameId: 'g1' });
+    useAIReviewStore.getState().addFlag({ ...baseFlag, gameId: 'g2', note: 'other game' });
+    const text = useAIReviewStore.getState().exportText('g1');
+    expect(text).toContain('bad move');
+    expect(text).not.toContain('other game');
+  });
+
+  it('exports all flags when no gameId provided (backward compat)', () => {
+    useAIReviewStore.getState().addFlag({ ...baseFlag, gameId: 'g1' });
+    useAIReviewStore.getState().addFlag({ ...baseFlag, gameId: 'g2', note: 'other' });
+    const text = useAIReviewStore.getState().exportText();
+    expect(text).toContain('bad move');
+    expect(text).toContain('other');
   });
 });

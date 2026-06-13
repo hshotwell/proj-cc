@@ -16,6 +16,7 @@ interface AIReviewStore {
   captureTo: CubeCoord | null;
   flags: FlaggedMove[];
   rewindSignal: number;
+  activeGameId: string | null;
 
   togglePause: () => void;
   pushHistory: (state: GameState) => void;
@@ -27,8 +28,10 @@ interface AIReviewStore {
   cancelCapture: () => void;
   addFlag: (flag: Omit<FlaggedMove, 'id' | 'timestamp'>) => void;
   removeFlag: (id: string) => void;
+  updateFlag: (id: string, patch: Partial<Pick<FlaggedMove, 'suggestedMove' | 'note'>>) => void;
   clearFlags: () => void;
-  exportText: () => string;
+  setActiveGameId: (id: string | null) => void;
+  exportText: (gameId?: string) => string;
 }
 
 export const useAIReviewStore = create<AIReviewStore>()(
@@ -42,6 +45,7 @@ export const useAIReviewStore = create<AIReviewStore>()(
       captureTo: null,
       flags: [],
       rewindSignal: 0,
+      activeGameId: null,
 
       togglePause: () => set((s) => ({ isPaused: !s.isPaused })),
 
@@ -88,23 +92,31 @@ export const useAIReviewStore = create<AIReviewStore>()(
       removeFlag: (id) =>
         set((s) => ({ flags: s.flags.filter((f) => f.id !== id) })),
 
+      updateFlag: (id, patch) =>
+        set((s) => ({
+          flags: s.flags.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+        })),
+
       clearFlags: () => set({ flags: [] }),
 
-      exportText: () => {
+      setActiveGameId: (id) => set({ activeGameId: id }),
+
+      exportText: (gameId?: string) => {
         const { flags } = get();
-        if (flags.length === 0) return '(no flags recorded)';
+        const filtered = gameId ? flags.filter((f) => f.gameId === gameId) : flags;
+        if (filtered.length === 0) return '(no flags recorded)';
         const lines: string[] = [
           '=== AI MOVE REVIEW EXPORT ===',
           `Exported: ${new Date().toISOString()}`,
-          `Flags: ${flags.length}`,
+          `Flags: ${filtered.length}`,
           '',
         ];
-        for (let i = 0; i < flags.length; i++) {
-          const f = flags[i];
+        for (let i = 0; i < filtered.length; i++) {
+          const f = filtered[i];
           const from = `(${f.actualMove.from.q},${f.actualMove.from.r})`;
           const to = `(${f.actualMove.to.q},${f.actualMove.to.r})`;
           lines.push(`--- Flag ${i + 1} ---`);
-          lines.push(`Turn ${f.turnNumber} | Player ${f.player} | ${f.difficulty}/${f.personality} | ${f.piecesInGoal}/10 in goal`);
+          lines.push(`Turn ${f.turnNumber} | Player ${f.player}${f.difficulty ? ` | ${f.difficulty}/${f.personality}` : ''} | ${f.piecesInGoal}/10 in goal`);
           lines.push(`Actual move:   ${from} → ${to}`);
           if (f.suggestedMove) {
             const sf = `(${f.suggestedMove.from.q},${f.suggestedMove.from.r})`;
