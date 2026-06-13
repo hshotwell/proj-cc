@@ -116,7 +116,7 @@ export const useAIReviewStore = create<AIReviewStore>()(
           const from = `(${f.actualMove.from.q},${f.actualMove.from.r})`;
           const to = `(${f.actualMove.to.q},${f.actualMove.to.r})`;
           lines.push(`--- Flag ${i + 1} ---`);
-          lines.push(`Turn ${f.turnNumber} | Player ${f.player}${f.difficulty ? ` | ${f.difficulty}/${f.personality}` : ''} | ${f.piecesInGoal}/10 in goal`);
+          lines.push(`Turn ${f.turnNumber} | Player ${f.player}${f.difficulty && f.personality ? ` | ${f.difficulty}/${f.personality}` : ''} | ${f.piecesInGoal}/10 in goal`);
           lines.push(`Actual move:   ${from} → ${to}`);
           if (f.suggestedMove) {
             const sf = `(${f.suggestedMove.from.q},${f.suggestedMove.from.r})`;
