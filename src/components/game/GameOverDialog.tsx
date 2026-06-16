@@ -79,6 +79,11 @@ export function GameOverDialog() {
     router.push(`/replay/${gameId}`);
   };
 
+  const handleReviewGame = () => {
+    if (!gameId) return;
+    router.push(`/review/${gameId}`);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
@@ -172,6 +177,12 @@ export function GameOverDialog() {
               className="w-full px-6 py-3 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-400 transition-colors"
             >
               Watch Replay
+            </button>
+            <button
+              onClick={handleReviewGame}
+              className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 transition-colors"
+            >
+              Review Game
             </button>
             <button
               onClick={() => {

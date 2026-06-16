@@ -84,6 +84,13 @@ export default function ReplaysPage() {
                         </span>
                       )}
                       <button
+                        onClick={(e) => { e.stopPropagation(); router.push(`/review/${game.id}`); }}
+                        className="text-xs px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                        title="Review this game"
+                      >
+                        Review
+                      </button>
+                      <button
                         onClick={(e) => handleDelete(game.id, e)}
                         className="text-gray-400 hover:text-red-500 transition-colors p-1"
                         title="Delete"
