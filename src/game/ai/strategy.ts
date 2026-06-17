@@ -14,6 +14,7 @@ import { getGoalPositionsForState } from '../state';
 import { getPlayerPieces } from '../setup';
 import { getAllValidMoves, getValidMoves, canJumpOver } from '../moves';
 import { DIRECTIONS } from '../constants';
+import { getPiecePhase } from './endgame';
 
 /**
  * Check if a piece is blocking a potential longer jump for its own team.
@@ -438,6 +439,8 @@ export interface StrategicScore {
   pastOpponentsPenalty: number;
   // Bonus for moving a significant straggler
   stragglerBonus: number;
+  // Midgame priority: prefer moving pieces still crossing the board
+  midgamePriorityBonus: number;
   // Total combined score
   total: number;
 }
@@ -496,6 +499,12 @@ export function computeStrategicScore(
   const movingStraggler = isMovingStraggler(state, move, player);
   const stragglerBonus = (hasStraggler && movingStraggler) ? gap * 3 : 0; // Scale with how far behind they are
 
+  // Midgame priority: prefer moving pieces still crossing the board.
+  // Endgame pieces should only be chosen when the endgame solver picks them
+  // or an exceptional opportunity (deep entry, blocking) exists.
+  const movingPiecePhase = getPiecePhase(state, move.from, player);
+  const midgamePriorityBonus = movingPiecePhase === 'midgame' ? 12 : 0;
+
   // Opponent pieces used in jump
   const opponentPiecesUsed = countOpponentPiecesInJump(state, move, player);
   const opponentPieceBonus = opponentPiecesUsed * 3;
@@ -528,7 +537,8 @@ export function computeStrategicScore(
     weights.backwardness * backwardnessBonus +
     weights.opponentPiece * opponentPieceBonus +
     weights.blockingOpponent * blockingOpponentValue +
-    weights.straggler * stragglerBonus -
+    weights.straggler * stragglerBonus +
+    midgamePriorityBonus -
     weights.pastOpponents * pastOpponentsPenalty;
 
   return {
@@ -539,6 +549,7 @@ export function computeStrategicScore(
     blockingOpponentValue,
     pastOpponentsPenalty,
     stragglerBonus,
+    midgamePriorityBonus,
     total,
   };
 }
