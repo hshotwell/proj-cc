@@ -571,6 +571,60 @@ function findShuffleSequence(
 }
 
 /**
+ * For endgame-phase pieces making a lateral or backward move:
+ * returns a large positive score if the move unlocks a new chain-jump path
+ * to a goal cell (setup move), or a heavy penalty if it sets nothing up.
+ * Returns 0 for midgame pieces or forward moves (handled elsewhere).
+ */
+export function evaluateEndgameLateral(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  const phase = getPiecePhase(state, move.from, player);
+  if (phase === 'midgame') return 0;
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalCenter = centroid(goalPositions);
+  const distBefore = cubeDistance(move.from, goalCenter);
+  const distAfter = cubeDistance(move.to, goalCenter);
+  if (distAfter < distBefore) return 0; // Forward move — not a lateral
+
+  const nextState = applyMove(state, move);
+  const emptyGoals = getEmptyGoalsByDepth(nextState, player);
+  if (emptyGoals.length === 0) return -2000; // Goal is full
+
+  const piecesOutsideBefore = getPiecesOutsideGoal(state, player);
+  const piecesOutsideAfter = getPiecesOutsideGoal(nextState, player);
+
+  let bestDepthUnlocked = 0;
+
+  for (const emptyGoal of emptyGoals) {
+    const depth = getGoalPositionDepth(emptyGoal);
+
+    // Was this goal already reachable by any piece before the move?
+    const wasReachable = piecesOutsideBefore.some(p =>
+      canReachGoalViaChain(state, p, emptyGoal, player)
+    );
+    if (wasReachable) continue;
+
+    // Is it reachable after the move?
+    const isReachableNow = piecesOutsideAfter.some(p =>
+      canReachGoalViaChain(nextState, p, emptyGoal, player)
+    );
+    if (isReachableNow) {
+      bestDepthUnlocked = Math.max(bestDepthUnlocked, depth);
+    }
+  }
+
+  if (bestDepthUnlocked > 0) {
+    return bestDepthUnlocked * 500; // Bonus: unlocks deeper goal access
+  }
+
+  return -2000; // No setup value detected: heavy endgame lateral penalty
+}
+
+/**
  * Score a move for endgame purposes.
  * Used when findEndgameMove returns null but we're still in late endgame.
  * Scores are VERY large to dominate regular evaluation scores.

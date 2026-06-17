@@ -9,7 +9,7 @@ import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats } from './strategy';
-import { findEndgameMove, isLateEndgame, scoreEndgameMove } from './endgame';
+import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral } from './endgame';
 import { getOpeningMove } from './openingBook';
 
 // Track recent board states to detect loops at the game state level
@@ -544,6 +544,11 @@ function getTopMoves(
       score += endgameScore; // Can add up to 1000+ for direct goal entries
     }
 
+    // Endgame lateral evaluation: penalise purposeless sidesteps,
+    // reward laterals that unlock a new chain entry into goal
+    const lateralBonus = evaluateEndgameLateral(state, move, player);
+    score += lateralBonus;
+
     // Prefer longer chain jumps for move ordering
     if (move.isJump && move.jumpPath && move.jumpPath.length > 1) {
       score += (move.jumpPath.length - 1) * 50;
@@ -1075,6 +1080,11 @@ function getTopMovesFromList(
       const endgameScore = scoreEndgameMove(state, move, player);
       score += endgameScore;
     }
+
+    // Endgame lateral evaluation: penalise purposeless sidesteps,
+    // reward laterals that unlock a new chain entry into goal
+    const lateralBonus = evaluateEndgameLateral(state, move, player);
+    score += lateralBonus;
 
     // Prefer longer chain jumps for move ordering
     if (move.isJump && move.jumpPath && move.jumpPath.length > 1) {
