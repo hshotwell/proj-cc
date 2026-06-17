@@ -8,6 +8,7 @@ import {
   serializeGameState,
   deserializeGameState,
 } from '@/game/ai';
+import { getPiecePhase } from '@/game/ai/endgame';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
 // Helper: create a simple move
@@ -210,5 +211,51 @@ describe('serializeGameState / deserializeGameState roundtrip', () => {
 
     expect(restored.isCustomLayout).toBeUndefined();
     expect(restored.playerColors).toBeUndefined();
+  });
+});
+
+describe('getPiecePhase', () => {
+  // Player 0 goal cells (lower-left): (-4,5)…(-4,8)
+  // A piece at (-2,4) is 1 cell from (-2,5) → within 3 → endgame territory
+  // A piece at (1,1) is 4+ cells from nearest goal cell → midgame
+
+  it('returns endgame for a piece inside the goal zone', () => {
+    const state = createGame(2);
+    const testState = cloneGameState(state);
+    // Place a player 0 piece at goal cell (-4,6)
+    testState.board.set(coordKey(cubeCoord(-4, 6)), { type: 'piece', player: 0 });
+    const phase = getPiecePhase(testState, cubeCoord(-4, 6), 0);
+    expect(phase).toBe('endgame');
+  });
+
+  it('returns endgame for a piece within 3 cells of goal with no opponent nearby', () => {
+    const state = createGame(2);
+    const testState = cloneGameState(state);
+    // Clear player 2 pieces from the goal region so no opponents are near
+    testState.board.set(coordKey(cubeCoord(-2, 5)), { type: 'empty' });
+    testState.board.set(coordKey(cubeCoord(-3, 5)), { type: 'empty' });
+    testState.board.set(coordKey(cubeCoord(-4, 5)), { type: 'empty' });
+    // Place player 0 piece at (-2,4): 1 cell from (-2,5) goal cell
+    testState.board.set(coordKey(cubeCoord(-2, 4)), { type: 'piece', player: 0 });
+    const phase = getPiecePhase(testState, cubeCoord(-2, 4), 0);
+    expect(phase).toBe('endgame');
+  });
+
+  it('returns endgame-contested when an opponent is between piece and goal', () => {
+    const state = createGame(2);
+    const testState = cloneGameState(state);
+    // Player 0 piece near goal at (-2,4)
+    testState.board.set(coordKey(cubeCoord(-2, 4)), { type: 'piece', player: 0 });
+    // Opponent at (-3,5) — closer to goal center than (-2,4)
+    testState.board.set(coordKey(cubeCoord(-3, 5)), { type: 'piece', player: 2 });
+    const phase = getPiecePhase(testState, cubeCoord(-2, 4), 0);
+    expect(phase).toBe('endgame-contested');
+  });
+
+  it('returns midgame for a piece far from the goal', () => {
+    const state = createGame(2);
+    // Player 0 piece at (2,-3) — far from goal
+    const phase = getPiecePhase(state, cubeCoord(2, -3), 0);
+    expect(phase).toBe('midgame');
   });
 });

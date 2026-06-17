@@ -19,6 +19,48 @@ import { DIRECTIONS } from '../constants';
 import { getCachedEndgameInsights } from '../learning';
 
 /**
+ * Classify a single piece's phase for move evaluation.
+ * endgame: piece is in/near goal (within 3 cells) with no opponents between it and the goal.
+ * endgame-contested: same proximity but an opponent piece is closer to goal than this piece.
+ * midgame: piece is not near the goal.
+ */
+export function getPiecePhase(
+  state: GameState,
+  piece: CubeCoord,
+  player: PlayerIndex
+): 'midgame' | 'endgame' | 'endgame-contested' {
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
+
+  // If piece is already inside the goal zone, it is unambiguously in endgame
+  if (goalKeys.has(coordKey(piece))) return 'endgame';
+
+  const nearGoal = goalPositions.some(g => cubeDistance(piece, g) <= 3);
+  if (!nearGoal) return 'midgame';
+
+  const goalCenter = centroid(goalPositions);
+  const pieceToGoalDist = cubeDistance(piece, goalCenter);
+
+  for (const [key, content] of state.board) {
+    if (content.type !== 'piece' || content.player === player) continue;
+    const [q, r] = key.split(',').map(Number);
+    const opponentPos: CubeCoord = { q, r, s: -q - r };
+    // Opponents inside the goal only count if they are adjacent to our piece
+    // (they are physically blocking entry), not if they are already deep inside
+    const opponentInGoal = goalKeys.has(key);
+    if (opponentInGoal && cubeDistance(opponentPos, piece) > 1) continue;
+    // Consider opponents within 3 cells of any goal position (the approach zone)
+    const opponentNearGoal = goalPositions.some(g => cubeDistance(opponentPos, g) <= 3);
+    if (!opponentNearGoal) continue;
+    if (cubeDistance(opponentPos, goalCenter) < pieceToGoalDist) {
+      return 'endgame-contested';
+    }
+  }
+
+  return 'endgame';
+}
+
+/**
  * Check if we're in late endgame where finishing logic should take over.
  * Trigger at 7+ pieces to focus on finishing efficiently.
  */
