@@ -63,6 +63,54 @@ export function getPiecePhase(
 }
 
 /**
+ * BFS over jump paths: can `piece` reach `targetGoalPos` via a chain of jumps?
+ * Only counts jumps (not steps) — used to detect if a setup move unlocks a chain entry.
+ * maxHops bounds the search to keep it fast (default 6).
+ */
+export function canReachGoalViaChain(
+  state: GameState,
+  piece: CubeCoord,
+  targetGoalPos: CubeCoord,
+  player: PlayerIndex,
+  maxHops: number = 6
+): boolean {
+  const visited = new Set<string>();
+  const queue: Array<{ pos: CubeCoord; hops: number }> = [{ pos: piece, hops: 0 }];
+  visited.add(coordKey(piece));
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (cubeEquals(current.pos, targetGoalPos)) return true;
+    if (current.hops >= maxHops) continue;
+
+    for (const dir of DIRECTIONS) {
+      const over: CubeCoord = {
+        q: current.pos.q + dir.q,
+        r: current.pos.r + dir.r,
+        s: current.pos.s + dir.s,
+      };
+      const land: CubeCoord = {
+        q: current.pos.q + dir.q * 2,
+        r: current.pos.r + dir.r * 2,
+        s: current.pos.s + dir.s * 2,
+      };
+
+      if (!state.board.has(coordKey(land))) continue;
+      if (state.board.get(coordKey(land))?.type !== 'empty') continue;
+      if (!canJumpOver(state, over, player)) continue;
+
+      const landKey = coordKey(land);
+      if (!visited.has(landKey)) {
+        visited.add(landKey);
+        queue.push({ pos: land, hops: current.hops + 1 });
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Check if we're in late endgame where finishing logic should take over.
  * Trigger at 7+ pieces to focus on finishing efficiently.
  */

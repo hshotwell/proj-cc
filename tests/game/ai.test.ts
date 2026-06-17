@@ -8,7 +8,7 @@ import {
   serializeGameState,
   deserializeGameState,
 } from '@/game/ai';
-import { getPiecePhase } from '@/game/ai/endgame';
+import { getPiecePhase, canReachGoalViaChain } from '@/game/ai/endgame';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
 // Helper: create a simple move
@@ -263,5 +263,78 @@ describe('getPiecePhase', () => {
     // Player 0 piece at (2,-3) — far from goal
     const phase = getPiecePhase(state, cubeCoord(2, -3), 0);
     expect(phase).toBe('midgame');
+  });
+});
+
+describe('canReachGoalViaChain', () => {
+  // Player 0 goal: (-4,5)…(-4,8). We'll test if a piece outside can
+  // chain-jump through stepping stones into a goal cell.
+
+  it('returns true when piece can reach target via a single jump', () => {
+    const state = createGame(2);
+    const testState = cloneGameState(state);
+    // Clear the goal area so we control it
+    for (const cell of ['-4,5','-3,5','-2,5','-1,5','-2,6','-3,6','-4,6','-4,7','-3,7','-4,8']) {
+      const [q, r] = cell.split(',').map(Number);
+      testState.board.set(`${q},${r}`, { type: 'empty' });
+    }
+    // Piece P at (-2,4), stepping stone at (-3,5) (player 0), target (-4,6) empty
+    testState.board.set(coordKey(cubeCoord(-2, 4)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(-3, 5)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(-4, 6)), { type: 'empty' });
+    // (-2,4) → over (-3,5) → land (-4,6)
+    const result = canReachGoalViaChain(testState, cubeCoord(-2, 4), cubeCoord(-4, 6), 0);
+    expect(result).toBe(true);
+  });
+
+  it('returns true when piece can reach target via a 2-hop chain', () => {
+    const state = createGame(2);
+    const testState = cloneGameState(state);
+    // Clear goal area
+    for (const cell of ['-4,5','-3,5','-2,5','-1,5','-2,6','-3,6','-4,6','-4,7','-3,7','-4,8']) {
+      const [q, r] = cell.split(',').map(Number);
+      testState.board.set(`${q},${r}`, { type: 'empty' });
+    }
+    // Chain: (0,2) → over (-1,3) → land (-2,4) → over (-3,5) → land (-4,6)
+    testState.board.set(coordKey(cubeCoord(0, 2)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(-1, 3)), { type: 'piece', player: 0 }); // step over
+    testState.board.set(coordKey(cubeCoord(-2, 4)), { type: 'empty' });            // intermediate landing
+    testState.board.set(coordKey(cubeCoord(-3, 5)), { type: 'piece', player: 0 }); // step over
+    testState.board.set(coordKey(cubeCoord(-4, 6)), { type: 'empty' });            // target goal cell
+    const result = canReachGoalViaChain(testState, cubeCoord(0, 2), cubeCoord(-4, 6), 0);
+    expect(result).toBe(true);
+  });
+
+  it('returns false when no jump path exists', () => {
+    const state = createGame(2);
+    const testState = cloneGameState(state);
+    // Clear goal area
+    for (const cell of ['-4,5','-3,5','-2,5','-1,5','-2,6','-3,6','-4,6','-4,7','-3,7','-4,8']) {
+      const [q, r] = cell.split(',').map(Number);
+      testState.board.set(`${q},${r}`, { type: 'empty' });
+    }
+    // Piece in isolation with no stepping stones
+    testState.board.set(coordKey(cubeCoord(2, -1)), { type: 'piece', player: 0 });
+    const result = canReachGoalViaChain(testState, cubeCoord(2, -1), cubeCoord(-4, 6), 0);
+    expect(result).toBe(false);
+  });
+
+  it('respects maxHops — does not find path beyond limit', () => {
+    const state = createGame(2);
+    const testState = cloneGameState(state);
+    // Clear goal area
+    for (const cell of ['-4,5','-3,5','-2,5','-1,5','-2,6','-3,6','-4,6','-4,7','-3,7','-4,8']) {
+      const [q, r] = cell.split(',').map(Number);
+      testState.board.set(`${q},${r}`, { type: 'empty' });
+    }
+    // 2-hop chain as above
+    testState.board.set(coordKey(cubeCoord(0, 2)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(-1, 3)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(-2, 4)), { type: 'empty' });
+    testState.board.set(coordKey(cubeCoord(-3, 5)), { type: 'piece', player: 0 });
+    testState.board.set(coordKey(cubeCoord(-4, 6)), { type: 'empty' });
+    // With maxHops=1, can only reach (-2,4), not (-4,6)
+    const result = canReachGoalViaChain(testState, cubeCoord(0, 2), cubeCoord(-4, 6), 0, 1);
+    expect(result).toBe(false);
   });
 });
