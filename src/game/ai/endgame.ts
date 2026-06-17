@@ -126,8 +126,8 @@ export function isLateEndgame(state: GameState, player: PlayerIndex): boolean {
     }
   }
 
-  // Late endgame: 7+ pieces in goal (3 or fewer remaining)
-  return inGoal >= 7;
+  // Late endgame: 6+ pieces in goal (4 or fewer remaining)
+  return inGoal >= 6;
 }
 
 /**
@@ -186,30 +186,16 @@ function couldEnterGoalIfEmpty(
   player: PlayerIndex,
   piecesOutside: CubeCoord[]
 ): CubeCoord | null {
-  // For each direction, check if there's a piece that could jump INTO goalPos
-  for (const dir of DIRECTIONS) {
-    // The piece would need to be 2 steps away in the opposite direction
-    const jumperPos: CubeCoord = {
-      q: goalPos.q - dir.q * 2,
-      r: goalPos.r - dir.r * 2,
-      s: goalPos.s - dir.s * 2,
-    };
+  // Simulate the goal position being empty so chain detection is accurate
+  const tempBoard = new Map(state.board);
+  tempBoard.set(coordKey(goalPos), { type: 'empty' });
+  const tempState: GameState = { ...state, board: tempBoard };
 
-    // Check if there's an outside piece there
-    const outsidePiece = piecesOutside.find(p => cubeEquals(p, jumperPos));
-    if (!outsidePiece) continue;
-
-    // Check if there's a jumpable piece between the jumper and the goal
-    const overPos: CubeCoord = {
-      q: goalPos.q - dir.q,
-      r: goalPos.r - dir.r,
-      s: goalPos.s - dir.s,
-    };
-    if (canJumpOver(state, overPos, player)) {
-      return outsidePiece; // This outside piece could jump in if goalPos were empty
+  for (const piece of piecesOutside) {
+    if (canReachGoalViaChain(tempState, piece, goalPos, player)) {
+      return piece;
     }
   }
-
   return null;
 }
 
