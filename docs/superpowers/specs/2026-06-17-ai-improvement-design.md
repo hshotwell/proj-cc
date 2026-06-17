@@ -101,6 +101,41 @@ Three targeted adjustments to `computeStrategicScore` and `evaluatePosition`. No
 
 ---
 
+## Section 6: Endgame Lateral Move Handling + Multi-Hop Chain Detection
+
+**Rule:** In endgame phase, purposeless lateral moves are penalized. Setup laterals are rewarded. The distinction is detected via multi-hop chain analysis.
+
+**New function: `canReachGoalViaChain(state, piece, targetGoalPos)`**
+- BFS from `piece`'s position over available jump paths (not steps — only jumps, since chains are what make setup moves valuable)
+- Returns true if `piece` can reach `targetGoalPos` via any chain of jumps given the current board
+- Bounded depth (e.g., 6 hops max) to keep it fast
+
+**How it's applied to lateral moves in endgame:**
+1. Simulate the lateral move on the board
+2. For each empty goal position, run `canReachGoalViaChain` for each friendly piece
+3. Compare reachable goal depths before and after the lateral
+4. If the lateral **increases** the maximum reachable goal depth for any friendly piece → score it positively (bonus scales with the depth gain unlocked)
+5. If the lateral changes nothing → heavy endgame penalty
+
+This replaces the current "0 penalty, let search depth decide" approach. It makes the intent explicit: lateral moves earn their place by demonstrably enabling deeper goal access.
+
+**`couldEnterGoalIfEmpty` upgrade:**
+The existing 1-hop check in `findEndgameMove`'s "make room" priority is replaced with `canReachGoalViaChain`. This fixes flags 9, 13–15 where the AI fails to see that consolidating a shallow goal piece creates space for a multi-hop chain entry from an outside piece.
+
+---
+
+## Section 7: Repetition Prevention
+
+The current `computeRepetitionPenalty` and `wouldRepeatState` are not preventing the loops seen in flags 12, 16, 18, 21. Strengthening:
+
+**Board-state repetition (endgame):** In endgame phase, if `wouldRepeatState` detects the resulting board has been seen before, the penalty escalates from a soft penalty to a hard veto. Outside endgame it stays as a soft penalty (some early-game positions legitimately recur).
+
+**Per-piece cycle detection:** If a piece has visited its proposed destination in the last 6 of its own moves (tracked via `moveHistory`), veto the move. This catches the "A→B→A→B" shuffle loops that `wouldRepeatState` misses when other players are also moving (changing the global board hash each time).
+
+**No-progress escalation:** If a player in endgame phase has made 4+ consecutive moves with zero net progress (measured by `computePlayerProgress`), apply a strong penalty to any move that also produces zero progress. Forces the AI to find a different approach rather than continuing to shuffle.
+
+---
+
 ## What This Does NOT Change
 
 - Search algorithm (minimax / max^n) — unchanged
