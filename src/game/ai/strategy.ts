@@ -444,7 +444,7 @@ function computeOpponentGiftPenalty(
     const oppGoalPositions = getGoalPositionsForState(state, opponent);
     const oppGoalCenter = centroid(oppGoalPositions);
 
-    let checked = 0;
+    let checked = 0;  // Reset counter for each opponent
     for (const [key, content] of nextState.board) {
       if (content.type !== 'piece' || content.player !== opponent) continue;
       const [q, r] = key.split(',').map(Number);

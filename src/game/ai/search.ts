@@ -411,8 +411,8 @@ export function computeRegressionPenalty(
     ).length;
     const isEndgame = piecesInGoals >= 6; // 6+ pieces in goal = endgame
 
-    // Hard veto: never leave goal once 7+ pieces are already secured there
-    if (piecesInGoals >= 7) return Infinity;
+    // Hard veto: never leave goal once 6+ pieces are already secured there
+    if (piecesInGoals >= 6) return Infinity;
 
     if (allowsGoalFill) {
       // Vacating goal so another piece can fill it - GOOD in endgame
@@ -426,12 +426,12 @@ export function computeRegressionPenalty(
     }
   }
 
-  // Hard veto: no backward/lateral moves within goal when 7+ pieces already secured
+  // Hard veto: no backward/lateral moves within goal when 6+ pieces already secured
   if (fromIsGoal && toIsGoal && progressDelta <= 0) {
     const piecesInGoalsForBackward = Array.from(state.board.entries()).filter(([key, content]) =>
       content.type === 'piece' && content.player === player && goalKeySet.has(key)
     ).length;
-    if (piecesInGoalsForBackward >= 7) return Infinity;
+    if (piecesInGoalsForBackward >= 6) return Infinity;
   }
 
   // State repetition - ABSOLUTE VETO

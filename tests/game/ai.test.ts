@@ -111,7 +111,8 @@ describe('computeRepetitionPenalty', () => {
     // Now proposing C -> A — returning to A, a 3-step cycle
     const move = makeMove(0, -5, 0, -3);
     const penalty = computeRepetitionPenalty(state, move, 0);
-    // Returning to a previously visited position (visitCount === 1)
+    // (0,-5) is a midgame piece (far from player 0's goal at lower-left),
+    // so the soft 200-point penalty applies rather than the endgame hard-veto.
     expect(penalty).toBe(200);
   });
 
