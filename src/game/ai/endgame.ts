@@ -141,45 +141,22 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   const goalPositions = getGoalPositionsForState(state, player);
   const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
 
-  const emptyGoals = getEmptyGoalsByDepth(state, player);
-  const piecesOutside = getPiecesOutsideGoal(state, player);
-
   // Priority 1: Direct goal entry — outside piece steps or jumps into an empty goal cell.
-  // Sort: deepest first; equal depth → prefer the entry that leaves the remaining
-  // outside pieces best positioned (lowest total BFS to their nearest empty cell);
-  // tiebreak on jump length.
+  // Always optimal; take deepest available.
   const directEntries = allMoves
     .filter(m => !goalKeys.has(coordKey(m.from)) && goalKeys.has(coordKey(m.to)))
-    .map(m => {
-      const depth = getGoalPositionDepth(m.to);
-      const jumpLen = m.jumpPath?.length ?? 0;
-
-      // Sum of BFS distances from remaining outside pieces to their nearest
-      // post-entry empty goal. Only computed when there are multiple outside pieces.
-      let remainingBFS = 0;
-      if (piecesOutside.length > 1) {
-        const postEmpty = emptyGoals.filter(g => !cubeEquals(g, m.to));
-        if (postEmpty.length > 0) {
-          const distMap = bfsDistancesToGoal(state, postEmpty);
-          for (const p of piecesOutside) {
-            if (cubeEquals(p, m.from)) continue;
-            remainingBFS += distMap.get(coordKey(p)) ?? 999;
-          }
-        }
-      }
-
-      return { move: m, depth, jumpLen, remainingBFS };
-    })
-    .sort((a, b) => {
-      if (b.depth !== a.depth) return b.depth - a.depth;
-      if (a.remainingBFS !== b.remainingBFS) return a.remainingBFS - b.remainingBFS;
-      return b.jumpLen - a.jumpLen;
-    });
+    .map(m => ({
+      move: m,
+      depth: getGoalPositionDepth(m.to),
+      jumpLen: m.jumpPath?.length ?? 0,
+    }))
+    .sort((a, b) => b.depth !== a.depth ? b.depth - a.depth : b.jumpLen - a.jumpLen);
 
   if (directEntries.length > 0) return directEntries[0].move;
 
   // Priority 2: Move deeper within goal — prefer moves that unblock an entry
   // point for an outside piece over moves that merely maximise depth gain.
+  const piecesOutside = getPiecesOutsideGoal(state, player);
 
   const goalMoves = allMoves
     .filter(m => {
@@ -360,12 +337,8 @@ export function scoreEndgameMove(state: GameState, move: Move, player: PlayerInd
       score += move.jumpPath.length * 500;
     }
 
-    // When multiple pieces are outside, prefer moving the piece closest to goal
-    // (can enter soonest). distBefore is small for close pieces → high bonus.
-    // With one outside piece the max equals distBefore → bonus is 0 (neutral).
-    const piecesOutsideDists = piecesOutside.map(p => distMap.get(coordKey(p)) ?? 999);
-    const maxOutsideDist = piecesOutsideDists.length > 0 ? Math.max(...piecesOutsideDists) : distBefore;
-    score += (maxOutsideDist - distBefore) * 100;
+    // Straggler urgency: farther pieces score higher so they get moved first
+    score += distBefore * 100;
   }
 
   // Check if this move enables goal entry next turn
