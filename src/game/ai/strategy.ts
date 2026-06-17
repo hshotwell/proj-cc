@@ -422,6 +422,54 @@ export function evaluateSteppingStoneSetup(
 }
 
 /**
+ * Penalise moves that hand an opponent a large forward jump.
+ * Simulates our move and checks opponent jump gains (up to 5 pieces checked).
+ */
+function computeOpponentGiftPenalty(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  // Simulate our move
+  const nextBoard = new Map(state.board);
+  const fromContent = nextBoard.get(coordKey(move.from));
+  nextBoard.set(coordKey(move.from), { type: 'empty' });
+  nextBoard.set(coordKey(move.to), fromContent!);
+  const nextState: GameState = { ...state, board: nextBoard };
+
+  let maxGift = 0;
+
+  for (const opponent of state.activePlayers) {
+    if (opponent === player) continue;
+    const oppGoalPositions = getGoalPositionsForState(state, opponent);
+    const oppGoalCenter = centroid(oppGoalPositions);
+
+    let checked = 0;
+    for (const [key, content] of nextState.board) {
+      if (content.type !== 'piece' || content.player !== opponent) continue;
+      const [q, r] = key.split(',').map(Number);
+      const from: CubeCoord = { q, r, s: -q - r };
+
+      for (const dir of DIRECTIONS) {
+        const over: CubeCoord = { q: from.q + dir.q, r: from.r + dir.r, s: from.s + dir.s };
+        const land: CubeCoord = { q: from.q + dir.q * 2, r: from.r + dir.r * 2, s: from.s + dir.s * 2 };
+        if (!nextState.board.has(coordKey(land))) continue;
+        if (nextState.board.get(coordKey(land))?.type !== 'empty') continue;
+        if (!canJumpOver(nextState, over, opponent)) continue;
+
+        const gain = cubeDistance(from, oppGoalCenter) - cubeDistance(land, oppGoalCenter);
+        if (gain > maxGift) maxGift = gain;
+      }
+
+      checked++;
+      if (checked >= 5) break;
+    }
+  }
+
+  return maxGift >= 3 ? maxGift * 2 : 0;
+}
+
+/**
  * Score a move based on all strategic principles.
  */
 export interface StrategicScore {
@@ -441,6 +489,8 @@ export interface StrategicScore {
   stragglerBonus: number;
   // Midgame priority: prefer moving pieces still crossing the board
   midgamePriorityBonus: number;
+  // Penalty for moves that hand an opponent a large forward jump
+  opponentGiftPenalty: number;
   // Total combined score
   total: number;
 }
@@ -505,6 +555,13 @@ export function computeStrategicScore(
   const movingPiecePhase = getPiecePhase(state, move.from, player);
   const midgamePriorityBonus = movingPiecePhase === 'midgame' ? 12 : 0;
 
+  // Opponent-gift: penalise moves that give opponent a large forward jump.
+  // Aggressive personality ignores opponent threats; defensive/generalist don't.
+  const opponentGiftPenalty =
+    personality !== 'aggressive'
+      ? computeOpponentGiftPenalty(state, move, player)
+      : 0;
+
   // Opponent pieces used in jump
   const opponentPiecesUsed = countOpponentPiecesInJump(state, move, player);
   const opponentPieceBonus = opponentPiecesUsed * 3;
@@ -539,7 +596,8 @@ export function computeStrategicScore(
     weights.blockingOpponent * blockingOpponentValue +
     weights.straggler * stragglerBonus +
     midgamePriorityBonus -
-    weights.pastOpponents * pastOpponentsPenalty;
+    weights.pastOpponents * pastOpponentsPenalty -
+    weights.blockingOpponent * opponentGiftPenalty;
 
   return {
     steppingStoneValue,
@@ -550,6 +608,7 @@ export function computeStrategicScore(
     pastOpponentsPenalty,
     stragglerBonus,
     midgamePriorityBonus,
+    opponentGiftPenalty,
     total,
   };
 }
