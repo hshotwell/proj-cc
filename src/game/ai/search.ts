@@ -540,7 +540,7 @@ function getTopMoves(
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
     if (inLateEndgame) {
-      const endgameScore = scoreEndgameMove(state, move, player);
+      const endgameScore = scoreEndgameMove(state, move, player, personality);
       score += endgameScore; // Can add up to 1000+ for direct goal entries
     }
 
@@ -1077,7 +1077,7 @@ function getTopMovesFromList(
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
     if (inLateEndgame) {
-      const endgameScore = scoreEndgameMove(state, move, player);
+      const endgameScore = scoreEndgameMove(state, move, player, personality);
       score += endgameScore;
     }
 

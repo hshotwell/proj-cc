@@ -10,6 +10,7 @@
  */
 
 import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
+import type { AIPersonality } from '@/types/ai';
 import { coordKey, cubeEquals, cubeDistance, centroid } from '../coordinates';
 import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
@@ -629,7 +630,12 @@ export function evaluateEndgameLateral(
  * Used when findEndgameMove returns null but we're still in late endgame.
  * Scores are VERY large to dominate regular evaluation scores.
  */
-export function scoreEndgameMove(state: GameState, move: Move, player: PlayerIndex): number {
+export function scoreEndgameMove(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  personality?: AIPersonality
+): number {
   const goalPositions = getGoalPositionsForState(state, player);
   const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
   const emptyGoals = getEmptyGoalsByDepth(state, player);
@@ -637,6 +643,17 @@ export function scoreEndgameMove(state: GameState, move: Move, player: PlayerInd
   const piecesOutside = getPiecesOutsideGoal(state, player);
 
   let score = 0;
+
+  // Swap move: displaces an opponent from our goal cell — highly valuable.
+  // Personality-weighted: defensive prizes this, aggressive less so.
+  if (move.isSwap) {
+    const swapDepth = getGoalPositionDepth(move.to);
+    const baseSwapBonus = 30000 + swapDepth * 800;
+    const personalityMultiplier =
+      personality === 'defensive' ? 1.5 :
+      personality === 'aggressive' ? 0.6 : 1.0;
+    score += baseSwapBonus * personalityMultiplier;
+  }
 
   const fromInGoal = goalKeys.has(coordKey(move.from));
   const toInGoal = goalKeys.has(coordKey(move.to));
