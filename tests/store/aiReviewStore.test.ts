@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useAIReviewStore } from '@/store/aiReviewStore';
 import type { FlaggedMove } from '@/types/review';
-import type { GameState } from '@/types/game';
 
 const baseFlag: Omit<FlaggedMove, 'id' | 'timestamp'> = {
   gameId: 'g1',
@@ -17,46 +16,11 @@ const baseFlag: Omit<FlaggedMove, 'id' | 'timestamp'> = {
 
 beforeEach(() => {
   useAIReviewStore.setState({
-    isPaused: false,
-    stateHistory: [],
-    pendingFlag: null,
     captureMode: null,
     captureFrom: null,
     captureTo: null,
     flags: [],
     activeGameId: null,
-  });
-});
-
-describe('togglePause', () => {
-  it('flips isPaused', () => {
-    useAIReviewStore.getState().togglePause();
-    expect(useAIReviewStore.getState().isPaused).toBe(true);
-    useAIReviewStore.getState().togglePause();
-    expect(useAIReviewStore.getState().isPaused).toBe(false);
-  });
-});
-
-describe('stateHistory', () => {
-  it('pushHistory adds state and popHistory returns it', () => {
-    const s = { turnNumber: 5 } as GameState;
-    useAIReviewStore.getState().pushHistory(s);
-    expect(useAIReviewStore.getState().stateHistory).toHaveLength(1);
-    const popped = useAIReviewStore.getState().popHistory();
-    expect(popped?.turnNumber).toBe(5);
-    expect(useAIReviewStore.getState().stateHistory).toHaveLength(0);
-  });
-
-  it('popHistory returns null when empty', () => {
-    expect(useAIReviewStore.getState().popHistory()).toBeNull();
-  });
-
-  it('caps stateHistory at 50 entries', () => {
-    for (let i = 0; i < 55; i++) {
-      useAIReviewStore.getState().pushHistory({ turnNumber: i } as GameState);
-    }
-    expect(useAIReviewStore.getState().stateHistory).toHaveLength(50);
-    expect(useAIReviewStore.getState().stateHistory[0].turnNumber).toBe(5);
   });
 });
 

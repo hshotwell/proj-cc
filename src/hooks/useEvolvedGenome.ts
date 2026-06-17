@@ -53,7 +53,7 @@ async function fetchEndgameGenome(): Promise<Genome | null> {
     const client = getConvexClientOrNull();
     if (!client) return cachedEndgameGenome;
 
-    const result = await client.query(api.endgameTraining.getActiveEndgameGenome);
+    const result = await client.query(api.endgameTraining.getEndgameEvolvedGenome);
     if (result) {
       cachedEndgameGenome = result.genome as Genome;
       endgameCacheTimestamp = Date.now();

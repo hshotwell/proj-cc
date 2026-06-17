@@ -36,11 +36,9 @@ interface GameStore {
   pendingAnimationSubmission: boolean;
   // Whether the current animation is a swap (both pieces arc simultaneously)
   isSwapAnimation: boolean;
-  isTrainingMode: boolean;
-
   // Actions
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>, isTrainingMode?: boolean) => string;
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>, isTrainingMode?: boolean) => string;
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
   selectPiece: (coord: CubeCoord) => void;
   makeMove: (to: CubeCoord, animate?: boolean) => boolean;
   clearSelection: () => void;
@@ -52,7 +50,6 @@ interface GameStore {
   loadGame: (gameId: string, state: GameState) => void;
   advanceAnimation: () => void;
   clearAnimation: () => void;
-  setTrainingMode: (v: boolean) => void;
 }
 
 // Generate a simple game ID
@@ -77,10 +74,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   pendingServerSubmission: false,
   pendingAnimationSubmission: false,
   isSwapAnimation: false,
-  isTrainingMode: false,
 
   // Start a new game with the specified number of players
-  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>, isTrainingMode?: boolean) => {
+  startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => {
     const gameState = createGame(playerCount, selectedPlayers, playerColors, aiPlayers, playerNames, teamMode, playerPieceTypes);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
@@ -98,13 +94,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateBeforeMove: null,
       lastMoveInfo: null,
       originalPiecePosition: null,
-      isTrainingMode: isTrainingMode ?? false,
     });
     return gameId;
   },
 
   // Start a game from a custom board layout
-  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>, isTrainingMode?: boolean) => {
+  startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => {
     const gameState = createGameFromLayout(layout, playerColors, aiPlayers, playerNames, teamMode, playerPieceTypes);
     const gameId = generateGameId();
     // Clear AI tracking state for new game
@@ -122,7 +117,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateBeforeMove: null,
       lastMoveInfo: null,
       originalPiecePosition: null,
-      isTrainingMode: isTrainingMode ?? false,
     });
     return gameId;
   },
@@ -421,7 +415,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animatingPiece: null,
       animationPath: null,
       animationStep: 0,
-      isTrainingMode: false,
     });
   },
 
@@ -478,5 +471,4 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
 
-  setTrainingMode: (v) => set({ isTrainingMode: v }),
 }));

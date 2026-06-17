@@ -29,7 +29,6 @@ export interface WorkerRequest {
   difficulty: AIDifficulty;
   personality: AIPersonality;
   openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null;
-  patternCache?: Record<string, number>; // pattern key → scoreDelta
 }
 
 export interface WorkerResponse {

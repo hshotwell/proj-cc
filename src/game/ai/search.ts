@@ -1,7 +1,8 @@
 import type { Move, GameState, PlayerIndex, CubeCoord } from '@/types/game';
 import type { AIDifficulty, AIPersonality } from '@/types/ai';
+import { AI_DEPTH, AI_OPENING_DEPTH, AI_ENDGAME_DEPTH, AI_MOVE_LIMIT } from '@/types/ai';
 import { getAllValidMoves, canJumpOver } from '../moves';
-import { applyMove, getGoalPositionsForState, countPiecesInGoal } from '../state';
+import { applyMove, getGoalPositionsForState } from '../state';
 import { getPlayerPieces } from '../setup';
 import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
@@ -10,13 +11,6 @@ import { computePlayerProgress } from '../progress';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove } from './endgame';
 import { getOpeningMove } from './openingBook';
-
-// Module-level pattern cache (set by worker.ts before each search)
-let _patternCache: Record<string, number> = {};
-
-export function setPatternCache(cache: Record<string, number>): void {
-  _patternCache = cache;
-}
 
 // Track recent board states to detect loops at the game state level
 const recentBoardStates = new Map<string, number>(); // hash -> count
@@ -42,6 +36,42 @@ function storeTT(key: string, score: number, flag: TTFlag, depth: number): void 
 
 export function clearTranspositionTable(): void {
   transpositionTable.clear();
+}
+
+// ── Game phase detection ────────────────────────────────────────────────────
+type GamePhase = 'early' | 'mid' | 'end';
+
+/**
+ * Detect game phase for depth-scaling purposes.
+ * early: pieces haven't converged yet (no opponent within 4 cells of any own piece)
+ * end:   pieces have passed each other (same condition but progress > 40%)
+ * mid:   active contest — default
+ */
+function detectPhase(state: GameState, player: PlayerIndex): GamePhase {
+  const myPieces = getPlayerPieces(state, player);
+  const opponentPieces: CubeCoord[] = [];
+  for (const [key, content] of state.board) {
+    if (content.type !== 'piece' || content.player === player) continue;
+    const [q, r] = key.split(',').map(Number);
+    opponentPieces.push({ q, r, s: -q - r });
+  }
+
+  if (opponentPieces.length === 0) return 'mid';
+
+  let opponentNearby = false;
+  outer: for (const myPiece of myPieces) {
+    for (const opPiece of opponentPieces) {
+      if (cubeDistance(myPiece, opPiece) <= 4) {
+        opponentNearby = true;
+        break outer;
+      }
+    }
+  }
+
+  if (!opponentNearby) {
+    return computePlayerProgress(state, player) < 40 ? 'early' : 'end';
+  }
+  return 'mid';
 }
 
 /**
@@ -92,49 +122,6 @@ export function recordBoardState(state: GameState): void {
  */
 export function clearStateHistory(): void {
   recentBoardStates.clear();
-}
-
-/**
- * Compute search depth and move limit based on how many pieces are in the goal.
- * Depth scales steeply as the endgame simplifies — more pieces in goal = fewer
- * branching factor = we can afford deeper search.
- */
-export function computeSearchParams(
-  state: GameState,
-  player: PlayerIndex,
-  difficulty: AIDifficulty
-): { depth: number; moveLimit: number } {
-  const inGoal = countPiecesInGoal(state, player);
-
-  if (inGoal >= 9) {
-    return {
-      depth:     difficulty === 'hard' ? 9 : difficulty === 'medium' ? 7 : 4,
-      moveLimit: difficulty === 'hard' ? 6 : difficulty === 'medium' ? 4 : 3,
-    };
-  }
-  if (inGoal === 8) {
-    return {
-      depth:     difficulty === 'hard' ? 7 : difficulty === 'medium' ? 5 : 3,
-      moveLimit: difficulty === 'hard' ? 8 : difficulty === 'medium' ? 6 : 4,
-    };
-  }
-  if (inGoal === 7) {
-    return {
-      depth:     difficulty === 'hard' ? 5 : difficulty === 'medium' ? 4 : 3,
-      moveLimit: difficulty === 'hard' ? 12 : difficulty === 'medium' ? 10 : 6,
-    };
-  }
-  if (inGoal >= 4) {
-    return {
-      depth:     difficulty === 'hard' ? 3 : 2,
-      moveLimit: difficulty === 'hard' ? 16 : difficulty === 'medium' ? 12 : 8,
-    };
-  }
-  // 0–3 in goal — midgame
-  return {
-    depth: 2,
-    moveLimit: difficulty === 'hard' ? 20 : difficulty === 'medium' ? 15 : 10,
-  };
 }
 
 /**
@@ -275,36 +262,38 @@ function enablesGoalFill(
   // Simulate the state after the move (the goal position is now empty)
   const nextState = applyMove(state, move);
 
-  // Check if any OUTSIDE piece can now step or jump INTO the vacated goal position.
-  // Must be outside goal — an already-in-goal neighbor gains nothing from re-entering.
+  // Check if any friendly piece can now jump INTO the vacated goal position
   for (const dir of DIRECTIONS) {
-    const adjPos = {
-      q: move.from.q - dir.q,
-      r: move.from.r - dir.r,
-      s: move.from.s - dir.s,
-    };
-    const adjKey = coordKey(adjPos);
-    const adjContent = nextState.board.get(adjKey);
-
-    // Step entry: outside piece is adjacent to the now-vacant goal cell
-    if (adjContent?.type === 'piece' && adjContent.player === player && !goalKeySet.has(adjKey)) {
-      return true;
-    }
-
-    // Jump entry: outside piece is 2 steps away with something to jump over
+    // Position where a jumping piece would be (2 steps away from the vacated goal)
     const jumperPos = {
       q: move.from.q - dir.q * 2,
       r: move.from.r - dir.r * 2,
       s: move.from.s - dir.s * 2,
     };
     const jumperKey = coordKey(jumperPos);
+
+    // Check if there's a friendly piece there
     const jumperContent = state.board.get(jumperKey);
     if (jumperContent?.type !== 'piece' || jumperContent.player !== player) continue;
-    if (goalKeySet.has(jumperKey)) continue; // jumper already in goal — not helpful
 
-    if (adjContent?.type === 'piece') {
-      return true;
-    }
+    // Position that would be jumped over (between jumper and goal)
+    const overPos = {
+      q: move.from.q - dir.q,
+      r: move.from.r - dir.r,
+      s: move.from.s - dir.s,
+    };
+    const overKey = coordKey(overPos);
+
+    // Check if there's a piece to jump over (could be the moving piece's new position or another piece)
+    const overContent = nextState.board.get(overKey);
+    if (overContent?.type !== 'piece') continue;
+
+    // The vacated goal position should now be empty
+    const goalContent = nextState.board.get(fromKey);
+    if (goalContent?.type !== 'empty') continue;
+
+    // A piece can jump into the vacated goal!
+    return true;
   }
 
   return false;
@@ -422,9 +411,8 @@ export function computeRegressionPenalty(
     ).length;
     const isEndgame = piecesInGoals >= 6; // 6+ pieces in goal = endgame
 
-    // Hard veto: never leave goal once 7+ pieces are already secured there,
-    // UNLESS vacating this cell directly enables an outside piece to enter.
-    if (piecesInGoals >= 7 && !allowsGoalFill) return Infinity;
+    // Hard veto: never leave goal once 7+ pieces are already secured there
+    if (piecesInGoals >= 7) return Infinity;
 
     if (allowsGoalFill) {
       // Vacating goal so another piece can fill it - GOOD in endgame
@@ -438,6 +426,13 @@ export function computeRegressionPenalty(
     }
   }
 
+  // Hard veto: no backward/lateral moves within goal when 7+ pieces already secured
+  if (fromIsGoal && toIsGoal && progressDelta <= 0) {
+    const piecesInGoalsForBackward = Array.from(state.board.entries()).filter(([key, content]) =>
+      content.type === 'piece' && content.player === player && goalKeySet.has(key)
+    ).length;
+    if (piecesInGoalsForBackward >= 7) return Infinity;
+  }
 
   // State repetition - ABSOLUTE VETO
   const { repeats, count } = wouldRepeatState(state, move);
@@ -549,25 +544,6 @@ function getTopMoves(
       score += endgameScore; // Can add up to 1000+ for direct goal entries
     }
 
-    // Apply pattern cache score deltas for move ordering
-    if (Object.keys(_patternCache).length > 0) {
-      const goalPositions = getGoalPositionsForState(state, player);
-      const goalKeysForPattern = new Set(goalPositions.map(g => coordKey(g)));
-      const goalCenterForPattern = centroid(goalPositions);
-      const inGoal = countPiecesInGoal(state, player);
-      const inGoalBucket = inGoal >= 3 && inGoal <= 5 ? '3-5' : inGoal >= 6 && inGoal <= 7 ? '6-7' : inGoal === 8 ? '8' : null;
-      if (inGoalBucket) {
-        const chainLen = move.jumpPath?.length ?? 1;
-        const isChainJump = move.isJump && chainLen > 1;
-        const lenBucket = chainLen >= 3 ? '3+' : String(chainLen);
-        const isDGE = !goalKeysForPattern.has(coordKey(move.from)) && goalKeysForPattern.has(coordKey(move.to));
-        const dist = cubeDistance(move.from, goalCenterForPattern);
-        const db = dist <= 3 ? 'near' : dist <= 6 ? 'mid' : 'far';
-        const patternKey = `${inGoalBucket}_${isChainJump ? 'cj' : 'nj'}_${lenBucket}_${isDGE ? 'dge' : 'ndge'}_${db}`;
-        score += _patternCache[patternKey] ?? 0;
-      }
-    }
-
     // Prefer longer chain jumps for move ordering
     if (move.isJump && move.jumpPath && move.jumpPath.length > 1) {
       score += (move.jumpPath.length - 1) * 50;
@@ -588,8 +564,7 @@ function minimax(
   beta: number,
   maximizingPlayer: PlayerIndex,
   personality: AIPersonality,
-  difficulty: AIDifficulty,
-  moveLimit: number
+  difficulty: AIDifficulty
 ): number {
   const origAlpha = alpha;
   const origBeta = beta;
@@ -612,7 +587,8 @@ function minimax(
 
   const currentPlayer = state.currentPlayer;
   const isMaximizing = currentPlayer === maximizingPlayer;
-  const moves = getTopMoves(state, currentPlayer, personality, difficulty, moveLimit);
+  const limit = AI_MOVE_LIMIT[difficulty];
+  const moves = getTopMoves(state, currentPlayer, personality, difficulty, limit);
 
   if (moves.length === 0) {
     return evaluatePosition(state, maximizingPlayer, personality, difficulty);
@@ -624,7 +600,7 @@ function minimax(
     score = -Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty, moveLimit);
+      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty);
       if (eval_ > score) score = eval_;
       if (score > alpha) alpha = score;
       if (alpha >= beta) break;
@@ -633,7 +609,7 @@ function minimax(
     score = Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty, moveLimit);
+      const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty);
       if (eval_ < score) score = eval_;
       if (score < beta) beta = score;
       if (alpha >= beta) break;
@@ -655,15 +631,15 @@ function maxn(
   depth: number,
   aiPlayer: PlayerIndex,
   personality: AIPersonality,
-  difficulty: AIDifficulty,
-  moveLimit: number
+  difficulty: AIDifficulty
 ): number {
   if (depth === 0) {
     return evaluatePosition(state, aiPlayer, personality, difficulty);
   }
 
   const currentPlayer = state.currentPlayer;
-  const moves = getTopMoves(state, currentPlayer, personality, difficulty, moveLimit);
+  const limit = AI_MOVE_LIMIT[difficulty];
+  const moves = getTopMoves(state, currentPlayer, personality, difficulty, limit);
 
   if (moves.length === 0) {
     return evaluatePosition(state, aiPlayer, personality, difficulty);
@@ -674,7 +650,7 @@ function maxn(
     let best = -Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty, moveLimit);
+      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty);
       best = Math.max(best, score);
     }
     return best;
@@ -684,7 +660,7 @@ function maxn(
     let worst = Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
-      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty, moveLimit);
+      const score = maxn(next, depth - 1, aiPlayer, personality, difficulty);
       worst = Math.min(worst, score);
     }
     return worst;
@@ -946,7 +922,12 @@ export function findBestMove(
   }
 
   // Standard layouts use the full search with penalties
-  const { depth, moveLimit: limit } = computeSearchParams(state, player, difficulty);
+  const phase = detectPhase(state, player);
+  const depth =
+    phase === 'mid'   ? AI_DEPTH[difficulty] :
+    phase === 'early' ? AI_OPENING_DEPTH[difficulty] :
+                        AI_ENDGAME_DEPTH[difficulty];
+  const limit = AI_MOVE_LIMIT[difficulty];
   const allMoves = getAllValidMoves(state, player);
 
   if (allMoves.length === 0) return null;
@@ -1031,9 +1012,9 @@ export function findBestMove(
     let score: number;
 
     if (is2Player) {
-      score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty, limit);
+      score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty);
     } else {
-      score = maxn(next, depth - 1, player, personality, difficulty, limit);
+      score = maxn(next, depth - 1, player, personality, difficulty);
     }
 
     score -= penalty;
@@ -1093,25 +1074,6 @@ function getTopMovesFromList(
     if (inLateEndgame) {
       const endgameScore = scoreEndgameMove(state, move, player);
       score += endgameScore;
-    }
-
-    // Apply pattern cache score deltas for move ordering
-    if (Object.keys(_patternCache).length > 0) {
-      const goalPositions = getGoalPositionsForState(state, player);
-      const goalKeysForPattern = new Set(goalPositions.map(g => coordKey(g)));
-      const goalCenterForPattern = centroid(goalPositions);
-      const inGoal = countPiecesInGoal(state, player);
-      const inGoalBucket = inGoal >= 3 && inGoal <= 5 ? '3-5' : inGoal >= 6 && inGoal <= 7 ? '6-7' : inGoal === 8 ? '8' : null;
-      if (inGoalBucket) {
-        const chainLen = move.jumpPath?.length ?? 1;
-        const isChainJump = move.isJump && chainLen > 1;
-        const lenBucket = chainLen >= 3 ? '3+' : String(chainLen);
-        const isDGE = !goalKeysForPattern.has(coordKey(move.from)) && goalKeysForPattern.has(coordKey(move.to));
-        const dist = cubeDistance(move.from, goalCenterForPattern);
-        const db = dist <= 3 ? 'near' : dist <= 6 ? 'mid' : 'far';
-        const patternKey = `${inGoalBucket}_${isChainJump ? 'cj' : 'nj'}_${lenBucket}_${isDGE ? 'dge' : 'ndge'}_${db}`;
-        score += _patternCache[patternKey] ?? 0;
-      }
     }
 
     // Prefer longer chain jumps for move ordering

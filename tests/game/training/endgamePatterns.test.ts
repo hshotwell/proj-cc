@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { CubeCoord, CellContent, PlayerIndex } from '@/types/game';
+import type { CubeCoord } from '@/types/game';
 import {
   computeChainDepth,
   computePathClearance,
@@ -10,10 +10,10 @@ import {
 import { scorePuzzleResult, runEndgamePuzzle } from '@/game/training/endgameRunner';
 
 function makeBoard(
-  pieces: Array<{ q: number; r: number; player: PlayerIndex }>,
+  pieces: Array<{ q: number; r: number; player: number }>,
   emptyCells: Array<{ q: number; r: number }> = []
-): Map<string, CellContent> {
-  const board = new Map<string, CellContent>();
+) {
+  const board = new Map<string, { type: string; player?: number }>();
   for (const p of pieces) {
     board.set(`${p.q},${p.r}`, { type: 'piece', player: p.player });
   }
@@ -163,43 +163,5 @@ describe('runEndgamePuzzle (beam search)', () => {
   it('solves in a reasonable number of turns (<= par x 3)', () => {
     const result = runEndgamePuzzle(positions, GOAL, 2, DEFAULT_GENOME);
     expect(result.turnsUsed).toBeLessThanOrEqual(6);
-  });
-});
-
-import { findEndgameMove } from '@/game/ai/endgame';
-import { createGameFromLayout } from '@/game/setup';
-import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
-
-describe('findEndgameMove (stripped fast-path)', () => {
-  const PLAYER: PlayerIndex = 0;
-  // Standard player-0 goal positions (top triangle)
-  const GOAL = ['4,-8','3,-7','4,-7','2,-6','3,-6','4,-6','1,-5','2,-5','3,-5','4,-5'];
-
-  function makeState(positions: string[]) {
-    return createGameFromLayout({
-      id: 'test', name: 'test', cells: DEFAULT_BOARD_LAYOUT.cells,
-      startingPositions: { [PLAYER]: positions } as Record<PlayerIndex, string[]>,
-      goalPositions: { [PLAYER]: GOAL } as Record<PlayerIndex, string[]>,
-      createdAt: 0,
-    });
-  }
-
-  it('returns a direct goal entry when one is available', () => {
-    // 9 pieces in goal, straggler at 3,-4 (close to goal, can step into 3,-5)
-    const positions = ['4,-8','3,-7','4,-7','2,-6','3,-6','4,-6','1,-5','2,-5','4,-5','3,-4'];
-    const state = makeState(positions);
-    const move = findEndgameMove(state, PLAYER);
-    expect(move).not.toBeNull();
-    if (move) {
-      expect(GOAL).toContain(`${move.to.q},${move.to.r}`);
-    }
-  });
-
-  it('returns null when neither direct entry nor deeper-in-goal is possible', () => {
-    // All pieces outside goal (midgame-like), none adjacent to goal
-    const positions = ['0,0','1,0','-1,0','0,1','0,-1','1,-1','-1,1','2,0','-2,0','0,2'];
-    const state = makeState(positions);
-    const move = findEndgameMove(state, PLAYER);
-    expect(move).toBeNull();
   });
 });

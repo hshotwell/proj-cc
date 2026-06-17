@@ -2,27 +2,16 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GameState, CubeCoord, PlayerIndex } from '@/types/game';
+import type { CubeCoord, PlayerIndex } from '@/types/game';
 import type { FlaggedMove } from '@/types/review';
 
-export type CapturedAIMove = Omit<FlaggedMove, 'id' | 'timestamp' | 'note' | 'suggestedMove'>;
-
 interface AIReviewStore {
-  isPaused: boolean;
-  stateHistory: GameState[];
-  pendingFlag: CapturedAIMove | null;
   captureMode: null | 'from' | 'to';
   captureFrom: CubeCoord | null;
   captureTo: CubeCoord | null;
   flags: FlaggedMove[];
-  rewindSignal: number;
   activeGameId: string | null;
 
-  togglePause: () => void;
-  pushHistory: (state: GameState) => void;
-  clearHistory: () => void;
-  popHistory: () => GameState | null;
-  setPendingFlag: (flag: CapturedAIMove | null) => void;
   startCapture: () => void;
   captureCell: (coord: CubeCoord) => void;
   cancelCapture: () => void;
@@ -37,35 +26,11 @@ interface AIReviewStore {
 export const useAIReviewStore = create<AIReviewStore>()(
   persist(
     (set, get) => ({
-      isPaused: false,
-      stateHistory: [],
-      pendingFlag: null,
       captureMode: null,
       captureFrom: null,
       captureTo: null,
       flags: [],
-      rewindSignal: 0,
       activeGameId: null,
-
-      togglePause: () => set((s) => ({ isPaused: !s.isPaused })),
-
-      pushHistory: (state) =>
-        set((s) => ({
-          stateHistory: [...s.stateHistory, state].slice(-50),
-        })),
-
-      clearHistory: () => set({ stateHistory: [] }),
-
-      popHistory: () => {
-        const { stateHistory } = get();
-        if (stateHistory.length === 0) return null;
-        const prev = stateHistory[stateHistory.length - 1];
-        set({ stateHistory: stateHistory.slice(0, -1), rewindSignal: get().rewindSignal + 1 });
-        return prev;
-      },
-
-      setPendingFlag: (flag) =>
-        set({ pendingFlag: flag, captureMode: null, captureFrom: null, captureTo: null }),
 
       startCapture: () => set({ captureMode: 'from', captureFrom: null, captureTo: null }),
 
@@ -106,7 +71,7 @@ export const useAIReviewStore = create<AIReviewStore>()(
         const filtered = gameId ? flags.filter((f) => f.gameId === gameId) : flags;
         if (filtered.length === 0) return '(no flags recorded)';
         const lines: string[] = [
-          '=== AI MOVE REVIEW EXPORT ===',
+          '=== MOVE REVIEW EXPORT ===',
           `Exported: ${new Date().toISOString()}`,
           `Flags: ${filtered.length}`,
           '',

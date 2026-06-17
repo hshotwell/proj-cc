@@ -16,19 +16,6 @@ import {
   clearTrainingSession,
 } from '@/game/training';
 import type { TrainingSession } from '@/game/training';
-import { scoreGenomeOnPuzzles } from '@/game/training/endgameRunner';
-import { CURATED_PUZZLES } from '@/game/training/curatedPuzzles';
-import { buildEndgameTablebase } from '@/game/training/tablebaseBuilder';
-import {
-  extractMoveFeatures,
-  accumulatePattern,
-  incrementGamesRecorded,
-  flushPatternCache,
-} from '@/game/training/patternCache';
-
-// Puzzle score bonus weight: scales mean puzzle score (0–100+) into fitness points.
-// With pop=20 and 2 games/matchup, max game fitness ≈ 114. Weight 0.4 → max puzzle bonus ≈ 40.
-const PUZZLE_FITNESS_WEIGHT = 0.4;
 
 interface MatchupInfo {
   player1Index: number;
@@ -52,16 +39,12 @@ interface TrainingStore {
   currentGameState: GameState | null;
   currentMatchup: MatchupInfo | null;
 
-  isBuildingTablebase: boolean;
-  tablebaseBuildProgress: { solved: number; total: number; sizeBytes: number } | null;
-
   startTraining: (config: TrainingConfig) => void;
   resumeSession: () => void;
   pauseTraining: () => void;
   resumeTraining: () => void;
   stopTraining: () => void;
   applyBestGenome: () => void;
-  buildTablebase: () => void;
 }
 
 // Handle for the current training loop so we can cancel it
@@ -96,8 +79,6 @@ export const useTrainingStore = create<TrainingStore>()((set, get) => ({
   statusMessage: 'Ready to start training',
   currentGameState: null,
   currentMatchup: null,
-  isBuildingTablebase: false,
-  tablebaseBuildProgress: null,
 
   startTraining: (config: TrainingConfig) => {
     abortController?.abort();
@@ -195,24 +176,6 @@ export const useTrainingStore = create<TrainingStore>()((set, get) => ({
       saveEvolvedGenome(bestGenome);
       set({ statusMessage: 'Evolved AI saved!' });
     }
-  },
-
-  buildTablebase: () => {
-    const { bestGenome } = get();
-    if (!bestGenome) return;
-
-    set({ isBuildingTablebase: true, tablebaseBuildProgress: { solved: 0, total: 1, sizeBytes: 0 } });
-
-    buildEndgameTablebase(
-      bestGenome,
-      (solved, total, sizeBytes) => {
-        set({ tablebaseBuildProgress: { solved, total, sizeBytes } });
-      }
-    ).then(() => {
-      set({ isBuildingTablebase: false });
-    }).catch(() => {
-      set({ isBuildingTablebase: false });
-    });
   },
 }));
 
@@ -362,12 +325,6 @@ async function runTrainingLoop(
 
     if (signal.aborted) return;
 
-    // Score each individual on curated endgame puzzles and add bonus to fitness
-    for (const ind of population) {
-      const puzzleScore = scoreGenomeOnPuzzles(ind.genome, CURATED_PUZZLES);
-      ind.fitness += puzzleScore * PUZZLE_FITNESS_WEIGHT;
-    }
-
     // Generation complete — summarize
     const sorted = [...population].sort((a, b) => b.fitness - a.fitness);
     const best = sorted[0];
@@ -391,9 +348,6 @@ async function runTrainingLoop(
       generationHistory,
       statusMessage: `Generation ${gen + 1} complete. Best fitness: ${best.fitness.toFixed(1)} (auto-saved)`,
     });
-
-    // Flush pattern cache after each generation
-    flushPatternCache();
 
     // Save progress at generation boundary
     persistProgress(
@@ -440,8 +394,6 @@ async function playGameStepByStep(
   };
 
   let totalMoves = 0;
-  // Collect (features, playerIndex) pairs to update with outcome after game ends
-  const recordedFeatures: Array<{ features: import('@/game/training/patternCache').MoveFeatures; player: number }> = [];
 
   useTrainingStore.setState({ currentGameState: state });
 
@@ -460,12 +412,6 @@ async function playGameStepByStep(
     // Compute one move — this is the expensive part (~0.5-2s)
     const move = findBestMoveWithGenome(state, genome);
     if (!move) break;
-
-    // Record features before applying (needs pre-move state)
-    const features = extractMoveFeatures(state, move, currentPlayer);
-    if (features) {
-      recordedFeatures.push({ features, player: currentPlayer });
-    }
 
     state = applyMove(state, move);
     totalMoves++;
@@ -486,15 +432,6 @@ async function playGameStepByStep(
   if (state.finishedPlayers.length > 0) {
     const winnerPlayer = state.finishedPlayers[0].player;
     winner = winnerPlayer === players[0] ? 0 : 1;
-  }
-
-  // Update pattern cache with game outcome
-  if (recordedFeatures.length > 0) {
-    const winnerPlayerIndex = winner !== null ? players[winner] : null;
-    for (const { features, player } of recordedFeatures) {
-      accumulatePattern(features, player === winnerPlayerIndex);
-    }
-    incrementGamesRecorded();
   }
 
   return { winner };
