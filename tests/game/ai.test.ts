@@ -244,6 +244,12 @@ describe('getPiecePhase', () => {
   it('returns endgame-contested when an opponent is between piece and goal', () => {
     const state = createGame(2);
     const testState = cloneGameState(state);
+    // Clear all player 2 pieces so we control exactly what's contested
+    for (const [key, content] of testState.board) {
+      if (content.type === 'piece' && content.player === 2) {
+        testState.board.set(key, { type: 'empty' });
+      }
+    }
     // Player 0 piece near goal at (-2,4)
     testState.board.set(coordKey(cubeCoord(-2, 4)), { type: 'piece', player: 0 });
     // Opponent at (-3,5) — closer to goal center than (-2,4)

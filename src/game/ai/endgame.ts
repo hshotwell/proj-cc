@@ -47,6 +47,8 @@ export function getPiecePhase(
     const opponentPos: CubeCoord = { q, r, s: -q - r };
     // Opponents inside the goal only count if they are adjacent to our piece
     // (they are physically blocking entry), not if they are already deep inside
+    // Opponents already deep in the goal zone don't make us "contested" unless
+    // they are adjacent — a piece at (-4,8) shouldn't block entry at (-2,4).
     const opponentInGoal = goalKeys.has(key);
     if (opponentInGoal && cubeDistance(opponentPos, piece) > 1) continue;
     // Consider opponents within 3 cells of any goal position (the approach zone)
