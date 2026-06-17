@@ -443,6 +443,37 @@ export function computeRegressionPenalty(
   return penalty;
 }
 
+/**
+ * Soft penalty for moving the same piece on consecutive turns.
+ * Moving the same piece 3+ times in a row is almost always suboptimal.
+ * Traces move history for the current player only.
+ */
+function computeConsecutivePiecePenalty(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  // Count consecutive past player-turns that moved the same piece
+  let count = 0;
+  let tracePos = move.from;
+
+  for (let i = state.moveHistory.length - 1; i >= 0; i--) {
+    const past = state.moveHistory[i];
+    if (past.player !== player) continue;
+    if (past.to.q === tracePos.q && past.to.r === tracePos.r) {
+      count++;
+      tracePos = past.from;
+    } else {
+      break;
+    }
+    if (count >= 4) break;
+  }
+
+  if (count < 2) return 0;   // 1st or 2nd consecutive turn: no penalty
+  if (count === 2) return 20; // 3rd consecutive turn: moderate
+  return 80;                  // 4th+ consecutive turn: strong
+}
+
 export function computeRepetitionPenalty(
   state: GameState,
   move: Move,
@@ -531,11 +562,12 @@ function getTopMoves(
     score -= totalPenalty;
 
     // Add strategic scoring (more important in endgame and for medium+ difficulty)
-    if (difficulty !== 'easy') {
+    {
       const strategic = computeStrategicScore(state, move, player, personality, threats);
-      // Strategic score weight increases in endgame
+      // Easy gets reduced strategic weight (setup concepts still apply, just lighter)
+      const difficultyMultiplier = difficulty === 'easy' ? 0.4 : 1.0;
       const strategicWeight = inEndgame ? 2.0 : 1.0;
-      score += strategic.total * strategicWeight;
+      score += strategic.total * strategicWeight * difficultyMultiplier;
     }
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
@@ -1010,8 +1042,10 @@ export function findBestMove(
   for (const move of moves) {
     const regPenalty = computeRegressionPenalty(state, move, player, difficulty);
     const repPenalty = computeRepetitionPenalty(state, move, player, difficulty);
+    const consecPenalty = computeConsecutivePiecePenalty(state, move, player);
     const penalty = (regPenalty === Infinity ? 1000000 : regPenalty) +
-                    (repPenalty === Infinity ? 1000000 : repPenalty);
+                    (repPenalty === Infinity ? 1000000 : repPenalty) +
+                    consecPenalty;
 
     const next = applyMove(state, move);
     let score: number;
@@ -1069,10 +1103,11 @@ function getTopMovesFromList(
     score -= totalPenalty;
 
     // Add strategic scoring
-    if (difficulty !== 'easy') {
+    {
       const strategic = computeStrategicScore(state, move, player, personality);
+      const difficultyMultiplier = difficulty === 'easy' ? 0.4 : 1.0;
       const strategicWeight = inEndgame ? 2.0 : 1.0;
-      score += strategic.total * strategicWeight;
+      score += strategic.total * strategicWeight * difficultyMultiplier;
     }
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
