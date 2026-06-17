@@ -112,7 +112,7 @@ export function canReachGoalViaChain(
 
 /**
  * Check if we're in late endgame where finishing logic should take over.
- * Trigger at 7+ pieces to focus on finishing efficiently.
+ * Trigger at 6+ pieces to focus on finishing efficiently.
  */
 export function isLateEndgame(state: GameState, player: PlayerIndex): boolean {
   const goalPositions = getGoalPositionsForState(state, player);
