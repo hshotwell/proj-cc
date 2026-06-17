@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Board } from '@/components/board';
 import { SettingsPopup } from '@/components/SettingsPopup';
 import { SettingsButton } from '@/components/SettingsButton';
@@ -11,11 +12,27 @@ import { useAITurn } from '@/hooks/useAITurn';
 import { usePlayerOpening } from '@/hooks/usePlayerOpening';
 import { useLocalGameSync } from '@/hooks/useLocalGameSync';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
+import { useGameStore } from '@/store/gameStore';
+import { saveCompletedGame } from '@/game/persistence';
+import { isGameFullyOver } from '@/game/state';
 
 export function GameContainer() {
+  const router = useRouter();
+  const { gameState, gameId } = useGameStore();
   useAITurn();
   usePlayerOpening();
   useLocalGameSync();
+
+  const hasAI = Object.keys(gameState?.aiPlayers ?? {}).length > 0;
+  const isOver = gameState ? isGameFullyOver(gameState) : false;
+  const hasMoves = (gameState?.moveHistory.length ?? 0) > 0;
+  const showAbandon = hasAI && !isOver && hasMoves;
+
+  function handleAbandon() {
+    if (!gameState || !gameId) return;
+    saveCompletedGame(gameId, gameState);
+    router.push(`/review/${gameId}`);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
@@ -32,6 +49,16 @@ export function GameContainer() {
         <div className="mt-2 sm:mt-4">
           <TurnIndicator />
         </div>
+        {showAbandon && (
+          <div className="mt-3 text-center">
+            <button
+              onClick={handleAbandon}
+              className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors"
+            >
+              End game &amp; review moves
+            </button>
+          </div>
+        )}
       </div>
       <GameOverDialog />
       <SettingsPopup mode="game" />
