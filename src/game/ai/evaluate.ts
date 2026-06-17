@@ -237,11 +237,11 @@ export function evaluatePosition(
 
   if (state.isCustomLayout) {
     const worstMoveCost = getWorstAssignmentCost(state, pieces, goalPositions, false);
-    stragglerScore = -(worstMoveCost * worstMoveCost) / 5;
+    stragglerScore = -(worstMoveCost * worstMoveCost) / 3;
   } else {
     const distances = pieces.map((p) => cubeDistance(p, goalCenter));
     const maxPieceDist = distances.length > 0 ? Math.max(...distances) : 0;
-    stragglerScore = -(maxPieceDist * maxPieceDist) / 5;
+    stragglerScore = -(maxPieceDist * maxPieceDist) / 3;
   }
 
   // Late endgame targeting: when 9+ pieces in goal, focus on nearest empty goal

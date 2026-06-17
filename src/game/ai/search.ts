@@ -9,7 +9,7 @@ import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats } from './strategy';
-import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral } from './endgame';
+import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase } from './endgame';
 import { getOpeningMove } from './openingBook';
 
 // Track recent board states to detect loops at the game state level
@@ -517,7 +517,14 @@ export function computeRepetitionPenalty(
   // Combined with state-based detection, this should prevent cycles
   if (reversals >= 1) return Infinity; // Hard veto for ANY reversal
   if (visitCount >= 2) return Infinity; // Hard veto for repeated cycling
-  if (visitCount === 1) return 200; // Heavy penalty for returning to any previous position
+  // Endgame pieces have less flexibility — escalate to a hard veto
+  // to prevent shuffling loops near the goal.
+  const piecePhase = getPiecePhase(state, move.from, player);
+  if (piecePhase !== 'midgame') {
+    if (visitCount >= 1) return Infinity;
+  } else {
+    if (visitCount === 1) return 200;
+  }
 
   return 0;
 }
