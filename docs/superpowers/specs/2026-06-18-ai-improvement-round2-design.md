@@ -106,6 +106,52 @@ Applied at medium (60% weight) and hard (100% weight). Easy: function returns 0.
 
 ---
 
+## Section 4: Setup Move Block Risk
+
+**New function:** `scoreSetupBlockRisk(state, move, player, personality): number` in `src/game/ai/strategy.ts`
+
+A setup move (stepping stone) creates value on the player's NEXT turn — piece A is placed so piece B can chain-jump through it. Between that setup turn and the follow-through, the opponent takes a turn. If the opponent can disrupt the intended chain in that one turn, the setup move's value evaporates. This function penalizes risky setup moves proportionally to both the chain value and the disruption probability.
+
+**When it applies:** Only when the move has meaningful `steppingStoneValue` (reuses the existing computation from `evaluateSteppingStoneSetup`). For non-setup moves, returns 0.
+
+### Two disruption types
+
+**Type 1 — Fill block:** The opponent moves INTO a landing position that the intended chain relies on. In Chinese Checkers, you cannot land on an occupied square. If the opponent can reach any intermediate or final landing position of the enabled chain in one move (step or jump), the chain is blocked.
+
+Detected by: for each landing position in the enabled chain, enumerate all opponent moves in the simulated state and check if any opponent piece can reach that position.
+
+**Type 2 — Removal block:** The opponent moves AWAY FROM a position that the chain relies on as a jump-over intermediate. If the chain requires jumping over an opponent piece at position X (which is legal and common in Chinese Checkers — you can jump over any piece), and that opponent piece moves before your follow-through, the jump becomes impossible because you cannot jump over an empty square.
+
+Detected by: identify any opponent pieces used as stepping-stone jump-overs in the enabled chain; check if that piece has valid moves (i.e., it CAN be moved by the opponent). If the opponent piece is mobile, flag the chain as block-vulnerable.
+
+Note: Chains that rely only on friendly pieces as stepping stones are not vulnerable to removal — the opponent cannot move your pieces. Only opponent-piece stepping stones carry removal risk.
+
+### Risk score computation
+
+```
+blockRisk = chainValue × (fillRiskWeight + removalRiskWeight)
+```
+
+- `fillRiskWeight`: 1.0 if opponent can reach the landing in 1 move, 0.4 if 2 moves, 0 beyond that
+- `removalRiskWeight`: 0.6 if any opponent stepping stone in the chain is mobile (has valid moves), 0 otherwise
+- `chainValue`: the `steppingStoneValue` of the enabled chain
+
+The result is a negative score (penalty) subtracted from the setup move's total score.
+
+### Personality scaling
+
+| Personality | Multiplier | Intent |
+|-------------|-----------|--------|
+| defensive   | 2.0       | Near-veto on risky setups — only makes them if the chain is very high value and hard to disrupt |
+| generalist  | 1.0       | Standard caution — weights risk against chain value |
+| aggressive  | 0.3       | Mostly ignores block risk — prefers to go for it |
+
+### Difficulty scaling
+
+Hard: full weight. Medium: 60%. Easy: 0% (easy AI doesn't reason about opponent disruption).
+
+---
+
 ## What This Does NOT Change
 
 - Endgame solver logic (`findEndgameMove`, `evaluateEndgameLateral`, etc.) — unchanged from round 1
@@ -124,6 +170,7 @@ After implementation, a new AI vs AI game at hard/generalist should show:
 - Far-back pieces maintaining stepping-stone connections rather than being left isolated (Flags 2, 3, 7, 19)
 - Shorter jumps chosen over longer-but-off-axis jumps when corridor alignment is better (Flags 9, 10)
 - Hard AI responding to opponent's most recent move threat within 1 turn (Flags 12–14)
+- Defensive AI avoiding setup moves that can be disrupted by one opponent move (Flags 4, 5, 12)
 - Generally fewer "why did it do that?" moments at hard difficulty
 
 ---
@@ -136,6 +183,6 @@ After implementation, a new AI vs AI game at hard/generalist should show:
 | 2, 3, 7, 19 | Straggler isolation | §1 Component 3 (straggler connectivity) |
 | 6, 8 | Off-axis trajectory | §1 Component 1 (corridor alignment) |
 | 12, 13, 14 | Missing 1-turn response | §3 Sub-component 1 (threat amplification) |
-| 4, 5 | Risk of giving opponent good move | §3 Sub-component 1 (partial) + round 1 opponent-gift |
+| 4, 5, 12 | Risk of giving opponent good move / risky setup | §3 Sub-component 1 + §4 setup block risk |
 | 11, 15, 16 | Step direction / near-goal restraint | §1 Component 1 + §2 depth 3 discovering better sequences |
 | 17, 18 | Sidesteps at 6/10 in goal | Round 1 endgame improvements |
