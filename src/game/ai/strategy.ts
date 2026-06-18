@@ -554,6 +554,91 @@ export function scoreLandingQuality(
 }
 
 /**
+ * Score a move based on how it responds to the opponent's most recent move.
+ * Sub-component 1: Block a jump threat set up by the opponent's last move.
+ * Sub-component 2: Exploit the square the opponent just vacated.
+ * Easy difficulty: always returns 0.
+ * Personality-weighted: defensive values blocking, aggressive ignores it.
+ */
+export function scoreLastMoveResponse(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  difficulty: AIDifficulty
+): number {
+  if (difficulty === 'easy') return 0;
+
+  const history = state.moveHistory;
+  if (history.length === 0) return 0;
+
+  // Find the most recent move by a non-player opponent
+  let lastOpponentMove: Move | null = null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].player !== player) {
+      lastOpponentMove = history[i];
+      break;
+    }
+  }
+  if (!lastOpponentMove || lastOpponentMove.player === undefined) return 0;
+
+  const opponentPlayer = lastOpponentMove.player;
+  const oppGoalPositions = getGoalPositionsForState(state, opponentPlayer);
+  if (oppGoalPositions.length === 0) return 0;
+  const oppGoalCenter = centroid(oppGoalPositions);
+
+  let score = 0;
+
+  // Sub-component 1: Threat amplification — block a jump set up by opponent's last move
+  const lastMovedTo = lastOpponentMove.to;
+  for (const dir of DIRECTIONS) {
+    const over: CubeCoord = {
+      q: lastMovedTo.q + dir.q,
+      r: lastMovedTo.r + dir.r,
+      s: lastMovedTo.s + dir.s,
+    };
+    const land: CubeCoord = {
+      q: lastMovedTo.q + dir.q * 2,
+      r: lastMovedTo.r + dir.r * 2,
+      s: lastMovedTo.s + dir.s * 2,
+    };
+
+    if (!state.board.has(coordKey(land))) continue;
+    if (state.board.get(coordKey(land))?.type !== 'empty') continue;
+    if (!canJumpOver(state, over, opponentPlayer)) continue;
+
+    const gain = cubeDistance(lastMovedTo, oppGoalCenter) - cubeDistance(land, oppGoalCenter);
+    if (gain <= 0) continue;
+
+    const blockingWeight =
+      personality === 'defensive'  ? 3.0 :
+      personality === 'generalist' ? 1.5 : 0;
+
+    if (coordKey(move.to) === coordKey(land) || coordKey(move.to) === coordKey(over)) {
+      score += gain * blockingWeight;
+    }
+  }
+
+  // Sub-component 2: Opportunity from vacated square — land where opponent just was
+  const vacatedPos = lastOpponentMove.from;
+  const myGoalPositions = getGoalPositionsForState(state, player);
+  const myGoalCenter = centroid(myGoalPositions);
+  const distFromBefore = cubeDistance(move.from, myGoalCenter);
+  const distLanding = cubeDistance(move.to, myGoalCenter);
+
+  if (coordKey(move.to) === coordKey(vacatedPos) && distLanding < distFromBefore) {
+    const opportunityWeight =
+      personality === 'aggressive' ? 2.0 :
+      personality === 'generalist' ? 1.0 : 0.5;
+    const gain = distFromBefore - distLanding;
+    score += gain * opportunityWeight;
+  }
+
+  const diffMult = difficulty === 'medium' ? 0.6 : 1.0;
+  return score * diffMult;
+}
+
+/**
  * Score a move based on all strategic principles.
  */
 export interface StrategicScore {

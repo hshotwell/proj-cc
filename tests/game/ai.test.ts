@@ -9,7 +9,7 @@ import {
   deserializeGameState,
 } from '@/game/ai';
 import { getPiecePhase, canReachGoalViaChain } from '@/game/ai/endgame';
-import { scoreLandingQuality } from '@/game/ai/strategy';
+import { scoreLandingQuality, scoreLastMoveResponse } from '@/game/ai/strategy';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
 // Helper: create a simple move
@@ -405,5 +405,74 @@ describe('scoreLandingQuality', () => {
     const scoreHard = scoreLandingQuality(ts, move, 0, 'generalist', 'hard');
     const scoreEasy = scoreLandingQuality(ts, move, 0, 'generalist', 'easy');
     expect(Math.abs(scoreHard)).toBeGreaterThanOrEqual(Math.abs(scoreEasy));
+  });
+});
+
+describe('scoreLastMoveResponse', () => {
+  it('returns 0 for easy difficulty', () => {
+    const state = createGame(2);
+    state.moveHistory.push({ from: cubeCoord(0, 1), to: cubeCoord(0, -1), isJump: true, player: 2 });
+    const move = { from: cubeCoord(1, -5), to: cubeCoord(0, -4), isJump: false };
+    const score = scoreLastMoveResponse(state, move, 0, 'generalist', 'easy');
+    expect(score).toBe(0);
+  });
+
+  it('returns 0 when move history is empty', () => {
+    const state = createGame(2);
+    const move = { from: cubeCoord(1, -5), to: cubeCoord(0, -4), isJump: false };
+    const score = scoreLastMoveResponse(state, move, 0, 'generalist', 'hard');
+    expect(score).toBe(0);
+  });
+
+  it('defensive AI gets positive score for blocking opponent last-move jump threat', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Opponent (player 2) just moved TO (-1,2). Player 2 goal is top-right (~(3,-6)).
+    // From (-1,2) they can jump over (0,1) to land (1,0) — forward progress.
+    // cubeDistance((-1,2),(3,-6)): Δq=4,Δr=8,Δs=4 → max=8
+    // cubeDistance((1,0),(3,-6)): Δq=2,Δr=6,Δs=4 → max=6 → gain=2 (> 0, triggers with <= 0 threshold)
+    ts.board.set(coordKey(cubeCoord(-1, 2)), { type: 'piece', player: 2 }); // just-moved opponent
+    ts.board.set(coordKey(cubeCoord(0, 1)), { type: 'piece', player: 0 });  // jumping stone
+    ts.board.set(coordKey(cubeCoord(1, 0)), { type: 'empty' });             // landing
+    ts.moveHistory.push({ from: cubeCoord(-2, 3), to: cubeCoord(-1, 2), isJump: true, player: 2 });
+    // Our move blocks the landing (1,0)
+    const blockingMove = { from: cubeCoord(2, -1), to: cubeCoord(1, 0), isJump: false };
+    const scoreDefensive = scoreLastMoveResponse(ts, blockingMove, 0, 'defensive', 'hard');
+    // Non-blocking move to unrelated position
+    const otherMove = { from: cubeCoord(2, -1), to: cubeCoord(2, 0), isJump: false };
+    const scoreOther = scoreLastMoveResponse(ts, otherMove, 0, 'defensive', 'hard');
+    expect(scoreDefensive).toBeGreaterThan(scoreOther);
+  });
+
+  it('aggressive AI scores 0 for blocking (ignores opponent threats)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Same geometry as the defensive test
+    ts.board.set(coordKey(cubeCoord(-1, 2)), { type: 'piece', player: 2 });
+    ts.board.set(coordKey(cubeCoord(0, 1)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(1, 0)), { type: 'empty' });
+    ts.moveHistory.push({ from: cubeCoord(-2, 3), to: cubeCoord(-1, 2), isJump: true, player: 2 });
+    const blockingMove = { from: cubeCoord(2, -1), to: cubeCoord(1, 0), isJump: false };
+    const scoreAggressive = scoreLastMoveResponse(ts, blockingMove, 0, 'aggressive', 'hard');
+    expect(scoreAggressive).toBe(0);
+  });
+
+  it('returns positive score for landing on the square opponent just vacated (if forward progress)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Opponent moved FROM (1,1) TO (1,-1). Vacated (1,1).
+    ts.board.set(coordKey(cubeCoord(1, 1)), { type: 'empty' });
+    ts.board.set(coordKey(cubeCoord(1, -1)), { type: 'piece', player: 2 });
+    ts.moveHistory.push({ from: cubeCoord(1, 1), to: cubeCoord(1, -1), isJump: true, player: 2 });
+    // Our piece at (3,3) moves to (1,1) — vacated square, forward progress toward lower-left goal
+    // cubeDistance((3,3,-6), goalCenter(-3,6,-3)) = max(6,3,3) = 6
+    // cubeDistance((1,1,-2), goalCenter(-3,6,-3)) = max(4,5,1) = 5 → gain = 1
+    ts.board.set(coordKey(cubeCoord(3, 3)), { type: 'piece', player: 0 });
+    const vacatedMove = { from: cubeCoord(3, 3), to: cubeCoord(1, 1), isJump: false };
+    const score = scoreLastMoveResponse(ts, vacatedMove, 0, 'generalist', 'hard');
+    // Unrelated move away from goal
+    const otherMove = { from: cubeCoord(3, 3), to: cubeCoord(4, 3), isJump: false };
+    const scoreOther = scoreLastMoveResponse(ts, otherMove, 0, 'generalist', 'hard');
+    expect(score).toBeGreaterThanOrEqual(scoreOther);
   });
 });

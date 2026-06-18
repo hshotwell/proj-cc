@@ -8,7 +8,7 @@ import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase } from './endgame';
 import { getOpeningMove } from './openingBook';
 
@@ -576,6 +576,7 @@ function getTopMoves(
       const strategicWeight = inEndgame ? 2.0 : 1.0;
       score += strategic.total * strategicWeight * difficultyMultiplier;
       score += scoreLandingQuality(state, move, player, personality, difficulty);
+      score += scoreLastMoveResponse(state, move, player, personality, difficulty);
     }
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
@@ -1117,6 +1118,7 @@ function getTopMovesFromList(
       const strategicWeight = inEndgame ? 2.0 : 1.0;
       score += strategic.total * strategicWeight * difficultyMultiplier;
       score += scoreLandingQuality(state, move, player, personality, difficulty);
+      score += scoreLastMoveResponse(state, move, player, personality, difficulty);
     }
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
@@ -1141,3 +1143,4 @@ function getTopMovesFromList(
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit).map((s) => s.move);
 }
+
