@@ -14,7 +14,7 @@ export type AIPlayerMap = Partial<Record<PlayerIndex, AIConfig>>;
 export const AI_DEPTH: Record<AIDifficulty, number> = {
   easy: 2,
   medium: 2,
-  hard: 2,
+  hard: 3,
 };
 
 /** Deeper search used in early-game and end-game phases. */
