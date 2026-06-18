@@ -9,6 +9,7 @@ import {
   deserializeGameState,
 } from '@/game/ai';
 import { getPiecePhase, canReachGoalViaChain } from '@/game/ai/endgame';
+import { scoreLandingQuality } from '@/game/ai/strategy';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
 // Helper: create a simple move
@@ -337,5 +338,65 @@ describe('canReachGoalViaChain', () => {
     // With maxHops=1, can only reach (-2,4), not (-4,6)
     const result = canReachGoalViaChain(testState, cubeCoord(0, 2), cubeCoord(-4, 6), 0, 1);
     expect(result).toBe(false);
+  });
+});
+
+describe('scoreLandingQuality', () => {
+  it('corridor: move reducing lateral deviation from goal axis scores higher than lateral drift', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    ts.board.set(coordKey(cubeCoord(1, -3)), { type: 'piece', player: 0 });
+    const moveToward = { from: cubeCoord(1, -3), to: cubeCoord(0, -2), isJump: false };
+    const moveLateral = { from: cubeCoord(1, -3), to: cubeCoord(2, -3), isJump: false };
+    const scoreToward = scoreLandingQuality(ts, moveToward, 0, 'generalist', 'hard');
+    const scoreLateral = scoreLandingQuality(ts, moveLateral, 0, 'generalist', 'hard');
+    expect(scoreToward).toBeGreaterThanOrEqual(scoreLateral);
+  });
+
+  it('consolidation: landing near teammates scores higher than landing isolated', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece' && content.player === 0) ts.board.set(key, { type: 'empty' });
+    }
+    ts.board.set(coordKey(cubeCoord(-2, 3)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(-1, 3)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(-3, 3)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(0, 2)), { type: 'piece', player: 0 });
+    const moveNear = { from: cubeCoord(0, 2), to: cubeCoord(-2, 4), isJump: false };
+    const moveIsolated = { from: cubeCoord(0, 2), to: cubeCoord(4, -6), isJump: false };
+    const scoreNear = scoreLandingQuality(ts, moveNear, 0, 'defensive', 'hard');
+    const scoreIsolated = scoreLandingQuality(ts, moveIsolated, 0, 'defensive', 'hard');
+    expect(scoreNear).toBeGreaterThan(scoreIsolated);
+  });
+
+  it('straggler: landing near straggler scores higher than landing far from straggler', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece' && content.player === 0) ts.board.set(key, { type: 'empty' });
+    }
+    const nearGoal = ['-4,5','-3,5','-2,5','-1,5','-2,6','-3,6','-4,6','-4,7','-3,7'];
+    for (const cell of nearGoal) {
+      const [q, r] = cell.split(',').map(Number);
+      ts.board.set(`${q},${r}`, { type: 'piece', player: 0 });
+    }
+    ts.board.set(coordKey(cubeCoord(4, -8)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(2, -6)), { type: 'piece', player: 0 });
+    const moveNearStraggler = { from: cubeCoord(2, -6), to: cubeCoord(3, -7), isJump: false };
+    const moveFarFromStraggler = { from: cubeCoord(2, -6), to: cubeCoord(-3, 5), isJump: false };
+    const scoreNear = scoreLandingQuality(ts, moveNearStraggler, 0, 'generalist', 'hard');
+    const scoreFar = scoreLandingQuality(ts, moveFarFromStraggler, 0, 'generalist', 'hard');
+    expect(scoreNear).toBeGreaterThan(scoreFar);
+  });
+
+  it('difficulty scaling: hard scores higher than easy for same move', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    ts.board.set(coordKey(cubeCoord(-2, 4)), { type: 'piece', player: 0 });
+    const move = { from: cubeCoord(-2, 4), to: cubeCoord(-3, 5), isJump: false };
+    const scoreHard = scoreLandingQuality(ts, move, 0, 'generalist', 'hard');
+    const scoreEasy = scoreLandingQuality(ts, move, 0, 'generalist', 'easy');
+    expect(Math.abs(scoreHard)).toBeGreaterThanOrEqual(Math.abs(scoreEasy));
   });
 });

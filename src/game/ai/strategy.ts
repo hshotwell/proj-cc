@@ -9,6 +9,7 @@
  */
 
 import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
+import type { AIPersonality, AIDifficulty } from '@/types/ai';
 import { coordKey, cubeDistance, centroid, cubeAdd } from '../coordinates';
 import { getGoalPositionsForState } from '../state';
 import { getPlayerPieces } from '../setup';
@@ -467,6 +468,93 @@ function computeOpponentGiftPenalty(
   }
 
   return maxGift >= 3 ? maxGift * 2 : 0;
+}
+
+/**
+ * Evaluate the quality of a move's landing position across three components:
+ * 1. Corridor alignment — how well the move vector aligns with the goal direction
+ * 2. Consolidation — friendly pieces within 2 cells of landing
+ * 3. Straggler connectivity — does landing help bridge the furthest-back piece
+ * Scaled by difficulty: hard=1.0, medium=0.6, easy=0.2
+ */
+export function scoreLandingQuality(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  difficulty: AIDifficulty
+): number {
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalCenter = centroid(goalPositions);
+
+  // Component 1: Corridor alignment
+  // Measures how well the move vector aligns with the goal direction.
+  const gLen = Math.sqrt(goalCenter.q * goalCenter.q + goalCenter.r * goalCenter.r);
+  let corridorScore = 0;
+  if (gLen > 0.01) {
+    const gq = goalCenter.q / gLen;
+    const gr = goalCenter.r / gLen;
+    const dq = move.to.q - move.from.q;
+    const dr = move.to.r - move.from.r;
+    corridorScore = (dq * gq + dr * gr) * 2;
+  }
+
+  // Component 2: Consolidation
+  // Only count pieces that are at least as close to the goal as the landing position,
+  // so clustering with lagging pieces in the start zone is not rewarded.
+  const pieces = getPlayerPieces(state, player);
+  const landingGoalDist = cubeDistance(move.to, goalCenter);
+  let consolidation = 0;
+  for (const piece of pieces) {
+    if (piece.q === move.from.q && piece.r === move.from.r) continue;
+    if (cubeDistance(piece, move.to) <= 2 && cubeDistance(piece, goalCenter) <= landingGoalDist) {
+      consolidation++;
+    }
+  }
+  const consolidationWeight =
+    personality === 'aggressive' ? 0.5 :
+    personality === 'defensive'  ? 2.0 : 1.2;
+  const consolidationScore = consolidation * consolidationWeight;
+
+  // Component 3: Straggler connectivity
+  // Find the farthest-behind piece (straggler candidate) directly.
+  let stragglerScore = 0;
+  let farthestDist = -Infinity;
+  let farthestPiece: CubeCoord | null = null;
+  let totalDist = 0;
+  let piecesConsidered = 0;
+  for (const piece of pieces) {
+    if (piece.q === move.from.q && piece.r === move.from.r) continue;
+    const d = cubeDistance(piece, goalCenter);
+    totalDist += d;
+    piecesConsidered++;
+    if (d > farthestDist) { farthestDist = d; farthestPiece = piece; }
+  }
+  if (farthestPiece && piecesConsidered > 0) {
+    const avgDist = totalDist / piecesConsidered;
+    const distExcess = farthestDist - avgDist; // How much farther than average
+    if (distExcess >= 2) {
+      const distToStraggler = cubeDistance(move.to, farthestPiece);
+      const distFromBefore = cubeDistance(move.from, farthestPiece);
+      if (distToStraggler <= 3) {
+        // Very close to straggler — bridging bonus
+        stragglerScore = 4 + distExcess;
+      } else if (distToStraggler < distFromBefore) {
+        // Moving closer to straggler
+        stragglerScore = 2;
+      } else if (distToStraggler > distFromBefore && distExcess >= 4) {
+        // Moving away from a significantly isolated straggler — penalize
+        stragglerScore = -(distToStraggler * distExcess * 0.2);
+      }
+    }
+  }
+
+  const raw = corridorScore + consolidationScore + stragglerScore;
+  const diffMult =
+    difficulty === 'hard'   ? 1.0 :
+    difficulty === 'medium' ? 0.6 : 0.2;
+  return raw * diffMult;
 }
 
 /**
