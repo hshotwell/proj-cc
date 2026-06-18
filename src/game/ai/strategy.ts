@@ -518,35 +518,31 @@ export function scoreLandingQuality(
   const consolidationScore = consolidation * consolidationWeight;
 
   // Component 3: Straggler connectivity
-  // Find the farthest-behind piece (straggler candidate) directly.
   let stragglerScore = 0;
-  let farthestDist = -Infinity;
-  let farthestPiece: CubeCoord | null = null;
-  let totalDist = 0;
-  let piecesConsidered = 0;
-  for (const piece of pieces) {
-    if (piece.q === move.from.q && piece.r === move.from.r) continue;
-    const d = cubeDistance(piece, goalCenter);
-    totalDist += d;
-    piecesConsidered++;
-    if (d > farthestDist) { farthestDist = d; farthestPiece = piece; }
-  }
-  if (farthestPiece && piecesConsidered > 0) {
-    const avgDist = totalDist / piecesConsidered;
-    const distExcess = farthestDist - avgDist; // How much farther than average
-    if (distExcess >= 2) {
-      const distToStraggler = cubeDistance(move.to, farthestPiece);
-      const distFromBefore = cubeDistance(move.from, farthestPiece);
-      if (distToStraggler <= 3) {
-        // Very close to straggler — bridging bonus
-        stragglerScore = 4 + distExcess;
-      } else if (distToStraggler < distFromBefore) {
-        // Moving closer to straggler
-        stragglerScore = 2;
-      } else if (distToStraggler > distFromBefore && distExcess >= 4) {
-        // Moving away from a significantly isolated straggler — penalize
-        stragglerScore = -(distToStraggler * distExcess * 0.2);
+  const { hasStraggler, stragglerPos } = hasSignificantStraggler(state, player);
+  if (hasStraggler && stragglerPos) {
+    const distToStraggler = cubeDistance(move.to, stragglerPos);
+    if (distToStraggler <= 3) {
+      stragglerScore = 4;
+    } else {
+      let nearestPackDist = Infinity;
+      let nearestPackPiece: CubeCoord | null = null;
+      for (const piece of pieces) {
+        if (piece.q === move.from.q && piece.r === move.from.r) continue;
+        if (piece.q === stragglerPos.q && piece.r === stragglerPos.r) continue;
+        const d = cubeDistance(piece, stragglerPos);
+        if (d < nearestPackDist) { nearestPackDist = d; nearestPackPiece = piece; }
       }
+      if (nearestPackPiece && nearestPackDist < Infinity) {
+        const distToPack = cubeDistance(move.to, nearestPackPiece);
+        if (distToStraggler + distToPack < nearestPackDist) {
+          stragglerScore = 2;
+        }
+      }
+    }
+    const distFromBefore = cubeDistance(move.from, stragglerPos);
+    if (distToStraggler > distFromBefore && distToStraggler > 4) {
+      stragglerScore -= 2;
     }
   }
 

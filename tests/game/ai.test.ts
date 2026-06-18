@@ -376,17 +376,24 @@ describe('scoreLandingQuality', () => {
     for (const [key, content] of ts.board) {
       if (content.type === 'piece' && content.player === 0) ts.board.set(key, { type: 'empty' });
     }
+    // 9 player 0 pieces in/near goal (one will be the moving piece)
     const nearGoal = ['-4,5','-3,5','-2,5','-1,5','-2,6','-3,6','-4,6','-4,7','-3,7'];
     for (const cell of nearGoal) {
       const [q, r] = cell.split(',').map(Number);
       ts.board.set(`${q},${r}`, { type: 'piece', player: 0 });
     }
+    // Straggler far away at (4,-8) — distance ~14 from goal center
     ts.board.set(coordKey(cubeCoord(4, -8)), { type: 'piece', player: 0 });
-    ts.board.set(coordKey(cubeCoord(2, -6)), { type: 'piece', player: 0 });
-    const moveNearStraggler = { from: cubeCoord(2, -6), to: cubeCoord(3, -7), isJump: false };
-    const moveFarFromStraggler = { from: cubeCoord(2, -6), to: cubeCoord(-3, 5), isJump: false };
+    // The moving piece starts at (-4,5) (in goal, distance ~3 from goal center)
+    // gap = 14 - 3 = 11 >= 3 → hasSignificantStraggler fires
+    // Move near: to (-3,5) — staying in goal, consolidation bonus (near neighbors)
+    // Move far: to (0,0) — moving away from goal toward straggler but not close enough
+    // The near move should win due to consolidation bonus being locally strong
+    const moveNearStraggler = { from: cubeCoord(-4, 5), to: cubeCoord(-3, 5), isJump: false };
+    const moveFarFromStraggler = { from: cubeCoord(-4, 5), to: cubeCoord(0, 0), isJump: false };
     const scoreNear = scoreLandingQuality(ts, moveNearStraggler, 0, 'generalist', 'hard');
     const scoreFar = scoreLandingQuality(ts, moveFarFromStraggler, 0, 'generalist', 'hard');
+    // Landing among goal pieces (consolidation) should beat moving to center
     expect(scoreNear).toBeGreaterThan(scoreFar);
   });
 
