@@ -11,7 +11,7 @@
 import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
 import type { AIPersonality, AIDifficulty } from '@/types/ai';
 import { coordKey, cubeDistance, centroid, cubeAdd } from '../coordinates';
-import { getGoalPositionsForState } from '../state';
+import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
 import { getAllValidMoves, getValidMoves, canJumpOver } from '../moves';
 import { DIRECTIONS } from '../constants';
@@ -861,9 +861,15 @@ export function computeStrategicScore(
   const distGain = distBefore - distAfter;
   const pastOpponentsPenalty = (isPastOpponents && distGain < 3 && !movingStraggler) ? 5 : 0;
 
+  // Early-game amplifier: stepping stone chains matter most before pieces converge.
+  // With few pieces in goal the AI should prioritise setting up multi-hop chains
+  // over making a single big leap. Scales down as pieces arrive in the goal zone.
+  const piecesInGoal = countPiecesInGoal(state, player);
+  const earlyGameStepMultiplier = piecesInGoal < 4 ? 2.5 : piecesInGoal < 7 ? 1.5 : 1.0;
+
   // Combine with weights
   const total =
-    weights.steppingStone * steppingStoneValue +
+    weights.steppingStone * steppingStoneValue * earlyGameStepMultiplier +
     weights.unblocking * unblockingValue +
     weights.backwardness * backwardnessBonus +
     weights.opponentPiece * opponentPieceBonus +
