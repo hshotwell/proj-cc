@@ -608,7 +608,7 @@ export function scoreLastMoveResponse(
     if (!canJumpOver(state, over, opponentPlayer)) continue;
 
     const gain = cubeDistance(lastMovedTo, oppGoalCenter) - cubeDistance(land, oppGoalCenter);
-    if (gain <= 0) continue;
+    if (gain < 2) continue; // Only react to meaningful threats (min 2-cell gain for opponent)
 
     const blockingWeight =
       personality === 'defensive'  ? 3.0 :
@@ -715,7 +715,7 @@ export function scoreSetupBlockRisk(
               q: oppPos.q + od.q * 2, r: oppPos.r + od.r * 2, s: oppPos.s + od.s * 2,
             };
             if (coordKey(oppLand) !== coordKey(land)) continue;
-            if (nextState.board.get(coordKey(oppOver))?.type !== 'piece') continue;
+            if (!canJumpOver(nextState, oppOver, opponent)) continue;
             fillRisk = 1.0;
             break outer;
           }
