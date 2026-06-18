@@ -639,6 +639,111 @@ export function scoreLastMoveResponse(
 }
 
 /**
+ * Penalise setup moves whose enabled chain can be disrupted by one opponent move.
+ *
+ * Type 1 — Fill block: opponent can reach an intended chain landing in one move.
+ * Type 2 — Removal block: an opponent piece used as a stepping-stone can be moved.
+ *
+ * Returns a negative score (penalty). Returns 0 for non-setup moves or easy difficulty.
+ * personalityMult: defensive=2.0, generalist=1.0, aggressive=0.3
+ */
+export function scoreSetupBlockRisk(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  difficulty: AIDifficulty,
+  steppingStoneValue: number
+): number {
+  if (difficulty === 'easy') return 0;
+  if (steppingStoneValue <= 0) return 0;
+
+  // Simulate our setup move on a shallow-copied board
+  const nextBoard = new Map(state.board);
+  const fromContent = nextBoard.get(coordKey(move.from));
+  nextBoard.set(coordKey(move.from), { type: 'empty' });
+  nextBoard.set(coordKey(move.to), fromContent!);
+  const nextState: GameState = { ...state, board: nextBoard };
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalCenter = centroid(goalPositions);
+  const pieces = getPlayerPieces(nextState, player);
+
+  let totalRisk = 0;
+
+  for (const piece of pieces) {
+    if (piece.q === move.to.q && piece.r === move.to.r) continue; // skip the moved piece
+
+    for (const dir of DIRECTIONS) {
+      const over: CubeCoord = {
+        q: piece.q + dir.q,
+        r: piece.r + dir.r,
+        s: piece.s + dir.s,
+      };
+      const land: CubeCoord = {
+        q: piece.q + dir.q * 2,
+        r: piece.r + dir.r * 2,
+        s: piece.s + dir.s * 2,
+      };
+
+      if (!nextState.board.has(coordKey(land))) continue;
+      if (nextState.board.get(coordKey(land))?.type !== 'empty') continue;
+      if (!canJumpOver(nextState, over, player)) continue;
+
+      const jumpGain = cubeDistance(piece, goalCenter) - cubeDistance(land, goalCenter);
+      if (jumpGain <= 0) continue; // Only forward chains matter
+
+      // TYPE 1: Fill block — can any opponent reach `land` in one move (step or jump)?
+      let fillRisk = 0;
+      outer: for (const opponent of state.activePlayers) {
+        if (opponent === player) continue;
+        for (const [oppKey, oppContent] of nextState.board) {
+          if (oppContent.type !== 'piece' || oppContent.player !== opponent) continue;
+          const [oq, or_] = oppKey.split(',').map(Number);
+          const oppPos: CubeCoord = { q: oq, r: or_, s: -oq - or_ };
+
+          // Can opponent step to land?
+          if (cubeDistance(oppPos, land) === 1) { fillRisk = 1.0; break outer; }
+
+          // Can opponent jump to land?
+          for (const od of DIRECTIONS) {
+            const oppOver: CubeCoord = {
+              q: oppPos.q + od.q, r: oppPos.r + od.r, s: oppPos.s + od.s,
+            };
+            const oppLand: CubeCoord = {
+              q: oppPos.q + od.q * 2, r: oppPos.r + od.r * 2, s: oppPos.s + od.s * 2,
+            };
+            if (coordKey(oppLand) !== coordKey(land)) continue;
+            if (nextState.board.get(coordKey(oppOver))?.type !== 'piece') continue;
+            fillRisk = 1.0;
+            break outer;
+          }
+        }
+      }
+
+      // TYPE 2: Removal block — is `over` an opponent piece (they can move it)?
+      let removalRisk = 0;
+      const overContent = nextState.board.get(coordKey(over));
+      if (overContent?.type === 'piece' && overContent.player !== player) {
+        removalRisk = 0.6;
+      }
+
+      totalRisk += jumpGain * (fillRisk + removalRisk);
+    }
+  }
+
+  if (totalRisk <= 0) return 0;
+
+  const personalityMult =
+    personality === 'defensive'  ? 2.0 :
+    personality === 'generalist' ? 1.0 : 0.3;
+  const diffMult = difficulty === 'medium' ? 0.6 : 1.0;
+
+  return -(totalRisk * personalityMult * diffMult);
+}
+
+/**
  * Score a move based on all strategic principles.
  */
 export interface StrategicScore {

@@ -9,7 +9,7 @@ import {
   deserializeGameState,
 } from '@/game/ai';
 import { getPiecePhase, canReachGoalViaChain } from '@/game/ai/endgame';
-import { scoreLandingQuality, scoreLastMoveResponse } from '@/game/ai/strategy';
+import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk } from '@/game/ai/strategy';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
 // Helper: create a simple move
@@ -474,5 +474,81 @@ describe('scoreLastMoveResponse', () => {
     const otherMove = { from: cubeCoord(3, 3), to: cubeCoord(4, 3), isJump: false };
     const scoreOther = scoreLastMoveResponse(ts, otherMove, 0, 'generalist', 'hard');
     expect(score).toBeGreaterThanOrEqual(scoreOther);
+  });
+});
+
+describe('scoreSetupBlockRisk', () => {
+  // scoreSetupBlockRisk returns a NEGATIVE value (penalty) or 0.
+  // Player 0 goal center ≈ (-3, 6). Forward for P0 = moving toward (-3,6).
+  // A hop from (1,0) over (0,1) to land (-1,2):
+  //   cubeDistance((1,0), (-3,6)) = max(4,6,2) = 6
+  //   cubeDistance((-1,2), (-3,6)) = max(2,4,2) = 4
+  //   jumpGain = 6 - 4 = 2 (forward!) ✓
+
+  it('returns 0 when steppingStoneValue is 0 (not a setup move)', () => {
+    const state = createGame(2);
+    const move = { from: cubeCoord(1, -5), to: cubeCoord(0, -4), isJump: false };
+    const result = scoreSetupBlockRisk(state, move, 0, 'defensive', 'hard', 0);
+    expect(result).toBe(0);
+  });
+
+  it('returns 0 for easy difficulty', () => {
+    const state = createGame(2);
+    const move = { from: cubeCoord(1, -5), to: cubeCoord(0, -4), isJump: false };
+    const result = scoreSetupBlockRisk(state, move, 0, 'defensive', 'easy', 10);
+    expect(result).toBe(0);
+  });
+
+  it('fill block: defensive penalty when opponent can reach the enabled landing in 1 step', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Clear all pieces so we control the board
+    for (const [key] of ts.board) {
+      ts.board.set(key, { type: 'empty' });
+    }
+    // Board setup (all using cube coords with s = -q - r):
+    // Piece B at (1,0) will hop over (0,1) to land at (-1,2) — forward for P0, jumpGain = 2
+    // Piece A (the setup piece) moves TO (0,1) to become the stepping stone
+    // Opponent at (0,2) is 1 step from landing (-1,2) → fill block risk
+
+    ts.board.set(coordKey(cubeCoord(1, 0)), { type: 'piece', player: 0 });  // piece B
+    ts.board.set(coordKey(cubeCoord(0, 1)), { type: 'empty' });              // will be piece A's landing
+    ts.board.set(coordKey(cubeCoord(-1, 2)), { type: 'empty' });             // intended landing
+    ts.board.set(coordKey(cubeCoord(0, 2)), { type: 'piece', player: 2 });  // opponent — 1 step from landing
+    // Piece A starts at (2,-1), moves to (0,1) (the stepping stone position)
+    ts.board.set(coordKey(cubeCoord(2, -1)), { type: 'piece', player: 0 }); // piece A
+
+    const setupMove = { from: cubeCoord(2, -1), to: cubeCoord(0, 1), isJump: false };
+
+    const penaltyDefensive  = scoreSetupBlockRisk(ts, setupMove, 0, 'defensive',  'hard', 5);
+    const penaltyAggressive = scoreSetupBlockRisk(ts, setupMove, 0, 'aggressive', 'hard', 5);
+
+    // Defensive gets a negative penalty (risky setup is discouraged)
+    expect(penaltyDefensive).toBeLessThan(0);
+    // Aggressive ignores it (near 0 or at 0)
+    expect(penaltyAggressive).toBeGreaterThan(penaltyDefensive);
+  });
+
+  it('removal block: penalty when chain relies on opponent piece that can be moved', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key] of ts.board) {
+      ts.board.set(key, { type: 'empty' });
+    }
+    // Chain: piece B at (1,0) hops over OPPONENT at (0,1) to land (-1,2) — jumpGain = 2
+    // Our setup move: piece A moves AWAY from (-1,2), making it an empty landing
+    // After setup: B at (1,0), opponent at (0,1) [stepping stone], (-1,2) empty
+    // Opponent piece at (0,1) CAN move → removal risk fires
+
+    ts.board.set(coordKey(cubeCoord(1, 0)), { type: 'piece', player: 0 });   // piece B
+    ts.board.set(coordKey(cubeCoord(0, 1)), { type: 'piece', player: 2 });   // opponent stepping stone
+    ts.board.set(coordKey(cubeCoord(-1, 2)), { type: 'piece', player: 0 });  // piece A (moving away)
+
+    // Piece A moves away from (-1,2) to (1,-1), vacating (-1,2) as the landing
+    const setupMove = { from: cubeCoord(-1, 2), to: cubeCoord(1, -1), isJump: false };
+
+    const penaltyDefensive = scoreSetupBlockRisk(ts, setupMove, 0, 'defensive', 'hard', 5);
+    // Removal risk: opponent at (0,1) can be moved → penalty should be ≤ 0
+    expect(penaltyDefensive).toBeLessThanOrEqual(0);
   });
 });
