@@ -16,6 +16,10 @@ import { getOpeningMove } from './openingBook';
 const recentBoardStates = new Map<string, number>(); // hash -> count
 const MAX_STATE_HISTORY = 20;
 
+// Module-level time budget for recursive search — set at findBestMove entry
+let _searchStartTime = 0;
+let _searchTimeBudget = 0;
+
 // ── Transposition table ────────────────────────────────────────────────────
 type TTFlag = 'exact' | 'lower' | 'upper';
 interface TTEntry { score: number; flag: TTFlag; depth: number; }
@@ -661,6 +665,22 @@ function getTopMoves(
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
 
+    // Landing hop quality: for jump endpoints, reward positions from which
+    // the moved piece can make another good forward hop next turn.
+    // This prevents the AI from stopping at a consolidation-rich but dead-end position.
+    if (move.isJump) {
+      let bestNextHopGain = 0;
+      for (const dir of DIRECTIONS) {
+        const over = { q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s };
+        const land = { q: move.to.q + dir.q * 2, r: move.to.r + dir.r * 2, s: move.to.s + dir.s * 2 };
+        if (canJumpOver(next, over, player) && next.board.get(coordKey(land))?.type === 'empty') {
+          const gain = cubeDistance(move.to, goalCenterForBonus) - cubeDistance(land, goalCenterForBonus);
+          if (gain > bestNextHopGain) bestNextHopGain = gain;
+        }
+      }
+      score += bestNextHopGain * 5;
+    }
+
     return { move, score };
   });
 
@@ -679,6 +699,11 @@ function minimax(
   personality: AIPersonality,
   difficulty: AIDifficulty
 ): number {
+  // Time-guard: abort deep recursion if budget exceeded
+  if (depth > 0 && performance.now() - _searchStartTime >= _searchTimeBudget) {
+    return evaluatePosition(state, maximizingPlayer, personality, difficulty);
+  }
+
   const origAlpha = alpha;
   const origBeta = beta;
 
@@ -746,6 +771,11 @@ function maxn(
   personality: AIPersonality,
   difficulty: AIDifficulty
 ): number {
+  // Time-guard: abort deep recursion if budget exceeded
+  if (depth > 0 && performance.now() - _searchStartTime >= _searchTimeBudget) {
+    return evaluatePosition(state, aiPlayer, personality, difficulty);
+  }
+
   if (depth === 0) {
     return evaluatePosition(state, aiPlayer, personality, difficulty);
   }
@@ -1051,6 +1081,10 @@ export function findBestMove(
   const limit = AI_MOVE_LIMIT[difficulty];
   const timeBudget = AI_TIME_BUDGET_MS[difficulty];
   const startTime = performance.now();
+
+  // Expose start time / budget to recursive helpers (time-guard in minimax/maxn)
+  _searchStartTime = startTime;
+  _searchTimeBudget = timeBudget;
   const allMoves = getAllValidMoves(state, player);
 
   if (allMoves.length === 0) return null;
@@ -1249,6 +1283,21 @@ function getTopMovesFromList(
 
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
+
+    // Landing hop quality: for jump endpoints, reward positions from which
+    // the moved piece can make another good forward hop next turn.
+    if (move.isJump) {
+      let bestNextHopGain = 0;
+      for (const dir of DIRECTIONS) {
+        const over = { q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s };
+        const land = { q: move.to.q + dir.q * 2, r: move.to.r + dir.r * 2, s: move.to.s + dir.s * 2 };
+        if (canJumpOver(next, over, player) && next.board.get(coordKey(land))?.type === 'empty') {
+          const gain = cubeDistance(move.to, goalCenterForBonus) - cubeDistance(land, goalCenterForBonus);
+          if (gain > bestNextHopGain) bestNextHopGain = gain;
+        }
+      }
+      score += bestNextHopGain * 5;
+    }
 
     return { move, score };
   });

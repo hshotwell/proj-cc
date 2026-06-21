@@ -142,8 +142,8 @@ export function hasSignificantStraggler(
   // A significant gap is when the farthest piece is much farther than the second
   const gap = farthest.dist - secondFarthest.dist;
 
-  // Consider it a straggler if gap is 3+ cells
-  if (gap >= 3) {
+  // Consider it a straggler if gap is 2+ cells
+  if (gap >= 2) {
     return { hasStraggler: true, stragglerPos: farthest.piece, gap };
   }
 
@@ -819,9 +819,10 @@ export function computeStrategicScore(
   const blockInfo = findBlockedJumpPotential(state, move.from, player);
   const unblockingValue = blockInfo.isBlocking ? blockInfo.potentialGain : 0;
 
-  // Backwardness of the moving piece
+  // Backwardness of the moving piece: quadratic so the most-backward piece
+  // gets a strongly disproportionate bonus over middle pieces.
   const backwardness = getPieceBackwardness(state, move.from, player);
-  const backwardnessBonus = backwardness * 8; // Up to 8 points for most backward piece
+  const backwardnessBonus = backwardness * backwardness * 25; // Up to 25 pts for most backward
 
   // BIG bonus for moving a significant straggler.
   // Urgency scales with pieces already in goal — the further along we are,
