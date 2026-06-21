@@ -580,6 +580,104 @@ function findShuffleSequence(
 }
 
 /**
+ * BFS over our own move sequences (opponent frozen) to find the minimum-move
+ * path to fill all remaining empty goal slots. Only activates for small finishing
+ * puzzles (≤3 pieces outside, ≤4 empty goal slots) where BFS is tractable.
+ * Returns the first move of the optimal sequence, or null if not found within 8 moves.
+ */
+export function findOptimalEndgameSequence(
+  state: GameState,
+  player: PlayerIndex
+): Move | null {
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
+  const piecesOutside = getPiecesOutsideGoal(state, player);
+  const emptyGoals = getEmptyGoalsByDepth(state, player);
+
+  // Only tractable for small finishing puzzles
+  if (piecesOutside.length === 0 || piecesOutside.length > 3) return null;
+  if (emptyGoals.length > 4) return null;
+
+  type BoardCell = { type: 'empty' } | { type: 'piece'; player: number };
+
+  // Apply a single move to a board copy WITHOUT advancing the turn
+  const applyToBoard = (board: Map<string, BoardCell>, move: Move): Map<string, BoardCell> => {
+    const next = new Map(board);
+    const content = next.get(coordKey(move.from));
+    next.set(coordKey(move.from), { type: 'empty' });
+    next.set(coordKey(move.to), content!);
+    return next;
+  };
+
+  // Hash only our piece positions (opponent is frozen — not in the search)
+  const hashBoard = (board: Map<string, BoardCell>): string => {
+    const positions: string[] = [];
+    for (const [key, cell] of board) {
+      if (cell.type === 'piece' && (cell as { type: 'piece'; player: number }).player === player) {
+        positions.push(key);
+      }
+    }
+    return positions.sort().join('|');
+  };
+
+  // Check if all goal positions are filled by our player
+  const isSolved = (board: Map<string, BoardCell>): boolean =>
+    goalPositions.every(g => {
+      const cell = board.get(coordKey(g));
+      return cell?.type === 'piece' && (cell as { type: 'piece'; player: number }).player === player;
+    });
+
+  // Get candidate moves for our pieces: no goal-leaving allowed
+  const getCandidates = (board: Map<string, BoardCell>): Move[] => {
+    const simState: GameState = {
+      ...state,
+      board: board as GameState['board'],
+      currentPlayer: player,
+    };
+    const moves = getAllValidMoves(simState, player);
+    return moves.filter(m => {
+      const fromInGoal = goalKeys.has(coordKey(m.from));
+      const toInGoal = goalKeys.has(coordKey(m.to));
+      if (fromInGoal && !toInGoal) return false; // Never leave goal
+      return true;
+    });
+  };
+
+  // BFS
+  type Entry = { board: Map<string, BoardCell>; firstMove: Move; depth: number };
+  const visited = new Set<string>();
+  const queue: Entry[] = [];
+
+  const initialBoard = state.board as Map<string, BoardCell>;
+  visited.add(hashBoard(initialBoard));
+
+  for (const move of getCandidates(initialBoard)) {
+    const nextBoard = applyToBoard(initialBoard, move);
+    const hash = hashBoard(nextBoard);
+    if (visited.has(hash)) continue;
+    visited.add(hash);
+    if (isSolved(nextBoard)) return move;
+    queue.push({ board: nextBoard, firstMove: move, depth: 1 });
+  }
+
+  const MAX_DEPTH = 8;
+  while (queue.length > 0) {
+    const { board, firstMove, depth } = queue.shift()!;
+    if (depth >= MAX_DEPTH) continue;
+    for (const move of getCandidates(board)) {
+      const nextBoard = applyToBoard(board, move);
+      const hash = hashBoard(nextBoard);
+      if (visited.has(hash)) continue;
+      visited.add(hash);
+      if (isSolved(nextBoard)) return firstMove;
+      queue.push({ board: nextBoard, firstMove, depth: depth + 1 });
+    }
+  }
+
+  return null;
+}
+
+/**
  * For endgame-phase pieces making a lateral or backward move:
  * returns a large positive score if the move unlocks a new chain-jump path
  * to a goal cell (setup move), or a heavy penalty if it sets nothing up.

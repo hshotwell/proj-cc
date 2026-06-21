@@ -9,7 +9,7 @@ import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk } from './strategy';
-import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase } from './endgame';
+import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 
 // Track recent board states to detect loops at the game state level
@@ -931,6 +931,16 @@ export function findBestMove(
       }
       if (bestAltScore <= bookScore + 300) return bookMove;
       // A significantly better move exists — fall through to normal search
+    }
+  }
+
+  // PRIORITY: BFS optimal finish for small endgame puzzles (≤3 outside, ≤4 empty goals).
+  // Finds the minimum-move sequence exactly, bypassing all heuristics.
+  if (!state.isCustomLayout) {
+    const optimalMove = findOptimalEndgameSequence(state, player);
+    if (optimalMove) {
+      const { repeats } = wouldRepeatState(state, optimalMove);
+      if (!repeats) return optimalMove;
     }
   }
 

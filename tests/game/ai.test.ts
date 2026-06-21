@@ -8,7 +8,7 @@ import {
   serializeGameState,
   deserializeGameState,
 } from '@/game/ai';
-import { getPiecePhase, canReachGoalViaChain } from '@/game/ai/endgame';
+import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence } from '@/game/ai/endgame';
 import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk } from '@/game/ai/strategy';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
@@ -550,5 +550,66 @@ describe('scoreSetupBlockRisk', () => {
     const penaltyDefensive = scoreSetupBlockRisk(ts, setupMove, 0, 'defensive', 'hard', 5);
     // Removal risk: opponent at (0,1) can be moved → penalty should be ≤ 0
     expect(penaltyDefensive).toBeLessThanOrEqual(0);
+  });
+});
+
+describe('findOptimalEndgameSequence', () => {
+  it('returns null when more than 3 pieces are outside goal', () => {
+    const state = createGame(2);
+    // Default game has 10 pieces outside — exceeds threshold
+    const result = findOptimalEndgameSequence(state, 0);
+    expect(result).toBeNull();
+  });
+
+  it('returns a move when 1 piece is outside and 1 goal slot is empty', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Clear all player 0 pieces
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece' && (content as { type: 'piece'; player: number }).player === 0) {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    // Place 9 player 0 pieces in goal
+    const inGoal = ['-4,5','-3,5','-2,5','-1,5','-2,6','-3,6','-4,6','-3,7','-4,8'];
+    for (const c of inGoal) {
+      const [q, r] = c.split(',').map(Number);
+      ts.board.set(`${q},${r}`, { type: 'piece', player: 0 });
+    }
+    // (-4,7) is the remaining empty goal. Place outside piece adjacent at (-3,6)...
+    // that's in the inGoal list. Let's use a piece at (-4,6) (in goal) that can step to (-4,7).
+    // Actually (-4,7) is the remaining empty goal. (-4,6) is in the inGoal list.
+    // Step: (-4,6) → (-4,7) is within goal (deeper), valid.
+    // But we need an OUTSIDE piece too. Let's place one piece outside:
+    ts.board.set(coordKey(cubeCoord(-4, 7)), { type: 'empty' }); // the empty goal
+    ts.board.set(coordKey(cubeCoord(0, 0)), { type: 'piece', player: 0 }); // 1 outside piece
+    ts.currentPlayer = 0;
+
+    const result = findOptimalEndgameSequence(ts, 0);
+    // Should find a move (not null) — either the within-goal step or some path
+    expect(result).not.toBeNull();
+    if (result) {
+      expect(result.from).toBeDefined();
+      expect(result.to).toBeDefined();
+    }
+  });
+
+  it('returns null when outside pieces are too far and no 8-move path exists', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Clear all player 0 pieces
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece' && (content as { type: 'piece'; player: number }).player === 0) {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    // 3 pieces in isolated positions very far from goal, goal zone empty
+    ts.board.set(coordKey(cubeCoord(4, -8)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(4, -7)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(4, -6)), { type: 'piece', player: 0 });
+    ts.currentPlayer = 0;
+    // All 10 goal positions are empty, no stepping stones — too far for 8-move BFS
+    const result = findOptimalEndgameSequence(ts, 0);
+    expect(result).toBeNull();
   });
 });
