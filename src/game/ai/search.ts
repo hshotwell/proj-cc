@@ -558,6 +558,39 @@ function selectBestChainStop(
   return [...nonChainMoves, ...Array.from(chainGroups.values())];
 }
 
+/**
+ * Check if any piece currently has a forward chain jump gaining ≥ 4 cells.
+ * Computed once per turn and passed into move scoring.
+ */
+function checkBigJumpOpportunity(
+  allMoves: Move[],
+  player: PlayerIndex,
+  goalCenter: CubeCoord
+): boolean {
+  return allMoves.some(m => {
+    if (!m.isJump) return false;
+    const gain = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
+    return gain >= 4;
+  });
+}
+
+/**
+ * If a big jump opportunity exists this turn, apply a bonus to moves that
+ * capitalise on it (jump gain ≥ 4). This prevents the AI making small endgame
+ * moves when a large chain jump is available.
+ */
+function computeBigJumpOpportunityBonus(
+  move: Move,
+  goalCenter: CubeCoord,
+  hasBigOpportunity: boolean
+): number {
+  if (!hasBigOpportunity) return 0;
+  if (!move.isJump) return 0;
+  const gain = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  if (gain < 4) return 0;
+  return gain * 8;
+}
+
 function getTopMoves(
   state: GameState,
   player: PlayerIndex,
@@ -585,6 +618,11 @@ function getTopMoves(
   const threats = (difficulty !== 'easy' && (personality === 'defensive' || personality === 'generalist'))
     ? findOpponentJumpThreats(state, player)
     : undefined;
+
+  // Compute goal center for big jump opportunity detection
+  const goalPositionsForBonus = getGoalPositionsForState(state, player);
+  const goalCenterForBonus = centroid(goalPositionsForBonus);
+  const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, player, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
@@ -619,6 +657,9 @@ function getTopMoves(
     // reward laterals that unlock a new chain entry into goal
     const lateralBonus = evaluateEndgameLateral(state, move, player);
     score += lateralBonus;
+
+    // Prioritize large chain jumps when available (transition timing heuristic)
+    score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
 
     return { move, score };
   });
@@ -1124,6 +1165,11 @@ function getTopMovesFromList(
   const inEndgame = isEndgame(state, player);
   const inLateEndgame = isLateEndgame(state, player);
 
+  // Compute goal center for big jump opportunity detection
+  const goalPositionsForBonus = getGoalPositionsForState(state, player);
+  const goalCenterForBonus = centroid(goalPositionsForBonus);
+  const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, player, goalCenterForBonus);
+
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
     const next = applyMove(state, move);
@@ -1159,6 +1205,9 @@ function getTopMovesFromList(
     // reward laterals that unlock a new chain entry into goal
     const lateralBonus = evaluateEndgameLateral(state, move, player);
     score += lateralBonus;
+
+    // Prioritize large chain jumps when available (transition timing heuristic)
+    score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
 
     return { move, score };
   });
