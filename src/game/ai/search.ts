@@ -529,6 +529,35 @@ export function computeRepetitionPenalty(
   return 0;
 }
 
+/**
+ * For each starting piece with multiple chain-jump stopping points (A→B, A→B→C, etc.),
+ * keep only the highest-scored stopping point. Non-jump moves and single-hop jumps
+ * pass through unmodified. This prevents the move limit from being consumed by
+ * inferior chain variants of the same piece.
+ */
+function selectBestChainStop(
+  scored: Array<{ move: Move; score: number }>
+): Array<{ move: Move; score: number }> {
+  const chainGroups = new Map<string, { move: Move; score: number }>();
+  const nonChainMoves: Array<{ move: Move; score: number }> = [];
+
+  for (const entry of scored) {
+    const { move } = entry;
+    // Multi-hop jump: jumpPath exists and has ≥1 step (meaning the move went through at least one intermediate)
+    if (move.isJump && move.jumpPath && move.jumpPath.length >= 1) {
+      const key = coordKey(move.from);
+      const existing = chainGroups.get(key);
+      if (!existing || entry.score > existing.score) {
+        chainGroups.set(key, entry);
+      }
+    } else {
+      nonChainMoves.push(entry);
+    }
+  }
+
+  return [...nonChainMoves, ...Array.from(chainGroups.values())];
+}
+
 function getTopMoves(
   state: GameState,
   player: PlayerIndex,
@@ -594,8 +623,9 @@ function getTopMoves(
     return { move, score };
   });
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map((s) => s.move);
+  const deduped = selectBestChainStop(scored);
+  deduped.sort((a, b) => b.score - a.score);
+  return deduped.slice(0, limit).map((s) => s.move);
 }
 
 // Minimax with alpha-beta pruning and transposition table for 2-player games
@@ -1133,7 +1163,8 @@ function getTopMovesFromList(
     return { move, score };
   });
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map((s) => s.move);
+  const deduped = selectBestChainStop(scored);
+  deduped.sort((a, b) => b.score - a.score);
+  return deduped.slice(0, limit).map((s) => s.move);
 }
 
