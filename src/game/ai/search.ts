@@ -935,26 +935,22 @@ export function findBestMove(
   }
 
   // PRIORITY: Late endgame finishing logic for ALL difficulty levels
-  // When 7+ pieces are in goal, finishing quickly is fundamental
+  // When 6+ pieces are in goal, the dedicated endgame solver is authoritative.
+  // Trust it completely — the regression gate previously rejected valid moves like
+  // (4,-7)→(4,-8) because moving to the deepest corner increases distance from
+  // goal centroid, which computePlayerProgress misreads as backward progress.
   if (isLateEndgame(state, player)) {
     const endgameMove = findEndgameMove(state, player);
     if (endgameMove) {
-      // Don't use endgame move if it would create a cycle
+      // Only veto if this move would repeat a board state (cycle detection).
+      // No progress gate — the endgame solver's priority waterfall is authoritative.
       const { repeats } = wouldRepeatState(state, endgameMove);
-      const { returns } = wouldReturnToPreviousPosition(state, endgameMove);
-      if (!repeats && !returns) {
-        // Regression gate: only take endgame move if it doesn't significantly regress progress
-        const progBefore = computePlayerProgress(state, player);
-        const progAfter = computePlayerProgress(applyMove(state, endgameMove), player);
-        if (progAfter >= progBefore - 0.01) {
-          return endgameMove;
-        }
-        // Progress regresses — fall through to normal search
+      if (!repeats) {
+        return endgameMove;
       }
-      // Endgame move would cycle — fall through to normal search with full penalty logic
+      // State would repeat — fall through to normal search which has its own
+      // repetition penalties to find a different path out of the cycle.
     }
-    // If no clear finishing move found, continue with normal logic
-    // but endgame scoring will still apply
   }
 
   // For custom layouts, use the simple progress-maximizing approach
