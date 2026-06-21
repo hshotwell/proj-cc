@@ -323,22 +323,39 @@ function findSteppingStoneMove(
  * It uses a strict priority system to ensure optimal endgame play.
  */
 export function findEndgameMove(state: GameState, player: PlayerIndex): Move | null {
-  const allMoves = getAllValidMoves(state, player);
-  if (allMoves.length === 0) return null;
+  const allRawMoves = getAllValidMoves(state, player);
+  if (allRawMoves.length === 0) return null;
 
   const goalPositions = getGoalPositionsForState(state, player);
   const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
+
+  // Hard rule: a piece already inside the goal zone must NEVER leave it.
+  // No stepping-stone justification, no backstep, no exception for standard layouts.
+  // (Custom layouts where goal cells aren't fully adjacent are excluded from this
+  // filtering only if the board is non-standard, but even then moves are restricted
+  // to within-goal or deeper-in-goal only.)
+  const allMoves = allRawMoves.filter(m => {
+    const fromInGoal = goalKeys.has(coordKey(m.from));
+    const toInGoal = goalKeys.has(coordKey(m.to));
+    if (fromInGoal && !toInGoal) return false; // Never leave the goal zone
+    return true;
+  });
+
+  // If filtering left us with nothing, fall back to all moves (shouldn't happen
+  // in a real game where the board isn't fully packed, but prevents deadlock)
+  const moves = allMoves.length > 0 ? allMoves : allRawMoves;
+
   const piecesOutside = getPiecesOutsideGoal(state, player);
   const emptyGoals = getEmptyGoalsByDepth(state, player);
 
   // If no pieces outside goal AND no empty goals, game is won - any move is fine
   if (piecesOutside.length === 0 && emptyGoals.length === 0) {
-    return allMoves[0];
+    return moves[0];
   }
 
   // PRIORITY 1: Direct goal entry - ALWAYS take this if available
   // Prefer entries to DEEPER positions, then longer jumps
-  const directEntries = allMoves
+  const directEntries = moves
     .filter(m => isDirectGoalEntry(state, m, player))
     .map(m => ({
       move: m,
@@ -355,13 +372,13 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   }
 
   // PRIORITY 2: "Make room" - move a blocking piece deeper to enable entry
-  const makeRoomMove = findMakeRoomMove(state, player, allMoves, goalKeys, piecesOutside);
+  const makeRoomMove = findMakeRoomMove(state, player, moves, goalKeys, piecesOutside);
   if (makeRoomMove) {
     return makeRoomMove;
   }
 
   // PRIORITY 3: Move pieces DEEPER within goal (consolidate at back)
-  const deeperMoves = allMoves
+  const deeperMoves = moves
     .filter(m => {
       if (!goalKeys.has(coordKey(m.from))) return false;
       if (!goalKeys.has(coordKey(m.to))) return false;
@@ -381,7 +398,7 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
 
   // PRIORITY 4: Create stepping stone for goal entry
   const steppingStoneMove = findSteppingStoneMove(
-    state, player, allMoves, goalKeys, piecesOutside, emptyGoals
+    state, player, moves, goalKeys, piecesOutside, emptyGoals
   );
   if (steppingStoneMove) {
     return steppingStoneMove;
@@ -389,7 +406,7 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
 
   // PRIORITY 5: Shuffle within goal that IMMEDIATELY enables a goal entry
   const inGoalShuffles: Array<{ move: Move; enablesDepth: number }> = [];
-  for (const move of allMoves) {
+  for (const move of moves) {
     if (!goalKeys.has(coordKey(move.from))) continue;
     if (!goalKeys.has(coordKey(move.to))) continue;
 
@@ -419,7 +436,7 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   }
 
   // PRIORITY 6: 2-4 move lookahead for shuffle/reposition sequences
-  const shuffleSequence = findShuffleSequence(state, player, allMoves, goalKeys, 2);
+  const shuffleSequence = findShuffleSequence(state, player, moves, goalKeys, 2);
   if (shuffleSequence) {
     return shuffleSequence;
   }
@@ -440,7 +457,7 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     for (const piece of piecesOutside) {
       const distToGoal = cubeDistance(piece, targetGoal);
       const distToCenter = cubeDistance(piece, goalCenter);
-      for (const move of allMoves) {
+      for (const move of moves) {
         if (!cubeEquals(move.from, piece)) continue;
 
         const newDist = cubeDistance(move.to, targetGoal);
@@ -482,22 +499,10 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     }
   }
 
-  // PRIORITY 8: Any move that doesn't leave goal and doesn't go shallower
-  const safeMoves = allMoves.filter(m => {
-    const fromInGoal = goalKeys.has(coordKey(m.from));
-    const toInGoal = goalKeys.has(coordKey(m.to));
-
-    if (!fromInGoal && !toInGoal) return true;
-    if (!fromInGoal && toInGoal) return true;
-    if (fromInGoal && toInGoal) {
-      return getGoalPositionDepth(m.to) >= getGoalPositionDepth(m.from);
-    }
-    return false;
-  });
-
-  if (safeMoves.length > 0) {
+  // PRIORITY 8: Any remaining safe move (already filtered — no goal-leaving moves exist here)
+  if (moves.length > 0) {
     const goalCenter = centroid(goalPositions);
-    const scored = safeMoves.map(m => {
+    const scored = moves.map(m => {
       const forward = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
       const jumpLen = m.jumpPath?.length || 0;
       const tiebreaker = Math.random() * 0.01;
@@ -507,7 +512,7 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     return scored[0].move;
   }
 
-  return allMoves[0];
+  return moves[0] ?? allRawMoves[0];
 }
 
 /**

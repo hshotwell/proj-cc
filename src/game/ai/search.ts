@@ -591,11 +591,6 @@ function getTopMoves(
     const lateralBonus = evaluateEndgameLateral(state, move, player);
     score += lateralBonus;
 
-    // Prefer longer chain jumps for move ordering
-    if (move.isJump && move.jumpPath && move.jumpPath.length > 1) {
-      score += (move.jumpPath.length - 1) * 50;
-    }
-
     return { move, score };
   });
 
@@ -1068,11 +1063,6 @@ export function findBestMove(
 
     score -= penalty;
 
-    // Tiebreaker: prefer longer chain jumps
-    if (move.isJump && move.jumpPath && move.jumpPath.length > 1) {
-      score += (move.jumpPath.length - 1) * 20;
-    }
-
     scoredMoves.push({ move, score });
   }
 
@@ -1133,11 +1123,6 @@ function getTopMovesFromList(
     // reward laterals that unlock a new chain entry into goal
     const lateralBonus = evaluateEndgameLateral(state, move, player);
     score += lateralBonus;
-
-    // Prefer longer chain jumps for move ordering
-    if (move.isJump && move.jumpPath && move.jumpPath.length > 1) {
-      score += (move.jumpPath.length - 1) * 50;
-    }
 
     return { move, score };
   });
