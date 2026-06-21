@@ -613,3 +613,57 @@ describe('findOptimalEndgameSequence', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('scoreLeapfrogPotential', () => {
+  it('returns non-negative value for any move (never negative)', () => {
+    const state = createGame(2);
+    const move = { from: cubeCoord(4, -8), to: cubeCoord(4, -7), isJump: false };
+    const score = scoreLeapfrogPotential(state, move, 0, 'generalist');
+    expect(score).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns higher score when landing enables a friendly piece to jump forward over us', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Clear all player 0 pieces for clean setup
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece' && (content as { type: 'piece'; player: number }).player === 0) {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    // Piece A at (-1,3) steps to (-1,4).
+    // Piece B at (0,3) can jump over (-1,4) [direction (-1,+1,0)] to land (-2,5).
+    // jumpGain for B: cubeDistance((0,3),(-3,6))=3, cubeDistance((-2,5),(-3,6))=1, gain=2 > 0
+    ts.board.set(coordKey(cubeCoord(-1, 3)), { type: 'piece', player: 0 }); // piece A (moving)
+    ts.board.set(coordKey(cubeCoord(0, 3)), { type: 'piece', player: 0 });  // piece B (will jump)
+    ts.board.set(coordKey(cubeCoord(-2, 5)), { type: 'empty' });            // B's landing
+
+    const moveWithLeapfrog = { from: cubeCoord(-1, 3), to: cubeCoord(-1, 4), isJump: false };
+
+    // Control: a move to an isolated position where no piece can jump over us forward
+    ts.board.set(coordKey(cubeCoord(3, -5)), { type: 'piece', player: 0 }); // isolated piece C
+    const moveWithoutLeapfrog = { from: cubeCoord(3, -5), to: cubeCoord(3, -4), isJump: false };
+
+    const scoreWith = scoreLeapfrogPotential(ts, moveWithLeapfrog, 0, 'generalist');
+    const scoreWithout = scoreLeapfrogPotential(ts, moveWithoutLeapfrog, 0, 'generalist');
+    expect(scoreWith).toBeGreaterThan(scoreWithout);
+  });
+
+  it('aggressive personality scores higher than defensive for same leapfrog setup', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece' && (content as { type: 'piece'; player: number }).player === 0) {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    ts.board.set(coordKey(cubeCoord(-1, 3)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(0, 3)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(-2, 5)), { type: 'empty' });
+    const move = { from: cubeCoord(-1, 3), to: cubeCoord(-1, 4), isJump: false };
+
+    const aggressive = scoreLeapfrogPotential(ts, move, 0, 'aggressive');
+    const defensive = scoreLeapfrogPotential(ts, move, 0, 'defensive');
+    expect(aggressive).toBeGreaterThan(defensive);
+  });
+});
