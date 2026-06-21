@@ -9,7 +9,7 @@ import {
   deserializeGameState,
 } from '@/game/ai';
 import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence } from '@/game/ai/endgame';
-import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk } from '@/game/ai/strategy';
+import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential } from '@/game/ai/strategy';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
 // Helper: create a simple move

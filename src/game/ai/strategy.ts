@@ -902,6 +902,87 @@ export function computeStrategicScore(
 }
 
 /**
+ * Detect and reward the "leapfrog" pattern: our move lands in a position that
+ * enables a friendly piece to jump over us to a better position, AND after that
+ * jump, we (still at ourNewPos) or the jumped piece can enable another hop.
+ *
+ * Returns a positive bonus; never negative.
+ * Personality-weighted: aggressive values leapfrog chains most.
+ */
+export function scoreLeapfrogPotential(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  personality: AIPersonality
+): number {
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalCenter = centroid(goalPositions);
+
+  const ourNewPos = move.to;
+  const ourNewDist = cubeDistance(ourNewPos, goalCenter);
+
+  let leapfrogValue = 0;
+
+  // Check each direction: can a friendly piece jump over our landing position?
+  for (const dir of DIRECTIONS) {
+    // Jumping piece is 1 step BEHIND our landing in this direction
+    const jumperPos: CubeCoord = {
+      q: ourNewPos.q - dir.q,
+      r: ourNewPos.r - dir.r,
+      s: ourNewPos.s - dir.s,
+    };
+    const jumperContent = state.board.get(coordKey(jumperPos));
+    if (jumperContent?.type !== 'piece' || jumperContent.player !== player) continue;
+    // Skip the piece that is moving
+    if (jumperPos.q === move.from.q && jumperPos.r === move.from.r) continue;
+
+    // Where the jumper would land (1 step PAST our landing)
+    const hopLand: CubeCoord = {
+      q: ourNewPos.q + dir.q,
+      r: ourNewPos.r + dir.r,
+      s: ourNewPos.s + dir.s,
+    };
+    const hopLandContent = state.board.get(coordKey(hopLand));
+    if (!hopLandContent || hopLandContent.type !== 'empty') continue;
+
+    // Is this hop forward for the jumping piece?
+    const jumperDist = cubeDistance(jumperPos, goalCenter);
+    const hopLandDist = cubeDistance(hopLand, goalCenter);
+    const firstHopGain = jumperDist - hopLandDist;
+    if (firstHopGain <= 0) continue;
+
+    leapfrogValue += firstHopGain;
+
+    // Reciprocal check: after B jumps to hopLand, can A (at ourNewPos) jump over B
+    // for a second hop? (True leapfrog: A and B alternate enabling each other)
+    // A is at ourNewPos; B is now at hopLand; check if hopLand is 1 step from ourNewPos
+    // in the same direction, and the landing 1 step further is empty.
+    const secondHopLand: CubeCoord = {
+      q: hopLand.q + dir.q,
+      r: hopLand.r + dir.r,
+      s: hopLand.s + dir.s,
+    };
+    const secondLandContent = state.board.get(coordKey(secondHopLand));
+    if (secondLandContent?.type === 'empty') {
+      const secondHopDist = cubeDistance(secondHopLand, goalCenter);
+      const secondHopGain = ourNewDist - secondHopDist;
+      if (secondHopGain > 0) {
+        leapfrogValue += secondHopGain * 0.6; // Discounted: requires a future turn
+      }
+    }
+  }
+
+  if (leapfrogValue <= 0) return 0;
+
+  const personalityMult =
+    personality === 'aggressive' ? 2.0 :
+    personality === 'generalist' ? 1.5 : 1.0;
+
+  return leapfrogValue * personalityMult;
+}
+
+/**
  * Check if we're in endgame (many pieces in goal).
  * Stepping stone logic becomes MORE important in endgame.
  */

@@ -8,7 +8,7 @@ import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 
@@ -645,6 +645,7 @@ function getTopMoves(
       score += scoreLandingQuality(state, move, player, personality, difficulty);
       score += scoreLastMoveResponse(state, move, player, personality, difficulty);
       score += scoreSetupBlockRisk(state, move, player, personality, difficulty, strategic.steppingStoneValue);
+      score += scoreLeapfrogPotential(state, move, player, personality);
     }
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
@@ -1193,6 +1194,7 @@ function getTopMovesFromList(
       score += scoreLandingQuality(state, move, player, personality, difficulty);
       score += scoreLastMoveResponse(state, move, player, personality, difficulty);
       score += scoreSetupBlockRisk(state, move, player, personality, difficulty, strategic.steppingStoneValue);
+      score += scoreLeapfrogPotential(state, move, player, personality);
     }
 
     // CRITICAL: In late endgame, heavily prioritize finishing moves for ALL difficulties
