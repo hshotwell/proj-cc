@@ -922,6 +922,18 @@ export function scoreLeapfrogPotential(
   const ourNewPos = move.to;
   const ourNewDist = cubeDistance(ourNewPos, goalCenter);
 
+  // Cell state reflecting the POST-move board: move.from becomes empty,
+  // move.to becomes occupied by us. Pre-existing pieces are unchanged.
+  // Returns 'empty' | 'us' | 'piece' | 'off-board'.
+  const cellAfterMove = (pos: CubeCoord): 'empty' | 'us' | 'piece' | 'off-board' => {
+    if (pos.q === move.from.q && pos.r === move.from.r) return 'empty';
+    if (pos.q === move.to.q && pos.r === move.to.r) return 'us';
+    const c = state.board.get(coordKey(pos));
+    if (!c) return 'off-board';
+    if (c.type !== 'piece') return 'empty';
+    return c.player === player ? 'us' : 'piece';
+  };
+
   let leapfrogValue = 0;
 
   // Check each direction: can a friendly piece jump over our landing position?
@@ -932,10 +944,8 @@ export function scoreLeapfrogPotential(
       r: ourNewPos.r - dir.r,
       s: ourNewPos.s - dir.s,
     };
-    const jumperContent = state.board.get(coordKey(jumperPos));
-    if (jumperContent?.type !== 'piece' || jumperContent.player !== player) continue;
-    // Skip the piece that is moving
-    if (jumperPos.q === move.from.q && jumperPos.r === move.from.r) continue;
+    // A friendly jumper at jumperPos AFTER our move
+    if (cellAfterMove(jumperPos) !== 'us') continue;
 
     // Where the jumper would land (1 step PAST our landing)
     const hopLand: CubeCoord = {
@@ -943,8 +953,7 @@ export function scoreLeapfrogPotential(
       r: ourNewPos.r + dir.r,
       s: ourNewPos.s + dir.s,
     };
-    const hopLandContent = state.board.get(coordKey(hopLand));
-    if (!hopLandContent || hopLandContent.type !== 'empty') continue;
+    if (cellAfterMove(hopLand) !== 'empty') continue;
 
     // Is this hop forward for the jumping piece?
     const jumperDist = cubeDistance(jumperPos, goalCenter);
@@ -955,16 +964,13 @@ export function scoreLeapfrogPotential(
     leapfrogValue += firstHopGain;
 
     // Reciprocal check: after B jumps to hopLand, can A (at ourNewPos) jump over B
-    // for a second hop? (True leapfrog: A and B alternate enabling each other)
-    // A is at ourNewPos; B is now at hopLand; check if hopLand is 1 step from ourNewPos
-    // in the same direction, and the landing 1 step further is empty.
+    // for a second hop? Check the cell 1 step PAST hopLand in the same direction.
     const secondHopLand: CubeCoord = {
       q: hopLand.q + dir.q,
       r: hopLand.r + dir.r,
       s: hopLand.s + dir.s,
     };
-    const secondLandContent = state.board.get(coordKey(secondHopLand));
-    if (secondLandContent?.type === 'empty') {
+    if (cellAfterMove(secondHopLand) === 'empty') {
       const secondHopDist = cubeDistance(secondHopLand, goalCenter);
       const secondHopGain = ourNewDist - secondHopDist;
       if (secondHopGain > 0) {

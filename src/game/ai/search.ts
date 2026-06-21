@@ -564,7 +564,6 @@ function selectBestChainStop(
  */
 function checkBigJumpOpportunity(
   allMoves: Move[],
-  player: PlayerIndex,
   goalCenter: CubeCoord
 ): boolean {
   return allMoves.some(m => {
@@ -622,7 +621,7 @@ function getTopMoves(
   // Compute goal center for big jump opportunity detection
   const goalPositionsForBonus = getGoalPositionsForState(state, player);
   const goalCenterForBonus = centroid(goalPositionsForBonus);
-  const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, player, goalCenterForBonus);
+  const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
@@ -1104,8 +1103,9 @@ export function findBestMove(
     movesToConsider = scoredByPenalty.slice(0, limit).map((s) => s.move);
   }
 
-  // Get top moves for deeper search
-  const moves = getTopMovesFromList(state, movesToConsider, player, personality, difficulty, limit);
+  // Get top moves for deeper search.
+  // `let` (not const) because iterative deepening reorders this for better alpha-beta pruning.
+  let moves = getTopMovesFromList(state, movesToConsider, player, personality, difficulty, limit);
 
   // Always include swap moves — they can be critical for unblocking but may be
   // outscored by chain jumps and dropped by the move limit
@@ -1174,6 +1174,10 @@ export function findBestMove(
     // Only commit this iteration's results if it completed fully
     if (!aborted && iterationScores.length === moves.length) {
       bestScoredMoves = iterationScores;
+      // Reorder moves by score so the next depth searches the best-looking move
+      // first — significantly improves alpha-beta pruning at deeper depths.
+      const sortedThisDepth = [...iterationScores].sort((a, b) => b.score - a.score);
+      moves = sortedThisDepth.map((s) => s.move);
     } else {
       break;
     }
@@ -1204,7 +1208,7 @@ function getTopMovesFromList(
   // Compute goal center for big jump opportunity detection
   const goalPositionsForBonus = getGoalPositionsForState(state, player);
   const goalCenterForBonus = centroid(goalPositionsForBonus);
-  const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, player, goalCenterForBonus);
+  const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
