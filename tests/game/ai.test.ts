@@ -608,7 +608,7 @@ describe('findOptimalEndgameSequence', () => {
     ts.board.set(coordKey(cubeCoord(4, -7)), { type: 'piece', player: 0 });
     ts.board.set(coordKey(cubeCoord(4, -6)), { type: 'piece', player: 0 });
     ts.currentPlayer = 0;
-    // All 10 goal positions are empty, no stepping stones — too far for 8-move BFS
+    // All 10 goal positions are empty — emptyGoals.length > 4 guard fires before BFS even starts
     const result = findOptimalEndgameSequence(ts, 0);
     expect(result).toBeNull();
   });
