@@ -127,8 +127,9 @@ export function isLateEndgame(state: GameState, player: PlayerIndex): boolean {
     }
   }
 
-  // Late endgame: 6+ pieces in goal (4 or fewer remaining)
-  return inGoal >= 6;
+  // Late endgame: 7+ pieces in goal (3 or fewer remaining).
+  // At exactly 6/10 the minimax holistic view handles back-piece vs. endgame tradeoffs better.
+  return inGoal >= 7;
 }
 
 /**
@@ -436,7 +437,9 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   }
 
   // PRIORITY 6: 2-4 move lookahead for shuffle/reposition sequences
-  const shuffleSequence = findShuffleSequence(state, player, moves, goalKeys, 2);
+  // 3-level lookahead: move X → enables move Y → enables Z (direct entry).
+  // Depth 3 captures the "move blocker deeper so outside piece can chain further in" sequences.
+  const shuffleSequence = findShuffleSequence(state, player, moves, goalKeys, 3);
   if (shuffleSequence) {
     return shuffleSequence;
   }

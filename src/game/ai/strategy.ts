@@ -512,10 +512,15 @@ export function scoreLandingQuality(
       consolidation++;
     }
   }
+  // Consolidation weight decays as pieces enter the goal — in endgame, getting
+  // pieces IN is more important than clustering near teammates. Without decay,
+  // mid-chain stops score artificially high because they're surrounded by pieces.
+  const piecesInGoalForConsolidation = countPiecesInGoal(state, player);
+  const consolidationDecay = Math.max(0.25, 1 - piecesInGoalForConsolidation * 0.08);
   const consolidationWeight =
     personality === 'aggressive' ? 0.5 :
     personality === 'defensive'  ? 2.0 : 1.2;
-  const consolidationScore = consolidation * consolidationWeight;
+  const consolidationScore = consolidation * consolidationWeight * consolidationDecay;
 
   // Component 3: Straggler connectivity
   let stragglerScore = 0;
@@ -818,16 +823,22 @@ export function computeStrategicScore(
   const backwardness = getPieceBackwardness(state, move.from, player);
   const backwardnessBonus = backwardness * 8; // Up to 8 points for most backward piece
 
-  // BIG bonus for moving a significant straggler
+  // BIG bonus for moving a significant straggler.
+  // Urgency scales with pieces already in goal — the further along we are,
+  // the more critical it is to get the remaining outside pieces in quickly.
+  const piecesInGoalForStraggler = countPiecesInGoal(state, player);
+  const stragglerUrgencyScale = 1 + Math.max(0, (piecesInGoalForStraggler - 4) * 0.4);
   const { hasStraggler, gap } = hasSignificantStraggler(state, player);
   const movingStraggler = isMovingStraggler(state, move, player);
-  const stragglerBonus = (hasStraggler && movingStraggler) ? gap * 3 : 0; // Scale with how far behind they are
+  const stragglerBonus = (hasStraggler && movingStraggler) ? gap * 3 * stragglerUrgencyScale : 0;
 
   // Midgame priority: prefer moving pieces still crossing the board.
-  // Endgame pieces should only be chosen when the endgame solver picks them
-  // or an exceptional opportunity (deep entry, blocking) exists.
+  // Scales up sharply as pieces enter the goal — at 8+ in goal, the outside pieces
+  // are the absolute top priority and should beat any inside fiddling.
   const movingPiecePhase = getPiecePhase(state, move.from, player);
-  const midgamePriorityBonus = movingPiecePhase === 'midgame' ? 12 : 0;
+  const midgamePriorityBonus = movingPiecePhase === 'midgame'
+    ? 12 + Math.max(0, piecesInGoalForStraggler - 4) * 8
+    : 0;
 
   // Opponent-gift: penalise moves that give opponent a large forward jump.
   // Aggressive personality ignores opponent threats; defensive/generalist don't.
@@ -862,10 +873,7 @@ export function computeStrategicScore(
   const pastOpponentsPenalty = (isPastOpponents && distGain < 3 && !movingStraggler) ? 5 : 0;
 
   // Early-game amplifier: stepping stone chains matter most before pieces converge.
-  // With few pieces in goal the AI should prioritise setting up multi-hop chains
-  // over making a single big leap. Scales down as pieces arrive in the goal zone.
-  const piecesInGoal = countPiecesInGoal(state, player);
-  const earlyGameStepMultiplier = piecesInGoal < 4 ? 2.5 : piecesInGoal < 7 ? 1.5 : 1.0;
+  const earlyGameStepMultiplier = piecesInGoalForStraggler < 4 ? 2.5 : piecesInGoalForStraggler < 7 ? 1.5 : 1.0;
 
   // Combine with weights
   const total =
