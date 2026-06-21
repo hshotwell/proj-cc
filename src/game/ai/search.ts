@@ -1,6 +1,6 @@
 import type { Move, GameState, PlayerIndex, CubeCoord } from '@/types/game';
 import type { AIDifficulty, AIPersonality } from '@/types/ai';
-import { AI_DEPTH, AI_OPENING_DEPTH, AI_ENDGAME_DEPTH, AI_MOVE_LIMIT } from '@/types/ai';
+import { AI_DEPTH, AI_OPENING_DEPTH, AI_ENDGAME_DEPTH, AI_MOVE_LIMIT, AI_TIME_BUDGET_MS } from '@/types/ai';
 import { getAllValidMoves, canJumpOver } from '../moves';
 import { applyMove, getGoalPositionsForState } from '../state';
 import { getPlayerPieces } from '../setup';
@@ -1041,13 +1041,17 @@ export function findBestMove(
     return findBestMoveForCustomLayout(state, player);
   }
 
-  // Standard layouts use the full search with penalties
+  // Standard layouts use iterative deepening within a time budget.
+  // Start shallow and go deeper until the budget runs out, returning the
+  // best move found at the deepest completed depth.
   const phase = detectPhase(state, player);
-  const depth =
+  const maxDepth =
     phase === 'mid'   ? AI_DEPTH[difficulty] :
     phase === 'early' ? AI_OPENING_DEPTH[difficulty] :
                         AI_ENDGAME_DEPTH[difficulty];
   const limit = AI_MOVE_LIMIT[difficulty];
+  const timeBudget = AI_TIME_BUDGET_MS[difficulty];
+  const startTime = performance.now();
   const allMoves = getAllValidMoves(state, player);
 
   if (allMoves.length === 0) return null;
@@ -1119,9 +1123,8 @@ export function findBestMove(
 
   const is2Player = state.activePlayers.length === 2;
 
-  // Score all candidate moves
-  const scoredMoves: Array<{ move: Move; score: number }> = [];
-
+  // Pre-compute per-move penalties (depth-independent — same for all iterations)
+  const movePenalties = new Map<Move, number>();
   for (const move of moves) {
     const regPenalty = computeRegressionPenalty(state, move, player, difficulty);
     const repPenalty = computeRepetitionPenalty(state, move, player, difficulty);
@@ -1129,24 +1132,56 @@ export function findBestMove(
     const penalty = (regPenalty === Infinity ? 1000000 : regPenalty) +
                     (repPenalty === Infinity ? 1000000 : repPenalty) +
                     consecPenalty;
-
-    const next = applyMove(state, move);
-    let score: number;
-
-    if (is2Player) {
-      score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty);
-    } else {
-      score = maxn(next, depth - 1, player, personality, difficulty);
-    }
-
-    score -= penalty;
-
-    scoredMoves.push({ move, score });
+    movePenalties.set(move, penalty);
   }
 
-  scoredMoves.sort((a, b) => b.score - a.score);
+  // Iterative deepening: search depth 1, then 2, ... up to maxDepth.
+  // Each iteration overwrites the previous result, so even if we abort
+  // mid-iteration we still have the previous depth's best move.
+  let bestScoredMoves: Array<{ move: Move; score: number }> = moves.map(m => ({
+    move: m,
+    score: -(movePenalties.get(m) ?? 0),
+  }));
 
-  return selectMoveWithVariance(scoredMoves, difficulty);
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    // Check time budget before starting a new iteration
+    if (performance.now() - startTime >= timeBudget) break;
+
+    const iterationScores: Array<{ move: Move; score: number }> = [];
+    let aborted = false;
+
+    for (const move of moves) {
+      // Check time budget mid-iteration too
+      if (performance.now() - startTime >= timeBudget) {
+        aborted = true;
+        break;
+      }
+
+      const penalty = movePenalties.get(move) ?? 0;
+      const next = applyMove(state, move);
+      let score: number;
+
+      if (is2Player) {
+        score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty);
+      } else {
+        score = maxn(next, depth - 1, player, personality, difficulty);
+      }
+
+      score -= penalty;
+      iterationScores.push({ move, score });
+    }
+
+    // Only commit this iteration's results if it completed fully
+    if (!aborted && iterationScores.length === moves.length) {
+      bestScoredMoves = iterationScores;
+    } else {
+      break;
+    }
+  }
+
+  bestScoredMoves.sort((a, b) => b.score - a.score);
+
+  return selectMoveWithVariance(bestScoredMoves, difficulty);
 }
 
 /**

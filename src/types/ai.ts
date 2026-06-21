@@ -37,3 +37,10 @@ export const AI_MOVE_LIMIT: Record<AIDifficulty, number> = {
 };
 
 export const AI_THINK_DELAY = 400;
+
+/** Time budget for iterative deepening search (milliseconds). */
+export const AI_TIME_BUDGET_MS: Record<AIDifficulty, number> = {
+  easy:   250,
+  medium: 600,
+  hard:   1200,
+};
