@@ -518,8 +518,8 @@ export function scoreLandingQuality(
   const piecesInGoalForConsolidation = countPiecesInGoal(state, player);
   const consolidationDecay = Math.max(0, 1 - piecesInGoalForConsolidation * 0.15);
   const consolidationWeight =
-    personality === 'aggressive' ? 0.5 :
-    personality === 'defensive'  ? 2.0 : 1.2;
+    personality === 'aggressive' ? 0.3 :
+    personality === 'defensive'  ? 1.2 : 0.7;
   const consolidationScore = consolidation * consolidationWeight * consolidationDecay;
 
   // Component 3: Straggler connectivity
@@ -831,7 +831,7 @@ export function computeStrategicScore(
   const stragglerUrgencyScale = 1 + Math.max(0, (piecesInGoalForStraggler - 4) * 0.4);
   const { hasStraggler, gap } = hasSignificantStraggler(state, player);
   const movingStraggler = isMovingStraggler(state, move, player);
-  const stragglerBonus = (hasStraggler && movingStraggler) ? gap * 3 * stragglerUrgencyScale : 0;
+  const stragglerBonus = (hasStraggler && movingStraggler) ? gap * 8 * stragglerUrgencyScale : 0;
 
   // Midgame priority: prefer moving pieces still crossing the board.
   // Scales up sharply as pieces enter the goal — at 8+ in goal, the outside pieces

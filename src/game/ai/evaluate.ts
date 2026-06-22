@@ -242,6 +242,18 @@ export function evaluatePosition(
     const distances = pieces.map((p) => cubeDistance(p, goalCenter));
     const maxPieceDist = distances.length > 0 ? Math.max(...distances) : 0;
     stragglerScore = -(maxPieceDist * maxPieceDist) / 3;
+
+    // Extra quadratic penalty for a piece significantly behind the pack.
+    // -maxDist² alone doesn't tell the minimax that the GAP is large — a
+    // board where the straggler is 2+ cells behind all teammates must look
+    // much worse so the search sees the urgency of moving it.
+    if (distances.length >= 2) {
+      const sortedDists = [...distances].sort((a, b) => b - a);
+      const gap = sortedDists[0] - sortedDists[1];
+      if (gap >= 2) {
+        stragglerScore -= gap * gap * 6;
+      }
+    }
   }
 
   // Late endgame targeting: when 9+ pieces in goal, focus on nearest empty goal
