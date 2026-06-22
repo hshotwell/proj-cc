@@ -127,9 +127,8 @@ export function isLateEndgame(state: GameState, player: PlayerIndex): boolean {
     }
   }
 
-  // Late endgame: 7+ pieces in goal (3 or fewer remaining).
-  // At exactly 6/10 the minimax holistic view handles back-piece vs. endgame tradeoffs better.
-  return inGoal >= 7;
+  // Late endgame: 6+ pieces in goal (4 or fewer remaining).
+  return inGoal >= 6;
 }
 
 /**

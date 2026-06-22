@@ -516,7 +516,7 @@ export function scoreLandingQuality(
   // pieces IN is more important than clustering near teammates. Without decay,
   // mid-chain stops score artificially high because they're surrounded by pieces.
   const piecesInGoalForConsolidation = countPiecesInGoal(state, player);
-  const consolidationDecay = Math.max(0.25, 1 - piecesInGoalForConsolidation * 0.08);
+  const consolidationDecay = Math.max(0, 1 - piecesInGoalForConsolidation * 0.15);
   const consolidationWeight =
     personality === 'aggressive' ? 0.5 :
     personality === 'defensive'  ? 2.0 : 1.2;

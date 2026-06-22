@@ -563,7 +563,7 @@ function selectBestChainStop(
 }
 
 /**
- * Check if any piece currently has a forward chain jump gaining ≥ 4 cells.
+ * Check if any piece currently has a forward jump gaining ≥ 2 cells.
  * Computed once per turn and passed into move scoring.
  */
 function checkBigJumpOpportunity(
@@ -573,14 +573,15 @@ function checkBigJumpOpportunity(
   return allMoves.some(m => {
     if (!m.isJump) return false;
     const gain = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
-    return gain >= 4;
+    return gain >= 2;
   });
 }
 
 /**
- * If a big jump opportunity exists this turn, apply a bonus to moves that
- * capitalise on it (jump gain ≥ 4). This prevents the AI making small endgame
- * moves when a large chain jump is available.
+ * When a forward jump opportunity exists this turn:
+ * - Bonus for moves that capitalise on it (jump gain ≥ 2).
+ * - Penalty for lateral/backward non-jump moves — pointless sidesteps
+ *   when a useful jump is available are a persistent AI mistake.
  */
 function computeBigJumpOpportunityBonus(
   move: Move,
@@ -588,10 +589,16 @@ function computeBigJumpOpportunityBonus(
   hasBigOpportunity: boolean
 ): number {
   if (!hasBigOpportunity) return 0;
-  if (!move.isJump) return 0;
-  const gain = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
-  if (gain < 4) return 0;
-  return gain * 8;
+  const moveDist = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  if (!move.isJump) {
+    // Non-jump lateral or backward step while a forward jump exists — penalise
+    if (moveDist <= 0) return -25;
+    return 0; // Forward step is acceptable
+  }
+  const gain = moveDist;
+  if (gain < 2) return 0;      // Lateral/backward jump — no bonus
+  if (gain >= 4) return gain * 8; // Large jump — big bonus
+  return gain * 4;               // Moderate jump — smaller bonus
 }
 
 function getTopMoves(
