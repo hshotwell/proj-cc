@@ -406,10 +406,13 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   }
 
   // PRIORITY 5: Shuffle within goal that IMMEDIATELY enables a goal entry
+  // Cap to 20 in-goal moves to prevent blowup when many chain paths exist.
+  let inGoalCheckCount = 0;
   const inGoalShuffles: Array<{ move: Move; enablesDepth: number }> = [];
   for (const move of moves) {
     if (!goalKeys.has(coordKey(move.from))) continue;
     if (!goalKeys.has(coordKey(move.to))) continue;
+    if (inGoalCheckCount++ >= 20) break;
 
     const fromDepth = getGoalPositionDepth(move.from);
     const toDepth = getGoalPositionDepth(move.to);
@@ -437,8 +440,9 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   }
 
   // PRIORITY 6: 2-4 move lookahead for shuffle/reposition sequences
-  // 3-level lookahead: move X → enables move Y → enables Z (direct entry).
   // Depth 3 captures the "move blocker deeper so outside piece can chain further in" sequences.
+  // Node counter is reset here so each findEndgameMove call gets a fresh budget.
+  _shuffleNodesChecked = 0;
   const shuffleSequence = findShuffleSequence(state, player, moves, goalKeys, 3);
   if (shuffleSequence) {
     return shuffleSequence;
@@ -518,6 +522,11 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   return moves[0] ?? allRawMoves[0];
 }
 
+// Node budget shared across the current findShuffleSequence call tree.
+// Reset in findEndgameMove before each invocation.
+let _shuffleNodesChecked = 0;
+const SHUFFLE_NODE_LIMIT = 400;
+
 /**
  * Find a shuffle sequence up to `maxDepth` moves that enables a goal entry.
  * Enhanced to consider moves that reposition pieces to enable jumps.
@@ -530,6 +539,7 @@ function findShuffleSequence(
   maxDepth: number
 ): Move | null {
   if (maxDepth <= 0) return null;
+  if (_shuffleNodesChecked >= SHUFFLE_NODE_LIMIT) return null;
 
   // Consider goal rearrangements that don't go shallower,
   // AND moves from outside that might position for a jump
@@ -559,6 +569,9 @@ function findShuffleSequence(
   });
 
   for (const move of validMoves) {
+    if (_shuffleNodesChecked >= SHUFFLE_NODE_LIMIT) break;
+    _shuffleNodesChecked++;
+
     const nextState = applyMove(state, move);
     const nextMoves = getAllValidMoves(nextState, player);
 
@@ -661,7 +674,9 @@ export function findOptimalEndgameSequence(
   }
 
   const MAX_DEPTH = 8;
+  const MAX_BFS_NODES = 4000;
   while (queue.length > 0) {
+    if (visited.size > MAX_BFS_NODES) break; // Safety cap — too many states to explore
     const { board, firstMove, depth } = queue.shift()!;
     if (depth >= MAX_DEPTH) continue;
     for (const move of getCandidates(board)) {

@@ -1015,6 +1015,10 @@ export function findBestMove(
 ): Move | null {
   const player = state.currentPlayer;
 
+  // Set timer immediately so time-guards in minimax/maxn are valid for this call
+  _searchStartTime = performance.now();
+  _searchTimeBudget = AI_TIME_BUDGET_MS[difficulty];
+
   // PRIORITY 0: Opening book — play textbook lines in the early game
   if (!state.isCustomLayout && openingMoves && openingMoves.length > 0) {
     const maxOpeningMoves = difficulty === 'easy' ? 2 : difficulty === 'medium' ? 4 : 11;
@@ -1079,12 +1083,8 @@ export function findBestMove(
     phase === 'early' ? AI_OPENING_DEPTH[difficulty] :
                         AI_ENDGAME_DEPTH[difficulty];
   const limit = AI_MOVE_LIMIT[difficulty];
-  const timeBudget = AI_TIME_BUDGET_MS[difficulty];
-  const startTime = performance.now();
-
-  // Expose start time / budget to recursive helpers (time-guard in minimax/maxn)
-  _searchStartTime = startTime;
-  _searchTimeBudget = timeBudget;
+  const timeBudget = _searchTimeBudget; // already set at function entry
+  const startTime = _searchStartTime;  // already set at function entry
   const allMoves = getAllValidMoves(state, player);
 
   if (allMoves.length === 0) return null;
