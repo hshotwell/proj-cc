@@ -2,7 +2,7 @@ import type { Move, GameState, PlayerIndex, CubeCoord } from '@/types/game';
 import type { AIDifficulty, AIPersonality } from '@/types/ai';
 import { AI_DEPTH, AI_OPENING_DEPTH, AI_ENDGAME_DEPTH, AI_MOVE_LIMIT, AI_TIME_BUDGET_MS } from '@/types/ai';
 import { getAllValidMoves, canJumpOver } from '../moves';
-import { applyMove, getGoalPositionsForState } from '../state';
+import { applyMove, getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
 import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
@@ -388,9 +388,15 @@ export function computeRegressionPenalty(
         penalty = enablesLeapfrog ? 20 : enablesJump ? 50 : 100;
       }
     } else if (progressDelta === 0) {
-      // Lateral moves: never prune at root — let search depth evaluate their value.
-      // A lateral that sets up a long chain is often worth it; the search will find this.
-      penalty = 0;
+      // Lateral step with no immediate chain payoff: bias toward forward movement.
+      // Lateral jumps (rare, but valid for consolidation) keep no penalty.
+      // Step moves that enable an immediate chain also stay at 0.
+      // In endgame (7+ in goal) the penalty is larger — sidesteps there are nearly
+      // always wasteful and are a persistent observed AI mistake.
+      if (!move.isJump && steppingStoneResult === 'none') {
+        const piecesInGoal = countPiecesInGoal(state, player);
+        penalty = piecesInGoal >= 7 ? 35 : 15;
+      }
     } else {
       penalty = -progressDelta * 30;
       if (enablesLeapfrog) {
