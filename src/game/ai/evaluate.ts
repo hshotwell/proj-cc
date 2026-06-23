@@ -513,9 +513,12 @@ export function evaluatePosition(
   const wChainReach = weights.chainReach * (1 - endgameRatio * 0.5);   // fades to ×0.5
   const wCohesion   = weights.cohesion * (1 - endgameRatio);           // fades to 0
 
-  // Post-winner urgency: when someone has already won, further boost distance weight
+  // Post-winner urgency: when someone has already won, the game is just a race
+  // to finish. Heavily boost distance progress AND straggler weights so the AI
+  // stops fiddling with sidesteps and just charges every piece into goal.
   if (state.winner !== null) {
-    wDistProgress *= 1.5;
+    wDistProgress *= 3.0;
+    wStraggler *= 2.0;
   }
 
   // Apply learned endgame insights (for medium+ difficulty in endgame)

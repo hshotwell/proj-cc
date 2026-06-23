@@ -525,17 +525,25 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     }
   }
 
-  // PRIORITY 8: Any remaining safe move (already filtered — no goal-leaving moves exist here)
+  // PRIORITY 8: Any remaining safe move.
+  // Critical: when outside pieces still exist, NEVER fall back to an in-goal
+  // shuffle. The infinite sidestep loops at the end of games trace to this path
+  // — the endgame solver was picking an in-goal lateral when an outside piece
+  // had perfectly valid forward moves. Restrict candidates to outside-piece
+  // moves first; only fall through to in-goal moves if there are no outside pieces.
   if (moves.length > 0) {
     const goalCenter = centroid(goalPositions);
-    const scored = moves.map(m => {
+    const outsidePieceMoves = piecesOutside.length > 0
+      ? moves.filter(m => !goalKeys.has(coordKey(m.from)))
+      : moves;
+    const candidates = outsidePieceMoves.length > 0 ? outsidePieceMoves : moves;
+    const scored = candidates.map(m => {
       const forward = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
       const jumpLen = m.jumpPath?.length || 0;
       const tiebreaker = Math.random() * 0.01;
       return { move: m, score: forward * 10 + jumpLen + tiebreaker };
     });
     scored.sort((a, b) => b.score - a.score);
-    // Prefer any non-backward move over a backward one even in this fallback
     const forwardFirst = scored.find(s => s.score >= 0);
     return (forwardFirst ?? scored[0]).move;
   }

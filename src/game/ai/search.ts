@@ -96,12 +96,15 @@ function getBoardStateHash(state: GameState): string {
 
 /**
  * Check if making this move would create a repeated board state.
+ * Threshold: count >= 2 (third visit) — one revisit is normal endgame shuffling
+ * and shouldn't override authoritative endgame-solver moves. A second revisit
+ * (count of 2) indicates an actual cycle and blocks the move.
  */
 function wouldRepeatState(state: GameState, move: Move): { repeats: boolean; count: number } {
   const nextState = applyMove(state, move);
   const hash = getBoardStateHash(nextState);
   const count = recentBoardStates.get(hash) || 0;
-  return { repeats: count > 0, count };
+  return { repeats: count >= 2, count };
 }
 
 /**
@@ -485,9 +488,12 @@ function computeConsecutivePiecePenalty(
     if (count >= 4) break;
   }
 
-  if (count < 2) return 0;   // 1st or 2nd consecutive turn: no penalty
-  if (count === 2) return 20; // 3rd consecutive turn: moderate
-  return 80;                  // 4th+ consecutive turn: strong
+  // Stronger scaling — repeated same-piece moves are almost always sidestep loops
+  // that the previous values (20/80) didn't deter. Forces piece rotation.
+  if (count < 2) return 0;     // 1st or 2nd consecutive turn: no penalty
+  if (count === 2) return 60;  // 3rd consecutive turn: significant
+  if (count === 3) return 200; // 4th: strong
+  return 500;                  // 5th+: hard discouragement
 }
 
 export function computeRepetitionPenalty(
@@ -1135,24 +1141,30 @@ export function findBestMove(
     const goalCenterES = centroid(goalPosES);
     const goalKeysES = new Set(goalPosES.map(g => coordKey(g)));
     const piecesES = getPlayerPieces(state, player);
+
+    // Tighter straggler threshold once 7+ in goal: any outside piece more than
+    // 5 cells from goal centre is "stranded" because all neighbours are converging
+    // on the goal. The previous >12 threshold missed mid-distance stragglers.
+    const inGoalES = piecesES.filter(p => goalKeysES.has(coordKey(p))).length;
+    const stragglerThreshold = inGoalES >= 7 ? 5 : 12;
     const hasExtremeStraggler = piecesES.some(
-      p => !goalKeysES.has(coordKey(p)) && cubeDistance(p, goalCenterES) > 12
+      p => !goalKeysES.has(coordKey(p)) && cubeDistance(p, goalCenterES) > stragglerThreshold
     );
 
     if (!hasExtremeStraggler) {
       const endgameMove = findEndgameMove(state, player);
       if (endgameMove) {
-        // Only veto if this move would repeat a board state (cycle detection).
-        // No progress gate — the endgame solver's priority waterfall is authoritative.
+        // Take the endgame solver's recommendation. The wouldRepeatState gate
+        // now allows one revisit (count >= 2), so a move triggering it means
+        // we'd genuinely be in a third visit — at that point the regular search
+        // (which has its own anti-cycle penalties) handles escape.
         const { repeats } = wouldRepeatState(state, endgameMove);
         if (!repeats) {
           return endgameMove;
         }
-        // State would repeat — fall through to normal search which has its own
-        // repetition penalties to find a different path out of the cycle.
       }
     }
-    // Extreme straggler present — fall through so regular search handles it.
+    // Extreme straggler present, or solver suggested a cycle — fall through.
   }
 
   // For custom layouts, use the simple progress-maximizing approach
