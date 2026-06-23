@@ -821,27 +821,17 @@ export function computeStrategicScore(
 
   // Backwardness of the moving piece: quadratic so the most-backward piece
   // gets a strongly disproportionate bonus over middle pieces.
-  // Only apply when moving forward or laterally — a backward step by the most-backward
-  // piece must not be rewarded just because the piece is behind.
-  const goalPositionsForBackwardness = getGoalPositionsForState(state, player);
-  const goalCenterForBackwardness = centroid(goalPositionsForBackwardness);
-  const moveDistForBackwardness = cubeDistance(move.from, goalCenterForBackwardness) - cubeDistance(move.to, goalCenterForBackwardness);
   const backwardness = getPieceBackwardness(state, move.from, player);
-  const backwardnessBonus = moveDistForBackwardness >= -0.5
-    ? backwardness * backwardness * 40
-    : 0;
+  const backwardnessBonus = backwardness * backwardness * 40; // Up to 40 pts for most backward
 
   // BIG bonus for moving a significant straggler.
   // Urgency scales with pieces already in goal — the further along we are,
   // the more critical it is to get the remaining outside pieces in quickly.
-  // Only reward forward/lateral moves — backward steps must not get this bonus.
   const piecesInGoalForStraggler = countPiecesInGoal(state, player);
   const stragglerUrgencyScale = 1 + Math.max(0, (piecesInGoalForStraggler - 4) * 0.4);
   const { hasStraggler, gap } = hasSignificantStraggler(state, player);
   const movingStraggler = isMovingStraggler(state, move, player);
-  const stragglerBonus = (hasStraggler && movingStraggler && moveDistForBackwardness >= -0.5)
-    ? gap * 8 * stragglerUrgencyScale
-    : 0;
+  const stragglerBonus = (hasStraggler && movingStraggler) ? gap * 8 * stragglerUrgencyScale : 0;
 
   // Midgame priority: prefer moving pieces still crossing the board.
   // Scales up sharply as pieces enter the goal — at 8+ in goal, the outside pieces
