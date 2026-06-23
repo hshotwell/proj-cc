@@ -315,7 +315,7 @@ export function evaluatePosition(
   const endgame = inGoal >= 7 || state.winner !== null;
   let wProgress     = endgame ? weights.progress * 2         : weights.progress;
   let wDistProgress = endgame ? weights.distanceProgress * 2 : weights.distanceProgress;
-  let wStraggler    = endgame ? 3.0                          : 1.5;
+  let wStraggler    = endgame ? 3.5                          : 2.0;
   const wAlignment    = endgame ? 0                            : weights.alignment;
   const wChainReach   = endgame ? weights.chainReach * 0.5     : weights.chainReach;
   const wCohesion     = endgame ? 0                            : weights.cohesion;
