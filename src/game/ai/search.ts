@@ -714,6 +714,26 @@ function getTopMoves(
       score += bestNextHopGain * 5;
     }
 
+    // Step-move next-turn jump potential: which step direction sets up the best
+    // follow-up jump? This catches wrong-lateral-direction mistakes without extra
+    // search depth by evaluating the immediate consequence of each step.
+    if (!move.isJump && !state.isCustomLayout) {
+      let bestStepHop = 0;
+      for (const dir of DIRECTIONS) {
+        const over = { q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s };
+        const land = {
+          q: move.to.q + dir.q * 2,
+          r: move.to.r + dir.r * 2,
+          s: move.to.s + dir.s * 2,
+        };
+        if (canJumpOver(next, over, player) && next.board.get(coordKey(land))?.type === 'empty') {
+          const gain = cubeDistance(move.to, goalCenterForBonus) - cubeDistance(land, goalCenterForBonus);
+          if (gain > bestStepHop) bestStepHop = gain;
+        }
+      }
+      score += bestStepHop * 8;
+    }
+
     return { move, score };
   });
 
@@ -1330,6 +1350,26 @@ function getTopMovesFromList(
         }
       }
       score += bestNextHopGain * 5;
+    }
+
+    // Step-move next-turn jump potential: which step direction sets up the best
+    // follow-up jump? This catches wrong-lateral-direction mistakes without extra
+    // search depth by evaluating the immediate consequence of each step.
+    if (!move.isJump && !state.isCustomLayout) {
+      let bestStepHop = 0;
+      for (const dir of DIRECTIONS) {
+        const over = { q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s };
+        const land = {
+          q: move.to.q + dir.q * 2,
+          r: move.to.r + dir.r * 2,
+          s: move.to.s + dir.s * 2,
+        };
+        if (canJumpOver(next, over, player) && next.board.get(coordKey(land))?.type === 'empty') {
+          const gain = cubeDistance(move.to, goalCenterForBonus) - cubeDistance(land, goalCenterForBonus);
+          if (gain > bestStepHop) bestStepHop = gain;
+        }
+      }
+      score += bestStepHop * 8;
     }
 
     return { move, score };
