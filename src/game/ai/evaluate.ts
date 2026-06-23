@@ -10,6 +10,7 @@ import { getWorstAssignmentCost } from '../pathfinding';
 import { loadEndgameGenome } from '../training/persistence';
 import { evaluateWithGenome } from '../training/evaluate';
 import { getCachedLearnedWeights, getCachedEndgameInsights } from '../learning';
+import { getApproachLaneMap } from './corridors';
 
 const PERSONALITY_WEIGHTS: Record<AIPersonality, {
   progress: number;
@@ -273,6 +274,38 @@ function computePowerupProximityBonus(
   return Math.min(bonus, 60);
 }
 
+/**
+ * Approach-lane score: for each piece outside the goal, check whether it sits
+ * on a precomputed approach corridor (geometrically aligned for a direct chain
+ * jump into a goal cell). On-lane pieces get a bonus that decays with distance;
+ * off-lane pieces get a small penalty (they need a lateral correction step first).
+ * Dropped in endgame (7+ in goal) when pieces scatter to fill specific cells.
+ */
+function computeApproachLaneScore(
+  pieces: CubeCoord[],
+  player: PlayerIndex,
+  goalPositions: CubeCoord[],
+  goalKeySet: Set<string>,
+  inGoal: number
+): number {
+  if (inGoal >= 7) return 0;
+
+  const laneMap = getApproachLaneMap(player, goalPositions);
+  let score = 0;
+
+  for (const piece of pieces) {
+    if (goalKeySet.has(coordKey(piece))) continue;
+    const hops = laneMap.get(coordKey(piece));
+    if (hops !== undefined) {
+      score += Math.max(0, 5 - hops) * 1.5;
+    } else {
+      score -= 1.5;
+    }
+  }
+
+  return score;
+}
+
 export function evaluatePosition(
   state: GameState,
   player: PlayerIndex,
@@ -329,6 +362,7 @@ export function evaluatePosition(
   }
 
   // Late endgame targeting: when 9+ pieces in goal, focus on nearest empty goal
+  const goalKeySet = new Set(goalPositions.map((g) => coordKey(g)));
   const lateEndgame = inGoal >= 9;
   if (lateEndgame) {
     const emptyGoals = goalPositions.filter((g) => {
@@ -336,7 +370,6 @@ export function evaluatePosition(
       return !content || content.type === 'empty' || (content.type === 'piece' && content.player !== player);
     });
     if (emptyGoals.length > 0) {
-      const goalKeySet = new Set(goalPositions.map((g) => coordKey(g)));
       const piecesOutside = pieces.filter((p) => !goalKeySet.has(coordKey(p)));
       if (piecesOutside.length > 0) {
         if (state.isCustomLayout) {
@@ -397,6 +430,12 @@ export function evaluatePosition(
     ? computeEmptyGoalTargetScore(state, pieces, goalPositions, inGoal)
     : 0;
 
+  // 11. Approach-lane alignment: reward pieces sitting on direct jump corridors
+  //     to goal cells. Off-lane pieces need a lateral correction step first.
+  const approachLaneScore = !state.isCustomLayout
+    ? computeApproachLaneScore(pieces, player, goalPositions, goalKeySet, inGoal)
+    : 0;
+
   // Endgame focus: boost progress metrics, drop tactical factors
   const endgame = inGoal >= 7 || state.winner !== null;
   let wProgress     = endgame ? weights.progress * 2         : weights.progress;
@@ -450,7 +489,8 @@ export function evaluatePosition(
     wBlockade          * blockadeScore +
     wPowerup           * powerupBonus +
     wBackConvoy        * backConvoyScore +
-    wEmptyGoalTarget   * emptyGoalTargetScore;
+    wEmptyGoalTarget   * emptyGoalTargetScore +
+    1.5                * approachLaneScore;
 
   // Apply learned weights if available (for medium+ difficulty)
   if (difficulty !== 'easy') {

@@ -11,6 +11,7 @@ import { computePlayerProgress } from '../progress';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
+import { clearApproachLaneCache } from './corridors';
 
 // Track recent board states to detect loops at the game state level
 const recentBoardStates = new Map<string, number>(); // hash -> count
@@ -126,6 +127,7 @@ export function recordBoardState(state: GameState): void {
  */
 export function clearStateHistory(): void {
   recentBoardStates.clear();
+  clearApproachLaneCache();
 }
 
 /**
