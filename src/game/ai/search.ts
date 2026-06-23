@@ -552,24 +552,38 @@ export function computeRepetitionPenalty(
 function selectBestChainStop(
   scored: Array<{ move: Move; score: number }>
 ): Array<{ move: Move; score: number }> {
-  const chainGroups = new Map<string, { move: Move; score: number }>();
+  const chainGroups = new Map<string, Array<{ move: Move; score: number }>>();
   const nonChainMoves: Array<{ move: Move; score: number }> = [];
 
   for (const entry of scored) {
     const { move } = entry;
-    // Multi-hop jump: jumpPath exists and has ≥1 step (meaning the move went through at least one intermediate)
+    // Multi-hop jump: jumpPath exists and has ≥1 step
     if (move.isJump && move.jumpPath && move.jumpPath.length >= 1) {
       const key = coordKey(move.from);
-      const existing = chainGroups.get(key);
-      if (!existing || entry.score > existing.score) {
-        chainGroups.set(key, entry);
+      const group = chainGroups.get(key);
+      if (!group) {
+        chainGroups.set(key, [entry]);
+      } else {
+        group.push(entry);
       }
     } else {
       nonChainMoves.push(entry);
     }
   }
 
-  return [...nonChainMoves, ...Array.from(chainGroups.values())];
+  const result: Array<{ move: Move; score: number }> = [...nonChainMoves];
+  for (const group of chainGroups.values()) {
+    group.sort((a, b) => b.score - a.score);
+    // Always keep the best stop. Also keep the 2nd-best if it scores within 25
+    // points of the best — the deeper search can then distinguish which landing
+    // position is truly superior (catching the "one more lateral hop" pattern).
+    result.push(group[0]);
+    if (group.length > 1 && group[0].score - group[1].score < 25) {
+      result.push(group[1]);
+    }
+  }
+
+  return result;
 }
 
 /**

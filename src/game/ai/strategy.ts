@@ -551,7 +551,35 @@ export function scoreLandingQuality(
     }
   }
 
-  const raw = corridorScore + consolidationScore + stragglerScore;
+  // Component 4: Empty-goal approach alignment
+  // For pieces OUTSIDE the goal, reward moves that bring the piece closer to a
+  // specific empty goal cell (not just the centroid). This captures the "approach
+  // corridor" concept: two moves with equal centroid-distance may be unequal in
+  // alignment with available empty spots — one may need a lateral correction step
+  // while the other can chain directly in. Only activates once 2+ pieces are in goal.
+  const goalKeySet = new Set(goalPositions.map(g => coordKey(g)));
+  let emptyGoalAlignScore = 0;
+  const piecesInGoalNow = countPiecesInGoal(state, player);
+  if (piecesInGoalNow >= 2 && !goalKeySet.has(coordKey(move.from))) {
+    const emptyGoals = goalPositions.filter(g => {
+      const c = state.board.get(coordKey(g));
+      return c?.type === 'empty';
+    });
+    if (emptyGoals.length > 0) {
+      let fromMin = Infinity;
+      let toMin = Infinity;
+      for (const g of emptyGoals) {
+        const df = cubeDistance(move.from, g);
+        const dt = cubeDistance(move.to, g);
+        if (df < fromMin) fromMin = df;
+        if (dt < toMin) toMin = dt;
+      }
+      // Positive = moved closer to nearest empty goal (approach improvement)
+      emptyGoalAlignScore = (fromMin - toMin) * 1.5;
+    }
+  }
+
+  const raw = corridorScore + consolidationScore + stragglerScore + emptyGoalAlignScore;
   const diffMult =
     difficulty === 'hard'   ? 1.0 :
     difficulty === 'medium' ? 0.6 : 0.2;

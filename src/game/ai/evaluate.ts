@@ -176,6 +176,78 @@ function computePieceCohesion(
 }
 
 /**
+ * Back-piece convoy score: rewards keeping the 3 most backward pieces within
+ * jump range (distance ≤ 2) of each other. Pieces spaced 2 apart can chain-jump
+ * using each other as stepping stones — a key pattern the straggler penalty alone
+ * misses because it tracks only the single farthest piece, not group cohesion.
+ * Returns positive when the back trio is well-grouped, negative when scattered.
+ */
+function computeBackConvoyScore(
+  pieces: CubeCoord[],
+  goalCenter: CubeCoord,
+  inGoal: number
+): number {
+  if (pieces.length < 3 || inGoal >= 7) return 0;
+
+  const sorted = pieces
+    .map(p => ({ pos: p, dist: cubeDistance(p, goalCenter) }))
+    .sort((a, b) => b.dist - a.dist);
+
+  const back = sorted.slice(0, 3).map(x => x.pos);
+
+  let score = 0;
+  for (let i = 0; i < back.length; i++) {
+    for (let j = i + 1; j < back.length; j++) {
+      const d = cubeDistance(back[i], back[j]);
+      if (d === 2) score += 3;      // Ideal: can chain-jump over each other
+      else if (d === 1) score += 2; // Adjacent: can leapfrog
+      else if (d === 3) score += 1; // One step from chaining
+      else if (d >= 5) score -= 2;  // Scattered: convoy broken
+    }
+  }
+  return Math.max(-12, Math.min(18, score));
+}
+
+/**
+ * Empty-goal target score: for each piece outside the goal, penalize by its
+ * min-distance to the nearest empty goal cell — not the centroid average.
+ * This captures "approach corridor" alignment: a piece equidistant from the
+ * centroid but aimed at a specific empty cell is better positioned than one
+ * that would need a lateral correction step to reach any open spot.
+ * Only active once a few pieces are in goal (otherwise all goals are equally empty).
+ */
+function computeEmptyGoalTargetScore(
+  state: GameState,
+  pieces: CubeCoord[],
+  goalPositions: CubeCoord[],
+  inGoal: number
+): number {
+  if (inGoal < 3) return 0;
+
+  const emptyGoals = goalPositions.filter(g => {
+    const c = state.board.get(coordKey(g));
+    return c?.type === 'empty';
+  });
+  if (emptyGoals.length === 0) return 0;
+
+  const goalKeySet = new Set(goalPositions.map(g => coordKey(g)));
+  const piecesOutside = pieces.filter(p => !goalKeySet.has(coordKey(p)));
+  if (piecesOutside.length === 0) return 0;
+
+  let totalMinDist = 0;
+  for (const piece of piecesOutside) {
+    let minDist = Infinity;
+    for (const goal of emptyGoals) {
+      const d = cubeDistance(piece, goal);
+      if (d < minDist) minDist = d;
+    }
+    if (minDist !== Infinity) totalMinDist += minDist;
+  }
+
+  return -totalMinDist * 2;
+}
+
+/**
  * Power-up proximity bonus: rewards pieces that are near uncollected power-up cells.
  * Picking up a power-up grants a piece variant (turbo/ghost/big), which is very
  * valuable, so the AI should steer pieces toward them.
@@ -311,6 +383,20 @@ export function evaluatePosition(
   //    Only meaningful on custom boards that define power-up cells.
   const powerupBonus = computePowerupProximityBonus(state, pieces);
 
+  // 9. Back-piece convoy: reward keeping the 3 most backward pieces close together
+  //    (within jump range) so they can chain-jump as a group rather than stranding
+  //    one piece while the others advance.
+  const backConvoyScore = !state.isCustomLayout
+    ? computeBackConvoyScore(pieces, goalCenter, inGoal)
+    : 0;
+
+  // 10. Empty-goal target: penalty for outside pieces not aligned with specific empty
+  //     goal cells. Unlike distanceProgressScore (centroid-based), this captures
+  //     approach-corridor quality — wrong lateral position costs extra correction moves.
+  const emptyGoalTargetScore = !state.isCustomLayout
+    ? computeEmptyGoalTargetScore(state, pieces, goalPositions, inGoal)
+    : 0;
+
   // Endgame focus: boost progress metrics, drop tactical factors
   const endgame = inGoal >= 7 || state.winner !== null;
   let wProgress     = endgame ? weights.progress * 2         : weights.progress;
@@ -349,16 +435,22 @@ export function evaluatePosition(
   // Power-up bonus is always active when power-ups exist; drop to 0 in late endgame
   // (no point chasing power-ups when you're almost done)
   const wPowerup = !endgame && state.powerups && state.powerups.size > 0 ? 1.5 : 0;
+  // Back convoy drops to 0 in endgame (7+ in goal) — pieces scatter to fill gaps then.
+  const wBackConvoy = endgame ? 0 : 1.2;
+  // Empty-goal target: stronger in endgame when specific cells matter most.
+  const wEmptyGoalTarget = endgame ? 2.0 : 0.8;
 
   let score =
-    wProgress     * progressScore +
-    wDistProgress * distanceProgressScore +
-    wStraggler    * stragglerScore +
-    wAlignment    * alignmentScore +
-    wChainReach   * chainReachScore +
-    wCohesion     * cohesionScore +
-    wBlockade     * blockadeScore +
-    wPowerup      * powerupBonus;
+    wProgress          * progressScore +
+    wDistProgress      * distanceProgressScore +
+    wStraggler         * stragglerScore +
+    wAlignment         * alignmentScore +
+    wChainReach        * chainReachScore +
+    wCohesion          * cohesionScore +
+    wBlockade          * blockadeScore +
+    wPowerup           * powerupBonus +
+    wBackConvoy        * backConvoyScore +
+    wEmptyGoalTarget   * emptyGoalTargetScore;
 
   // Apply learned weights if available (for medium+ difficulty)
   if (difficulty !== 'easy') {
