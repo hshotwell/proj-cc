@@ -668,6 +668,7 @@ function getTopMoves(
   // Compute goal center for big jump opportunity detection
   const goalPositionsForBonus = getGoalPositionsForState(state, player);
   const goalCenterForBonus = centroid(goalPositionsForBonus);
+  const goalKeySetForBonus = new Set(goalPositionsForBonus.map(g => coordKey(g)));
   const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
@@ -705,6 +706,15 @@ function getTopMoves(
     // reward laterals that unlock a new chain entry into goal
     const lateralBonus = evaluateEndgameLateral(state, move, player);
     score += lateralBonus;
+
+    // Goal-entry chain stop bonus: a chain jump that lands INSIDE the goal zone
+    // should clearly beat one that stops just outside, regardless of consolidation
+    // or next-hop scores at the intermediate position. Depth bonus rewards filling
+    // deeper cells first (which is generally the right endgame strategy).
+    if (move.isJump && !state.isCustomLayout && goalKeySetForBonus.has(coordKey(move.to))) {
+      const depthBonus = cubeDistance(move.to, { q: 0, r: 0, s: 0 }); // deeper = farther from center
+      score += 30 + depthBonus * 2;
+    }
 
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
@@ -1319,6 +1329,7 @@ function getTopMovesFromList(
   // Compute goal center for big jump opportunity detection
   const goalPositionsForBonus = getGoalPositionsForState(state, player);
   const goalCenterForBonus = centroid(goalPositionsForBonus);
+  const goalKeySetForBonus = new Set(goalPositionsForBonus.map(g => coordKey(g)));
   const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
@@ -1358,6 +1369,12 @@ function getTopMovesFromList(
     // reward laterals that unlock a new chain entry into goal
     const lateralBonus = evaluateEndgameLateral(state, move, player);
     score += lateralBonus;
+
+    // Goal-entry chain stop bonus: match the one in getTopMoves (see above).
+    if (move.isJump && !state.isCustomLayout && goalKeySetForBonus.has(coordKey(move.to))) {
+      const depthBonus = cubeDistance(move.to, { q: 0, r: 0, s: 0 });
+      score += 30 + depthBonus * 2;
+    }
 
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);

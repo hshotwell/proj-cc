@@ -127,8 +127,10 @@ export function isLateEndgame(state: GameState, player: PlayerIndex): boolean {
     }
   }
 
-  // Late endgame: 6+ pieces in goal (4 or fewer remaining).
-  return inGoal >= 6;
+  // Late endgame: 7+ pieces in goal (3 or fewer remaining).
+  // Was 6 — raised because the endgame solver becomes unreliable with 4+ outside
+  // pieces, where the regular minimax + straggler penalties handle things better.
+  return inGoal >= 7;
 }
 
 /**

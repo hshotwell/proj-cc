@@ -226,9 +226,11 @@ function computeConvoyFormationScore(
   let score = 0;
 
   for (const dir of DIRECTIONS) {
-    // Only consider directions broadly toward the goal
+    // Only consider directions that are meaningfully toward the goal.
+    // dot > 3 filters out weakly-forward diagonals that cause clustering along
+    // the wrong axis (e.g., the path that keeps q=0 when the goal is at q=-3).
     const dot = dir.q * goalCenter.q + dir.r * goalCenter.r;
-    if (dot <= 0) continue;
+    if (dot <= 3) continue;
 
     for (const p of pieces) {
       const p2Key = coordKey({ q: p.q + dir.q * 2, r: p.r + dir.r * 2, s: p.s + dir.s * 2 });
@@ -495,14 +497,21 @@ export function evaluatePosition(
     ? computeApproachLaneScore(pieces, player, goalPositions, goalKeySet, inGoal)
     : 0;
 
-  // Endgame focus: boost progress metrics, drop tactical factors
-  const endgame = inGoal >= 7 || state.winner !== null;
-  let wProgress     = endgame ? weights.progress * 2         : weights.progress;
-  let wDistProgress = endgame ? weights.distanceProgress * 2 : weights.distanceProgress;
-  let wStraggler    = endgame ? 3.5                          : 2.0;
-  const wAlignment    = endgame ? 0                            : weights.alignment;
-  const wChainReach   = endgame ? weights.chainReach * 0.5     : weights.chainReach;
-  const wCohesion     = endgame ? 0                            : weights.cohesion;
+  // Smooth endgame weight transition: linearly interpolate from midgame weights
+  // (ratio=0 at ≤3 in goal) to endgame weights (ratio=1 at ≥8 in goal).
+  // Avoids the hard cliff at "7 pieces in goal" that caused erratic behaviour
+  // near the threshold and violated the principle of fluid game-phase transitions.
+  const endgameRatio = state.winner !== null ? 1 :
+    Math.max(0, Math.min(1, (inGoal - 3) / 5));
+  // Keep a boolean flag for the learned-insights check below
+  const endgame = endgameRatio >= 1 || state.winner !== null;
+
+  let wProgress     = weights.progress * (1 + endgameRatio);           // ×1 → ×2
+  let wDistProgress = weights.distanceProgress * (1 + endgameRatio);   // ×1 → ×2
+  let wStraggler    = 2.0 + endgameRatio * 1.5;                        // 2.0 → 3.5
+  const wAlignment  = weights.alignment * (1 - endgameRatio);          // fades to 0
+  const wChainReach = weights.chainReach * (1 - endgameRatio * 0.5);   // fades to ×0.5
+  const wCohesion   = weights.cohesion * (1 - endgameRatio);           // fades to 0
 
   // Post-winner urgency: when someone has already won, further boost distance weight
   if (state.winner !== null) {
@@ -533,10 +542,10 @@ export function evaluatePosition(
   // Power-up bonus is always active when power-ups exist; drop to 0 in late endgame
   // (no point chasing power-ups when you're almost done)
   const wPowerup = !endgame && state.powerups && state.powerups.size > 0 ? 1.5 : 0;
-  // Back convoy drops to 0 in endgame (7+ in goal) — pieces scatter to fill gaps then.
-  const wBackConvoy = endgame ? 0 : 1.2;
-  // Empty-goal target: stronger in endgame when specific cells matter most.
-  const wEmptyGoalTarget = endgame ? 2.0 : 0.8;
+  // Back convoy fades as endgame progresses — pieces scatter to fill gaps then.
+  const wBackConvoy = (1 - endgameRatio) * 1.2;
+  // Empty-goal target: grows as specific empty cells matter more.
+  const wEmptyGoalTarget = 0.8 + endgameRatio * 1.2; // 0.8 → 2.0
 
   let score =
     wProgress          * progressScore +
