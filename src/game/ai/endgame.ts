@@ -329,20 +329,28 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   const goalPositions = getGoalPositionsForState(state, player);
   const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
 
-  // Hard rule: a piece already inside the goal zone must NEVER leave it.
-  // No stepping-stone justification, no backstep, no exception for standard layouts.
-  // (Custom layouts where goal cells aren't fully adjacent are excluded from this
-  // filtering only if the board is non-standard, but even then moves are restricted
-  // to within-goal or deeper-in-goal only.)
+  const goalCenter = centroid(goalPositions);
+
+  // Hard rules applied once here — they propagate to ALL priorities that use `moves`:
+  //   1. A piece inside the goal zone must NEVER leave it.
+  //   2. A piece OUTSIDE the goal must never move backward (increase distance to
+  //      goal centre). This is the root cause of "inverted direction" bugs for
+  //      players whose goal is on a non-obvious axis: every priority in this
+  //      function draws from `moves`, so filtering here fixes them all at once.
   const allMoves = allRawMoves.filter(m => {
     const fromInGoal = goalKeys.has(coordKey(m.from));
     const toInGoal = goalKeys.has(coordKey(m.to));
     if (fromInGoal && !toInGoal) return false; // Never leave the goal zone
+    if (!fromInGoal) {
+      // Outside piece: reject any move that increases distance to the goal centre.
+      const d = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
+      if (d < -0.5) return false; // Backward step/jump — skip
+    }
     return true;
   });
 
-  // If filtering left us with nothing, fall back to all moves (shouldn't happen
-  // in a real game where the board isn't fully packed, but prevents deadlock)
+  // If filtering left us with nothing, fall back to all moves (prevents deadlock
+  // in the rare case where a piece is completely boxed in with only backward paths)
   const moves = allMoves.length > 0 ? allMoves : allRawMoves;
 
   const piecesOutside = getPiecesOutsideGoal(state, player);
