@@ -127,10 +127,12 @@ export function isLateEndgame(state: GameState, player: PlayerIndex): boolean {
     }
   }
 
-  // Late endgame: 7+ pieces in goal (3 or fewer remaining).
-  // Was 6 — raised because the endgame solver becomes unreliable with 4+ outside
-  // pieces, where the regular minimax + straggler penalties handle things better.
-  return inGoal >= 7;
+  // Late endgame: 6+ pieces in goal (4 or fewer remaining).
+  // The extreme-straggler bypass in findBestMove (pieces > 12 cells from goal)
+  // handles the one case where the endgame solver was unreliable. Keeping this
+  // at 6 ensures findEndgameMove and scoreEndgameMove still apply at 6-in-goal
+  // so the AI correctly prioritises direct goal entries at that stage.
+  return inGoal >= 6;
 }
 
 /**

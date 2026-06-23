@@ -1211,12 +1211,14 @@ export function findBestMove(
   if (viableMoves.length > 0) {
     movesToConsider = viableMoves;
   } else {
-    // All moves vetoed - find the least bad option
+    // All moves vetoed - find the least bad option.
+    // Regression violations (backward/leaving-goal moves) score 5× higher than
+    // repetition violations (forward moves that repeat state) so the fallback
+    // always prefers a forward-cycling move over a backward step.
     const scoredByPenalty = candidateMoves.map((m) => {
       const regPenalty = computeRegressionPenalty(state, m, player, difficulty);
       const repPenalty = computeRepetitionPenalty(state, m, player, difficulty);
-      // Convert Infinity to a large but finite number for comparison
-      const totalPenalty = (regPenalty === Infinity ? 1000000 : regPenalty) +
+      const totalPenalty = (regPenalty === Infinity ? 5000000 : regPenalty) +
                            (repPenalty === Infinity ? 1000000 : repPenalty);
       return { move: m, penalty: totalPenalty };
     });
