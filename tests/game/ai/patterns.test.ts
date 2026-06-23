@@ -1,8 +1,10 @@
 // tests/game/ai/patterns.test.ts
 import { describe, test, expect } from 'vitest';
-import { scoreEphemeralOpponentJump } from '@/game/ai/strategy';
+import { scoreEphemeralOpponentJump, scoreResidualTrajectory } from '@/game/ai/strategy';
 import { createGame } from '@/game/setup';
 import type { GameState, Move } from '@/types/game';
+import { centroid } from '@/game/coordinates';
+import { getGoalPositionsForState } from '@/game/state';
 
 function makeGame(): GameState {
   return createGame(2);
@@ -41,5 +43,33 @@ describe('scoreEphemeralOpponentJump', () => {
     // Middle position (3,-6) is P0's own piece → urgency = 0
     const result = scoreEphemeralOpponentJump(state, jumpWithPath, 0);
     expect(result).toBe(0);
+  });
+});
+
+describe('scoreResidualTrajectory', () => {
+  test('returns 0 for a jump move', () => {
+    const state = makeGame();
+    const jumpMove: Move = {
+      from: { q: 4, r: -7, s: 3 },
+      to: { q: 2, r: -5, s: 3 },
+      isJump: true,
+      jumpPath: [{ q: 2, r: -5, s: 3 }],
+    };
+    const goalPositions = getGoalPositionsForState(state, 0);
+    const gc = centroid(goalPositions);
+    expect(scoreResidualTrajectory(state, jumpMove, 0, gc)).toBe(0);
+  });
+
+  test('returns 0 or positive for a step move', () => {
+    const state = makeGame();
+    const stepMove: Move = {
+      from: { q: 4, r: -7, s: 3 },
+      to: { q: 3, r: -7, s: 4 },
+      isJump: false,
+    };
+    const goalPositions = getGoalPositionsForState(state, 0);
+    const gc = centroid(goalPositions);
+    const result = scoreResidualTrajectory(state, stepMove, 0, gc);
+    expect(result).toBeGreaterThanOrEqual(0);
   });
 });

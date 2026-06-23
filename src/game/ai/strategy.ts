@@ -810,6 +810,56 @@ export function scoreEphemeralOpponentJump(
 }
 
 /**
+ * When two friendly pieces can both step to the same destination (the moving
+ * piece and at least one adjacent teammate), check what forward jump the
+ * alternative piece(s) could make OVER our moved piece at the destination.
+ * A source that leaves a better-positioned jumper behind scores higher,
+ * guiding the AI to pick the source that unlocks the strongest chain next turn.
+ */
+export function scoreResidualTrajectory(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  goalCenter: CubeCoord
+): number {
+  if (move.isJump) return 0;
+
+  // Only score forward steps
+  if (cubeDistance(move.from, goalCenter) <= cubeDistance(move.to, goalCenter)) return 0;
+
+  const pieces = getPlayerPieces(state, player);
+
+  // Is there another friendly piece adjacent to the destination?
+  const hasAlternative = pieces.some(
+    p => !(p.q === move.from.q && p.r === move.from.r) &&
+         cubeDistance(p, move.to) === 1
+  );
+  if (!hasAlternative) return 0;
+
+  // After moving to move.to, which adjacent alternative pieces can jump OVER
+  // the newly placed piece at move.to to a forward position?
+  // No board copy needed — check if the landing (move.to + delta) is empty.
+  let bestResidualJump = 0;
+  for (const piece of pieces) {
+    if (piece.q === move.from.q && piece.r === move.from.r) continue;
+    if (cubeDistance(piece, move.to) !== 1) continue;
+
+    // The jump: piece hops over move.to, landing at move.to + (move.to − piece)
+    const dq = move.to.q - piece.q;
+    const dr = move.to.r - piece.r;
+    const ds = move.to.s - piece.s;
+    const land: CubeCoord = { q: move.to.q + dq, r: move.to.r + dr, s: move.to.s + ds };
+    const landContent = state.board.get(coordKey(land));
+    if (!landContent || landContent.type !== 'empty') continue;
+
+    const gain = cubeDistance(piece, goalCenter) - cubeDistance(land, goalCenter);
+    if (gain > bestResidualJump) bestResidualJump = gain;
+  }
+
+  return bestResidualJump * 2;
+}
+
+/**
  * Score a move based on all strategic principles.
  */
 export interface StrategicScore {
