@@ -500,8 +500,16 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
       return goodMoves[0].move;
     }
 
+    // Secondary fallback: at minimum, don't go backward relative to goal centroid.
+    // The primary fallback below could return a backward move if all improvements
+    // are negative — avoid that when any lateral-or-forward move exists.
+    const nonBackward = outsideMoves.filter(m => m.centerImprovement >= 0);
+    if (nonBackward.length > 0) {
+      return nonBackward[0].move;
+    }
+
     if (outsideMoves.length > 0) {
-      return outsideMoves[0].move;
+      return outsideMoves[0].move; // absolute last resort
     }
   }
 
@@ -515,7 +523,9 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
       return { move: m, score: forward * 10 + jumpLen + tiebreaker };
     });
     scored.sort((a, b) => b.score - a.score);
-    return scored[0].move;
+    // Prefer any non-backward move over a backward one even in this fallback
+    const forwardFirst = scored.find(s => s.score >= 0);
+    return (forwardFirst ?? scored[0]).move;
   }
 
   return moves[0] ?? allRawMoves[0];

@@ -835,7 +835,7 @@ export function computeStrategicScore(
   // the more critical it is to get the remaining outside pieces in quickly.
   // Same forward/lateral gate — never reward a backward step for being behind.
   const piecesInGoalForStraggler = countPiecesInGoal(state, player);
-  const stragglerUrgencyScale = 1 + Math.max(0, (piecesInGoalForStraggler - 4) * 0.4);
+  const stragglerUrgencyScale = 1 + piecesInGoalForStraggler * 0.2;
   const { hasStraggler, gap } = hasSignificantStraggler(state, player);
   const movingStraggler = isMovingStraggler(state, move, player);
   const stragglerBonus = (hasStraggler && movingStraggler && isNotBackward)
