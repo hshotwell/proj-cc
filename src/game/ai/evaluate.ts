@@ -210,6 +210,42 @@ function computeBackConvoyScore(
 }
 
 /**
+ * Convoy formation score: detect 3-piece "trains" — pieces at A, A+dir×2, A+dir×4
+ * along a forward-pointing hex direction. Each can jump the next for large distance
+ * gain. Two-piece starts also score. Counts each direction independently so a piece
+ * can contribute to multiple trains. Dropped in endgame when pieces fill specific cells.
+ */
+function computeConvoyFormationScore(
+  pieces: CubeCoord[],
+  goalCenter: CubeCoord,
+  inGoal: number
+): number {
+  if (pieces.length < 2 || inGoal >= 7) return 0;
+
+  const pieceSet = new Set(pieces.map(p => coordKey(p)));
+  let score = 0;
+
+  for (const dir of DIRECTIONS) {
+    // Only consider directions broadly toward the goal
+    const dot = dir.q * goalCenter.q + dir.r * goalCenter.r;
+    if (dot <= 0) continue;
+
+    for (const p of pieces) {
+      const p2Key = coordKey({ q: p.q + dir.q * 2, r: p.r + dir.r * 2, s: p.s + dir.s * 2 });
+      const p4Key = coordKey({ q: p.q + dir.q * 4, r: p.r + dir.r * 4, s: p.s + dir.s * 4 });
+
+      if (pieceSet.has(p2Key) && pieceSet.has(p4Key)) {
+        score += 6; // 3-piece train: full leapfrog chain available
+      } else if (pieceSet.has(p2Key)) {
+        score += 2; // 2-piece start of a potential train
+      }
+    }
+  }
+
+  return Math.min(score, 24);
+}
+
+/**
  * Empty-goal target score: for each piece outside the goal, penalize by its
  * min-distance to the nearest empty goal cell — not the centroid average.
  * This captures "approach corridor" alignment: a piece equidistant from the
@@ -423,6 +459,12 @@ export function evaluatePosition(
     ? computeBackConvoyScore(pieces, goalCenter, inGoal)
     : 0;
 
+  // 12. Convoy formation: reward 3-piece trains (spacing-2 in forward direction)
+  //     that can chain-jump using each other as stepping stones.
+  const convoyFormationScore = !state.isCustomLayout
+    ? computeConvoyFormationScore(pieces, goalCenter, inGoal)
+    : 0;
+
   // 10. Empty-goal target: penalty for outside pieces not aligned with specific empty
   //     goal cells. Unlike distanceProgressScore (centroid-based), this captures
   //     approach-corridor quality — wrong lateral position costs extra correction moves.
@@ -490,7 +532,8 @@ export function evaluatePosition(
     wPowerup           * powerupBonus +
     wBackConvoy        * backConvoyScore +
     wEmptyGoalTarget   * emptyGoalTargetScore +
-    1.5                * approachLaneScore;
+    1.5                * approachLaneScore +
+    1.0                * convoyFormationScore;
 
   // Apply learned weights if available (for medium+ difficulty)
   if (difficulty !== 'easy') {

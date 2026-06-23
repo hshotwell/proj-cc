@@ -73,3 +73,18 @@ describe('scoreResidualTrajectory', () => {
     expect(result).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('convoy formation concept', () => {
+  test('three collinear pieces at spacing-2 form a valid train', () => {
+    // Verify the distance property: each pair in A, A+dir*2, A+dir*4 is exactly 2 apart.
+    const A = { q: 0, r: 0, s: 0 };
+    const dir = { q: -1, r: 1, s: 0 };
+    const B = { q: A.q + dir.q * 2, r: A.r + dir.r * 2, s: A.s + dir.s * 2 };
+    const C = { q: A.q + dir.q * 4, r: A.r + dir.r * 4, s: A.s + dir.s * 4 };
+
+    const distAB = (Math.abs(A.q-B.q) + Math.abs(A.r-B.r) + Math.abs(A.s-B.s)) / 2;
+    const distBC = (Math.abs(B.q-C.q) + Math.abs(B.r-C.r) + Math.abs(B.s-C.s)) / 2;
+    expect(distAB).toBe(2);
+    expect(distBC).toBe(2);
+  });
+});
