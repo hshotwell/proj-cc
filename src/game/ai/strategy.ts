@@ -948,7 +948,11 @@ export function computeStrategicScore(
   // the more critical it is to get the remaining outside pieces in quickly.
   // Same forward/lateral gate — never reward a backward step for being behind.
   const piecesInGoalForStraggler = countPiecesInGoal(state, player);
-  const stragglerUrgencyScale = 1 + piecesInGoalForStraggler * 0.2;
+  // Steeper scaling once 5+ pieces are in goal — straggler urgency must
+  // outpace the endgame goal-entry bonuses so back pieces aren't abandoned.
+  const stragglerUrgencyScale = piecesInGoalForStraggler >= 5
+    ? 1 + piecesInGoalForStraggler * 0.5
+    : 1 + piecesInGoalForStraggler * 0.2;
   const { hasStraggler, gap } = hasSignificantStraggler(state, player);
   const movingStraggler = isMovingStraggler(state, move, player);
   const stragglerBonus = (hasStraggler && movingStraggler && isNotBackward)

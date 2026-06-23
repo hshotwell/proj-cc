@@ -576,12 +576,22 @@ function selectBestChainStop(
   const result: Array<{ move: Move; score: number }> = [...nonChainMoves];
   for (const group of chainGroups.values()) {
     group.sort((a, b) => b.score - a.score);
-    // Always keep the best stop. Also keep the 2nd-best if it scores within 25
-    // points of the best — the deeper search can then distinguish which landing
-    // position is truly superior (catching the "one more lateral hop" pattern).
-    result.push(group[0]);
-    if (group.length > 1 && group[0].score - group[1].score < 25) {
-      result.push(group[1]);
+    result.push(group[0]); // Always keep best-scored stop
+
+    if (group.length > 1) {
+      // Also always expose the longest chain stop (most intermediate hops) —
+      // the 1-ply score can incorrectly prefer an early stop (better consolidation
+      // at the intermediate position) over continuing to the furthest-forward cell.
+      // Exposing the longest chain lets the deeper minimax resolve which is truly better.
+      const longestChain = [...group].sort(
+        (a, b) => (b.move.jumpPath?.length ?? 0) - (a.move.jumpPath?.length ?? 0)
+      )[0];
+
+      if (longestChain !== group[0]) {
+        result.push(longestChain);
+      } else if (group[0].score - group[1].score < 25) {
+        result.push(group[1]); // Keep 2nd-best within 25 pts as before
+      }
     }
   }
 
@@ -1104,22 +1114,35 @@ export function findBestMove(
   }
 
   // PRIORITY: Late endgame finishing logic for ALL difficulty levels
-  // When 6+ pieces are in goal, the dedicated endgame solver is authoritative.
-  // Trust it completely — the regression gate previously rejected valid moves like
-  // (4,-7)→(4,-8) because moving to the deepest corner increases distance from
-  // goal centroid, which computePlayerProgress misreads as backward progress.
+  // When 6+ pieces are in goal, the dedicated endgame solver is authoritative —
+  // UNLESS there is an "extreme straggler": a piece more than 12 cells from the
+  // goal center. The endgame solver greedily fills the goal from nearby pieces,
+  // completely ignoring pieces that are still far away. When a distant straggler
+  // exists, fall through to the regular search which has an extreme-straggler
+  // penalty that correctly prioritises moving that piece first.
   if (isLateEndgame(state, player)) {
-    const endgameMove = findEndgameMove(state, player);
-    if (endgameMove) {
-      // Only veto if this move would repeat a board state (cycle detection).
-      // No progress gate — the endgame solver's priority waterfall is authoritative.
-      const { repeats } = wouldRepeatState(state, endgameMove);
-      if (!repeats) {
-        return endgameMove;
+    const goalPosES = getGoalPositionsForState(state, player);
+    const goalCenterES = centroid(goalPosES);
+    const goalKeysES = new Set(goalPosES.map(g => coordKey(g)));
+    const piecesES = getPlayerPieces(state, player);
+    const hasExtremeStraggler = piecesES.some(
+      p => !goalKeysES.has(coordKey(p)) && cubeDistance(p, goalCenterES) > 12
+    );
+
+    if (!hasExtremeStraggler) {
+      const endgameMove = findEndgameMove(state, player);
+      if (endgameMove) {
+        // Only veto if this move would repeat a board state (cycle detection).
+        // No progress gate — the endgame solver's priority waterfall is authoritative.
+        const { repeats } = wouldRepeatState(state, endgameMove);
+        if (!repeats) {
+          return endgameMove;
+        }
+        // State would repeat — fall through to normal search which has its own
+        // repetition penalties to find a different path out of the cycle.
       }
-      // State would repeat — fall through to normal search which has its own
-      // repetition penalties to find a different path out of the cycle.
     }
+    // Extreme straggler present — fall through so regular search handles it.
   }
 
   // For custom layouts, use the simple progress-maximizing approach

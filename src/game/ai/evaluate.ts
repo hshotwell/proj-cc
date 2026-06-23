@@ -423,6 +423,23 @@ export function evaluatePosition(
     }
   }
 
+  // 3b. Extreme straggler penalty: when 4+ pieces are already in goal but a piece
+  //     is still very far away (> 12 cells from goal center), apply a steep extra
+  //     penalty that grows faster than the goal-entry bonus — this forces the AI
+  //     to deal with distant stragglers rather than comfortably filling the last
+  //     few goal cells while those pieces walk alone.
+  let extremeStragPenalty = 0;
+  if (inGoal >= 4 && !state.isCustomLayout) {
+    const piecesOutsideGoal = pieces.filter(p => !goalKeySet.has(coordKey(p)));
+    for (const piece of piecesOutsideGoal) {
+      const dist = cubeDistance(piece, goalCenter);
+      if (dist > 12) {
+        const excess = dist - 12;
+        extremeStragPenalty -= excess * excess * 10;
+      }
+    }
+  }
+
   // 4. Directional alignment: penalize pieces that have drifted laterally off
   //    the goal corridor. Skip for custom layouts (goal direction may vary).
   let alignmentScore = 0;
@@ -525,6 +542,7 @@ export function evaluatePosition(
     wProgress          * progressScore +
     wDistProgress      * distanceProgressScore +
     wStraggler         * stragglerScore +
+    extremeStragPenalty                        +
     wAlignment         * alignmentScore +
     wChainReach        * chainReachScore +
     wCohesion          * cohesionScore +
