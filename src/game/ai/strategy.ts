@@ -822,7 +822,7 @@ export function computeStrategicScore(
   // Backwardness of the moving piece: quadratic so the most-backward piece
   // gets a strongly disproportionate bonus over middle pieces.
   const backwardness = getPieceBackwardness(state, move.from, player);
-  const backwardnessBonus = backwardness * backwardness * 25; // Up to 25 pts for most backward
+  const backwardnessBonus = backwardness * backwardness * 40; // Up to 40 pts for most backward
 
   // BIG bonus for moving a significant straggler.
   // Urgency scales with pieces already in goal — the further along we are,
