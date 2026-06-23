@@ -337,8 +337,13 @@ export function computeRegressionPenalty(
 
   // Hard-veto backward moves per difficulty rules
   if (progressDelta < 0) {
-    // Easy: absolute ban — never take a backward step
+    // Easy: absolute ban on all backward moves
     if (difficulty === 'easy') return Infinity;
+
+    // Medium: backward steps (non-jump) are never justified — a step back by
+    // 1 cell cannot reliably set up a better chain within the shallow lookahead.
+    // Backward jumps (over a piece) may still pass the 2-move net check below.
+    if (difficulty === 'medium' && !move.isJump) return Infinity;
 
     const nextMoves = getAllValidMoves(nextState, player);
     let bestNextDelta = 0;
@@ -353,12 +358,11 @@ export function computeRegressionPenalty(
 
     if (difficulty === 'hard') {
       // Hard: only allow if the net gain is more than double the loss
-      // (requires an exceptional recovery to justify going backward)
       if (progressDelta + bestNextDelta <= Math.abs(progressDelta)) {
         return Infinity;
       }
     } else {
-      // Medium: veto if 2-move net is not positive
+      // Medium: veto backward jumps if 2-move net is not positive
       if (progressDelta + bestNextDelta <= 0) {
         return Infinity;
       }
