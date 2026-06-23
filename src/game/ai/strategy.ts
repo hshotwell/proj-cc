@@ -777,6 +777,39 @@ export function scoreSetupBlockRisk(
 }
 
 /**
+ * Urgency bonus for jumps that use opponent pieces as stepping stones.
+ * The more backward the opponent's piece (= the more they want to move it),
+ * the more urgent it is to jump over it NOW before it moves away.
+ */
+export function scoreEphemeralOpponentJump(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  if (!move.isJump || !move.jumpPath) return 0;
+
+  let urgency = 0;
+  let currentPos = move.from;
+
+  for (const nextPos of move.jumpPath) {
+    const mid: CubeCoord = {
+      q: (currentPos.q + nextPos.q) / 2,
+      r: (currentPos.r + nextPos.r) / 2,
+      s: (currentPos.s + nextPos.s) / 2,
+    };
+    if (Number.isInteger(mid.q) && Number.isInteger(mid.r)) {
+      const content = state.board.get(coordKey(mid));
+      if (content?.type === 'piece' && content.player !== player) {
+        urgency += getPieceBackwardness(state, mid, content.player) * 6;
+      }
+    }
+    currentPos = nextPos;
+  }
+
+  return urgency;
+}
+
+/**
  * Score a move based on all strategic principles.
  */
 export interface StrategicScore {
@@ -798,6 +831,8 @@ export interface StrategicScore {
   midgamePriorityBonus: number;
   // Penalty for moves that hand an opponent a large forward jump
   opponentGiftPenalty: number;
+  // Bonus for jumping over opponent pieces that the opponent urgently wants to move
+  ephemeralOpponentUrgency: number;
   // Total combined score
   total: number;
 }
@@ -889,6 +924,13 @@ export function computeStrategicScore(
   const opponentPiecesUsed = countOpponentPiecesInJump(state, move, player);
   const opponentPieceBonus = opponentPiecesUsed * 3;
 
+  // Ephemeral urgency: aggressive always uses opponent pieces opportunistically;
+  // generalist and defensive get the explicit nudge when the window is closing.
+  const ephemeralOpponentUrgency =
+    personality !== 'aggressive'
+      ? scoreEphemeralOpponentJump(state, move, player)
+      : 0;
+
   // Check if this move blocks opponent jumps
   let blockingOpponentValue = 0;
   if (personality === 'defensive' || personality === 'generalist') {
@@ -919,6 +961,7 @@ export function computeStrategicScore(
     weights.unblocking * unblockingValue +
     weights.backwardness * backwardnessBonus +
     weights.opponentPiece * opponentPieceBonus +
+    ephemeralOpponentUrgency +
     weights.blockingOpponent * blockingOpponentValue +
     weights.straggler * stragglerBonus +
     midgamePriorityBonus -
@@ -930,6 +973,7 @@ export function computeStrategicScore(
     unblockingValue,
     backwardnessBonus,
     opponentPieceBonus,
+    ephemeralOpponentUrgency,
     blockingOpponentValue,
     pastOpponentsPenalty,
     stragglerBonus,
