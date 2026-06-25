@@ -8,7 +8,7 @@ import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreBackPieceChainSetup } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
@@ -732,13 +732,26 @@ function getTopMoves(
     score += lateralBonus;
 
     // Goal-entry chain stop bonus: a chain jump that lands INSIDE the goal zone
-    // should clearly beat one that stops just outside, regardless of consolidation
-    // or next-hop scores at the intermediate position. Depth bonus rewards filling
-    // deeper cells first (which is generally the right endgame strategy).
+    // should clearly beat one that stops just outside. Chain-length bonus prefers
+    // the longer chain when multiple stops along the path land in goal — without
+    // this, the shorter chain's stronger landing-quality often beat the deeper
+    // entry (the "stop too early" pattern from Flag 3). Only applies in midgame
+    // (below isLateEndgame's threshold); above that, scoreEndgameMove handles it.
     if (move.isJump && !state.isCustomLayout && goalKeySetForBonus.has(coordKey(move.to))) {
       const depthBonus = cubeDistance(move.to, { q: 0, r: 0, s: 0 }); // deeper = farther from center
-      score += 30 + depthBonus * 2;
+      const chainLenBonus = (move.jumpPath?.length ?? 1) * 60;
+      score += 100 + depthBonus * 8 + chainLenBonus;
     }
+
+    // Source-dominance bonus: jump-over-friendly wins over a step from that
+    // friendly to the same destination — both end at the same spot, but the
+    // jump moves a back piece while the step would have moved the front piece.
+    score += scoreSourceDominance(state, move, player);
+
+    // Back-piece chain setup: a step that opens a new forward jump for the
+    // most-back piece is strategically more valuable than a same-improvement
+    // step from a front piece (Flag 4 — the "3-piece setup" pattern).
+    score += scoreBackPieceChainSetup(state, move, player);
 
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
@@ -1410,8 +1423,13 @@ function getTopMovesFromList(
     // Goal-entry chain stop bonus: match the one in getTopMoves (see above).
     if (move.isJump && !state.isCustomLayout && goalKeySetForBonus.has(coordKey(move.to))) {
       const depthBonus = cubeDistance(move.to, { q: 0, r: 0, s: 0 });
-      score += 30 + depthBonus * 2;
+      const chainLenBonus = (move.jumpPath?.length ?? 1) * 60;
+      score += 100 + depthBonus * 8 + chainLenBonus;
     }
+
+    // Source-dominance bonus (match getTopMoves)
+    score += scoreSourceDominance(state, move, player);
+    score += scoreBackPieceChainSetup(state, move, player);
 
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);

@@ -860,6 +860,97 @@ export function scoreResidualTrajectory(
 }
 
 /**
+ * Back-piece chain setup: detect when this STEP move creates a forward jump
+ * opportunity for the most-back friendly piece. Even at 1 cell of jump gain,
+ * setting up a back-piece chain is strategically much more valuable than a
+ * direct step from a front piece (Flag 4 pattern). The bonus is gated on the
+ * back piece NOT already having a jump of the same gain before this move.
+ */
+export function scoreBackPieceChainSetup(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  if (move.isJump) return 0;
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalCenter = centroid(goalPositions);
+  const pieces = getPlayerPieces(state, player);
+
+  // Most-back piece (excluding the moving piece itself).
+  let backPiece: CubeCoord | null = null;
+  let backDist = -1;
+  for (const p of pieces) {
+    if (p.q === move.from.q && p.r === move.from.r) continue;
+    const d = cubeDistance(p, goalCenter);
+    if (d > backDist) {
+      backDist = d;
+      backPiece = p;
+    }
+  }
+  if (!backPiece) return 0;
+
+  // Simulate the post-move board (no need to copy beyond the two cells)
+  const nextBoard = new Map(state.board);
+  const fromContent = nextBoard.get(coordKey(move.from));
+  nextBoard.set(coordKey(move.from), { type: 'empty' });
+  nextBoard.set(coordKey(move.to), fromContent!);
+  const nextState: GameState = { ...state, board: nextBoard };
+
+  // Best forward jump available to the back piece AFTER the move
+  let bestNewGain = 0;
+  for (const dir of DIRECTIONS) {
+    const over: CubeCoord = { q: backPiece.q + dir.q, r: backPiece.r + dir.r, s: backPiece.s + dir.s };
+    const land: CubeCoord = { q: backPiece.q + dir.q * 2, r: backPiece.r + dir.r * 2, s: backPiece.s + dir.s * 2 };
+    if (!canJumpOver(nextState, over, player)) continue;
+    if (nextState.board.get(coordKey(land))?.type !== 'empty') continue;
+    const gain = cubeDistance(backPiece, goalCenter) - cubeDistance(land, goalCenter);
+    if (gain > bestNewGain) bestNewGain = gain;
+  }
+  if (bestNewGain === 0) return 0;
+
+  // Same gain available BEFORE the move? Then no setup credit.
+  for (const dir of DIRECTIONS) {
+    const over: CubeCoord = { q: backPiece.q + dir.q, r: backPiece.r + dir.r, s: backPiece.s + dir.s };
+    const land: CubeCoord = { q: backPiece.q + dir.q * 2, r: backPiece.r + dir.r * 2, s: backPiece.s + dir.s * 2 };
+    if (!canJumpOver(state, over, player)) continue;
+    if (state.board.get(coordKey(land))?.type !== 'empty') continue;
+    const oldGain = cubeDistance(backPiece, goalCenter) - cubeDistance(land, goalCenter);
+    if (oldGain >= bestNewGain) return 0;
+  }
+
+  return bestNewGain * 25;
+}
+
+/**
+ * Source-dominance bonus: when a single-hop jump hops over a friendly piece to
+ * a destination, that friendly piece could have *stepped* to the same destination
+ * itself (jump-over-friendly means the friendly is adjacent to move.to). The jump
+ * is then strictly dominant — it lands the same piece at the same spot, but
+ * advances the back source instead of leaving the front piece exposed. Without
+ * this, the AI sometimes picks the step from the front piece when both options
+ * exist (Flag 2 pattern).
+ */
+export function scoreSourceDominance(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  if (!move.isJump || !move.jumpPath || move.jumpPath.length !== 1) return 0;
+  const midQ = (move.from.q + move.to.q) / 2;
+  const midR = (move.from.r + move.to.r) / 2;
+  if (!Number.isInteger(midQ) || !Number.isInteger(midR)) return 0;
+  const mid: CubeCoord = { q: midQ, r: midR, s: -midQ - midR };
+  const midContent = state.board.get(coordKey(mid));
+  if (midContent?.type !== 'piece' || midContent.player !== player) return 0;
+  // The friendly piece at mid could have stepped to move.to. The jump from a
+  // back source is strictly better — bonus large enough to overcome the slight
+  // landing-quality edge the step sometimes has.
+  return 60;
+}
+
+/**
  * Score a move based on all strategic principles.
  */
 export interface StrategicScore {
