@@ -883,6 +883,8 @@ export interface StrategicScore {
   opponentGiftPenalty: number;
   // Bonus for jumping over opponent pieces that the opponent urgently wants to move
   ephemeralOpponentUrgency: number;
+  // Penalty for moves that ignore the back piece while we're filling the goal
+  backPieceNeglectPenalty: number;
   // Total combined score
   total: number;
 }
@@ -951,13 +953,28 @@ export function computeStrategicScore(
   // Steeper scaling once 5+ pieces are in goal — straggler urgency must
   // outpace the endgame goal-entry bonuses so back pieces aren't abandoned.
   const stragglerUrgencyScale = piecesInGoalForStraggler >= 5
-    ? 1 + piecesInGoalForStraggler * 0.5
+    ? 1 + piecesInGoalForStraggler * 0.8
     : 1 + piecesInGoalForStraggler * 0.2;
-  const { hasStraggler, gap } = hasSignificantStraggler(state, player);
+  const { hasStraggler, stragglerPos, gap } = hasSignificantStraggler(state, player);
   const movingStraggler = isMovingStraggler(state, move, player);
   const stragglerBonus = (hasStraggler && movingStraggler && isNotBackward)
     ? gap * 10 * stragglerUrgencyScale
     : 0;
+
+  // Back-piece neglect penalty: rewarding the straggler alone is not enough —
+  // every OTHER move must also be punished so the search never settles for
+  // endzone fiddling while a piece sits abandoned in the back. Triggers when
+  // there's a clear back piece (gap ≥ 2) and 4+ pieces are already in goal.
+  // Setup-style moves that bring the moving piece within 3 cells of the straggler
+  // are exempt (they're helping it advance).
+  let backPieceNeglectPenalty = 0;
+  if (hasStraggler && stragglerPos && !movingStraggler && piecesInGoalForStraggler >= 4) {
+    const landingNearStraggler = cubeDistance(move.to, stragglerPos) <= 3;
+    if (!landingNearStraggler) {
+      // Scales with how many pieces are home and how big the gap is.
+      backPieceNeglectPenalty = (piecesInGoalForStraggler - 3) * gap * 5;
+    }
+  }
 
   // Midgame priority: prefer moving pieces still crossing the board.
   // Scales up sharply as pieces enter the goal — at 8+ in goal, the outside pieces
@@ -1020,7 +1037,8 @@ export function computeStrategicScore(
     weights.straggler * stragglerBonus +
     midgamePriorityBonus -
     weights.pastOpponents * pastOpponentsPenalty -
-    weights.blockingOpponent * opponentGiftPenalty;
+    weights.blockingOpponent * opponentGiftPenalty -
+    backPieceNeglectPenalty;
 
   return {
     steppingStoneValue,
@@ -1033,6 +1051,7 @@ export function computeStrategicScore(
     stragglerBonus,
     midgamePriorityBonus,
     opponentGiftPenalty,
+    backPieceNeglectPenalty,
     total,
   };
 }

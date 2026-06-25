@@ -365,14 +365,18 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     return moves[0];
   }
 
-  // PRIORITY 1: Direct goal entry - ALWAYS take this if available
-  // Prefer entries to DEEPER positions, then longer jumps
+  // PRIORITY 1: Direct goal entry — usually first choice, but DEFERRED when a
+  // back piece is stranded and the entering piece is a front-of-pack stepping
+  // stone the back piece still needs. Without this gate the solver would burn
+  // through the easy entries and abandon the back piece (the persistent
+  // "left behind" pattern).
   const directEntries = moves
     .filter(m => isDirectGoalEntry(state, m, player))
     .map(m => ({
       move: m,
       depth: getGoalPositionDepth(m.to),
-      jumpLen: m.jumpPath?.length || 0
+      jumpLen: m.jumpPath?.length || 0,
+      fromDist: cubeDistance(m.from, goalCenter),
     }))
     .sort((a, b) => {
       if (b.depth !== a.depth) return b.depth - a.depth;
@@ -380,7 +384,25 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     });
 
   if (directEntries.length > 0) {
-    return directEntries[0].move;
+    // Check for stranded back piece. If one exists, only take direct entries
+    // whose FROM piece is the back piece itself — otherwise defer entry and
+    // let the lower priorities advance the back piece.
+    let maxOutsideDist = 0;
+    if (piecesOutside.length >= 2) {
+      for (const p of piecesOutside) {
+        const d = cubeDistance(p, goalCenter);
+        if (d > maxOutsideDist) maxOutsideDist = d;
+      }
+    }
+    const hasStrandedBack = piecesOutside.length >= 2 && maxOutsideDist > 9;
+    if (!hasStrandedBack) {
+      return directEntries[0].move;
+    }
+    // Take the entry only if it comes from the stranded back piece itself
+    // (a chain jump from the back piece all the way to goal — best of both worlds).
+    const backPieceEntry = directEntries.find(e => Math.abs(e.fromDist - maxOutsideDist) < 0.5);
+    if (backPieceEntry) return backPieceEntry.move;
+    // Otherwise let lower priorities advance the back piece.
   }
 
   // PRIORITY 2: "Make room" - move a blocking piece deeper to enable entry
@@ -495,11 +517,23 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
       const aBig = (a.move.jumpPath?.length ?? 0) > 1 && a.improvement > 0 ? 1 : 0;
       const bBig = (b.move.jumpPath?.length ?? 0) > 1 && b.improvement > 0 ? 1 : 0;
       if (bBig !== aBig) return bBig - aBig;
-      // 1. Improvement toward target goal
+
+      // 1. When BOTH moves are forward-improving, a piece 4+ cells farther from
+      //    goal always wins. Without this gate the closer piece's larger relative
+      //    improvement (e.g. 2-cell step vs 1-cell step) outranked the more
+      //    urgent back piece — the persistent "back pieces left behind" pattern.
+      const aForward = a.improvement > 0;
+      const bForward = b.improvement > 0;
+      if (aForward && bForward) {
+        const distGap = a.pieceDistFromGoal - b.pieceDistFromGoal;
+        if (Math.abs(distGap) >= 4) return distGap > 0 ? -1 : 1;
+      }
+
+      // 2. Improvement toward target goal
       if (Math.abs(b.improvement - a.improvement) > 0.5) return b.improvement - a.improvement;
-      // 2. Farther pieces first (more to gain)
+      // 3. Farther pieces first (more to gain)
       if (Math.abs(b.pieceDistFromGoal - a.pieceDistFromGoal) > 0.5) return b.pieceDistFromGoal - a.pieceDistFromGoal;
-      // 3. Any jump over step
+      // 4. Any jump over step
       return b.jumpLen - a.jumpLen;
     });
 
@@ -811,10 +845,33 @@ export function scoreEndgameMove(
   // MASSIVE bonus for direct goal entry (outside -> inside)
   if (!fromInGoal && toInGoal) {
     const depth = getGoalPositionDepth(move.to);
-    score += 50000 + depth * 1000;
+    let entryBonus = 50000 + depth * 1000;
     if (move.jumpPath) {
-      score += move.jumpPath.length * 500;
+      entryBonus += move.jumpPath.length * 500;
     }
+
+    // When a back piece is stranded far behind AND the entering piece is one of
+    // the front pieces, discount the entry: those mid-board pieces are stepping
+    // stones the back piece needs to chain forward. Letting them disappear into
+    // goal too early forces the back piece to walk alone — the persistent
+    // "left behind" pattern. The back piece can use them now, the goal slot will
+    // still be there in a couple of turns.
+    if (piecesOutside.length >= 2) {
+      let maxOutsideDist = 0;
+      for (const p of piecesOutside) {
+        const d = cubeDistance(p, goalCenter);
+        if (d > maxOutsideDist) maxOutsideDist = d;
+      }
+      const movingFromDist = cubeDistance(move.from, goalCenter);
+      // Significant gap (5+ cells) AND a truly back piece (9+ from centre) ⇒
+      // discount aggressively. This still leaves a positive bonus so the entry
+      // remains preferable to wasteful sidesteps; it just no longer beats a
+      // genuine straggler-advancing move.
+      if (maxOutsideDist - movingFromDist >= 5 && maxOutsideDist > 9) {
+        entryBonus *= 0.08;
+      }
+    }
+    score += entryBonus;
   }
 
   // Within goal: reward deeper, ABSOLUTE VETO for shallower

@@ -396,11 +396,29 @@ export function computeRegressionPenalty(
       // Lateral step with no immediate chain payoff: bias toward forward movement.
       // Lateral jumps (rare, but valid for consolidation) keep no penalty.
       // Step moves that enable an immediate chain also stay at 0.
-      // In endgame (7+ in goal) the penalty is larger — sidesteps there are nearly
-      // always wasteful and are a persistent observed AI mistake.
+      // Penalty escalates when pieces are entering the goal AND a back piece is
+      // being neglected — endzone sidesteps are the persistent observed mistake.
       if (!move.isJump && steppingStoneResult === 'none') {
         const piecesInGoal = countPiecesInGoal(state, player);
-        penalty = piecesInGoal >= 7 ? 35 : 15;
+        // Detect a back piece left behind: any outside piece > 9 cells from goal centre
+        let hasBackPiece = false;
+        if (piecesInGoal >= 4) {
+          const pieces = getPlayerPieces(state, player);
+          const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
+          for (const p of pieces) {
+            if (goalKeys.has(coordKey(p))) continue;
+            if (cubeDistance(p, goalCenter) > 9) { hasBackPiece = true; break; }
+          }
+        }
+        if (hasBackPiece) {
+          // Sidestep while a back piece is stranded — strongly discouraged.
+          // Higher penalty for moves originating near the goal: those pieces have
+          // no business shuffling while the back of the train is still in the start zone.
+          const fromDist = cubeDistance(move.from, goalCenter);
+          penalty = fromDist <= 5 ? 120 : 60;
+        } else {
+          penalty = piecesInGoal >= 7 ? 35 : 15;
+        }
       }
     } else {
       penalty = -progressDelta * 30;
@@ -1142,11 +1160,16 @@ export function findBestMove(
     const goalKeysES = new Set(goalPosES.map(g => coordKey(g)));
     const piecesES = getPlayerPieces(state, player);
 
-    // Tighter straggler threshold once 7+ in goal: any outside piece more than
-    // 5 cells from goal centre is "stranded" because all neighbours are converging
-    // on the goal. The previous >12 threshold missed mid-distance stragglers.
+    // Straggler-aware threshold: scales with the number of pieces already in goal
+    // so mid-distance stragglers (8–11 cells out) trigger the bypass, not just
+    // far ones. Mirrors the extremeStragPenalty threshold in evaluate.ts.
+    //   6 in goal → 8,   7 in goal → 6,   8+ in goal → 5
+    // Smaller threshold ⇒ the minimax (with its straggler penalties) drives
+    // the move, not the greedy endgame solver.
     const inGoalES = piecesES.filter(p => goalKeysES.has(coordKey(p))).length;
-    const stragglerThreshold = inGoalES >= 7 ? 5 : 12;
+    const stragglerThreshold = inGoalES >= 5
+      ? Math.max(5, 12 - (inGoalES - 4) * 2)
+      : 12;
     const hasExtremeStraggler = piecesES.some(
       p => !goalKeysES.has(coordKey(p)) && cubeDistance(p, goalCenterES) > stragglerThreshold
     );

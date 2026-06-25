@@ -425,18 +425,26 @@ export function evaluatePosition(
     }
   }
 
-  // 3b. Extreme straggler penalty: when 4+ pieces are already in goal but a piece
-  //     is still very far away (> 12 cells from goal center), apply a steep extra
-  //     penalty that grows faster than the goal-entry bonus — this forces the AI
-  //     to deal with distant stragglers rather than comfortably filling the last
-  //     few goal cells while those pieces walk alone.
+  // 3b. Extreme straggler penalty: when pieces are entering the goal but a piece
+  //     is still far back, apply a steep extra penalty that grows faster than the
+  //     goal-entry bonus. The threshold scales with `inGoal`: the more pieces are
+  //     home, the less excuse there is for any single piece to be left lagging.
+  //     - inGoal < 4 : disabled (early game — distance varies naturally)
+  //     - inGoal 4   : 12 cells (original behaviour)
+  //     - inGoal 5+  : threshold drops by 2 per piece, floor 5
+  //       (5→10, 6→8, 7→6, 8→5, 9→5)
+  //     This catches "mid-distance" stragglers (8–11 cells) that the original
+  //     >12 cliff missed, which were the persistent back-piece-neglect flag source.
   let extremeStragPenalty = 0;
   if (inGoal >= 4 && !state.isCustomLayout) {
     const piecesOutsideGoal = pieces.filter(p => !goalKeySet.has(coordKey(p)));
+    const stragglerThreshold = inGoal >= 5
+      ? Math.max(5, 12 - (inGoal - 4) * 2)
+      : 12;
     for (const piece of piecesOutsideGoal) {
       const dist = cubeDistance(piece, goalCenter);
-      if (dist > 12) {
-        const excess = dist - 12;
+      if (dist > stragglerThreshold) {
+        const excess = dist - stragglerThreshold;
         extremeStragPenalty -= excess * excess * 10;
       }
     }
