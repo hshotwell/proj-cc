@@ -1782,6 +1782,56 @@ export function scoreCreatesOpponentJump(
 ): number {
   if (move.isJump) return 0;
 
+  // Best chain-jump gain available from `landPos` for `oppPlayer` in the post-
+  // move board. Used after a first hop already landed there. Bounded depth so
+  // a pathological chain doesn't blow up the per-move scoring budget (Flag 8:
+  // the opponent's first hop can lead to a 2- or 3-hop continuation).
+  const chainGainFrom = (
+    landPos: CubeCoord,
+    oppPlayer: PlayerIndex,
+    oppGoalCenter: CubeCoord,
+    visited: Set<string>,
+    depthBudget: number,
+  ): number => {
+    if (depthBudget === 0) return 0;
+    let best = 0;
+    for (const dir of DIRECTIONS) {
+      const over: CubeCoord = {
+        q: landPos.q + dir.q, r: landPos.r + dir.r, s: landPos.s + dir.s,
+      };
+      const overContent = state.board.get(coordKey(over));
+      // The opponent can chain over their own pieces freely; jumping over our
+      // pieces is fine too — only opponent big pieces fully block.
+      if (!overContent || overContent.type !== 'piece') continue;
+      // Skip jumping over the cell our piece just vacated (it's now empty).
+      if (over.q === move.from.q && over.r === move.from.r) continue;
+      // Skip jumping over our just-placed piece — we already counted the
+      // first hop from the caller's loop.
+      if (over.q === move.to.q && over.r === move.to.r) continue;
+
+      const nextLand: CubeCoord = {
+        q: landPos.q + dir.q * 2, r: landPos.r + dir.r * 2, s: landPos.s + dir.s * 2,
+      };
+      const nextKey = coordKey(nextLand);
+      if (visited.has(nextKey)) continue;
+      const nextContent = state.board.get(coordKey(nextLand));
+      const isEmpty =
+        nextContent?.type === 'empty' ||
+        (nextLand.q === move.from.q && nextLand.r === move.from.r);
+      if (!isEmpty) continue;
+
+      const hopGain = cubeDistance(landPos, oppGoalCenter) - cubeDistance(nextLand, oppGoalCenter);
+      if (hopGain <= 0) continue;
+
+      const newVisited = new Set(visited);
+      newVisited.add(nextKey);
+      const continuation = chainGainFrom(nextLand, oppPlayer, oppGoalCenter, newVisited, depthBudget - 1);
+      const total = hopGain + continuation;
+      if (total > best) best = total;
+    }
+    return best;
+  };
+
   let worstOppGain = 0;
   for (const opponent of state.activePlayers) {
     if (opponent === player) continue;
@@ -1805,9 +1855,15 @@ export function scoreCreatesOpponentJump(
         (landPos.q === move.from.q && landPos.r === move.from.r);
       if (!landIsEmptyPostMove) continue;
 
-      const gain = cubeDistance(jumperPos, oppGoalCenter) - cubeDistance(landPos, oppGoalCenter);
-      if (gain < 1) continue;
-      if (gain > worstOppGain) worstOppGain = gain;
+      const firstHopGain = cubeDistance(jumperPos, oppGoalCenter) - cubeDistance(landPos, oppGoalCenter);
+      if (firstHopGain < 1) continue;
+
+      const visited = new Set<string>();
+      visited.add(coordKey(jumperPos));
+      visited.add(coordKey(landPos));
+      const chainExtras = chainGainFrom(landPos, opponent, oppGoalCenter, visited, 2);
+      const total = firstHopGain + chainExtras;
+      if (total > worstOppGain) worstOppGain = total;
     }
   }
 

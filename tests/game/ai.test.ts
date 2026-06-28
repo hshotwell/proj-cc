@@ -763,6 +763,32 @@ describe('findOptimalEndgameSequence', () => {
     }
   });
 
+  // Flag 8 (game review export, Turn 28): P0 stepped (2,-2)→(1,-1), letting
+  // P2 chain (0,0)→(2,-2)→(4,-4) for a 3-cell gain. The single-hop penalty
+  // alone would under-count this; the chain extension is what makes the gift
+  // costly. Verifies scoreCreatesOpponentJump follows the chain past the
+  // first hop.
+  it('detects chain-continuation gain when penalising opponent-jump gifts (Flag 8)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // P0 stepping (2,-2)→(1,-1). P2 has the jumper (0,0) and a chain partner
+    // (3,-3) — once P2 lands at (2,-2) they can hop over (3,-3) to (4,-4).
+    ts.board.set(coordKey(cubeCoord(2, -2)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(0, 0)), { type: 'piece', player: 2 });
+    ts.board.set(coordKey(cubeCoord(3, -3)), { type: 'piece', player: 2 });
+    ts.currentPlayer = 0;
+
+    const giftMove: Move = makeMove(2, -2, 1, -1, false);
+    const penalty = scoreCreatesOpponentJump(ts, giftMove, 0);
+
+    // Pre-fix single-hop penalty: gain 1 → −50. Chain (0,0)→(2,-2)→(4,-4)
+    // brings the total to gain 3 → −150. Assert the chain extension fires.
+    expect(penalty).toBeLessThanOrEqual(-100);
+  });
+
   // Flag 4 (game review export, Turn 26): P0 stepped (3,-1)→(2,0). Pre-move,
   // P2 had a piece at (2,1) but no jump over the (still-empty) (2,0). After
   // the step, P0 occupies (2,0) and P2 can jump (2,1)→(2,-1) over us — a
