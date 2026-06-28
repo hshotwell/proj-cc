@@ -953,15 +953,15 @@ export function scoreBackPiecePriority(
   distances.sort((a, b) => b.d - a.d);
   const maxDist = distances[0].d;
 
-  // Eligibility widened: any piece within 3 cells of maxDist qualifies for
-  // a back-piece bonus. Previous 1.5-cell band gave 1-cell-below-max pieces
-  // only a 0.33 positionFactor, which let front-piece forward steps win over
-  // back-piece forward steps in mid-game positions. With 3-cell band, a piece
-  // 1 cell below max gets ~0.67 factor — competitive with the front-piece
-  // bonuses without dominating early-game development.
+  // Sharp positionFactor drop: backmost pieces (within 0.5 cells of maxDist)
+  // get full weight; 1-cell-behind pieces get a strongly damped factor; pieces
+  // 2+ cells behind get zero. Previous 3-cell band let band pieces with bigger
+  // single-move gains outscore the truly-backmost piece's modest forward step —
+  // exactly the "back piece left behind" pattern flagged repeatedly.
   const fromDist = cubeDistance(move.from, goalCenter);
-  if (fromDist < maxDist - 3) return 0;
-  const positionFactor = 1 - (maxDist - fromDist) / 3;
+  const distBehind = maxDist - fromDist;
+  if (distBehind > 1.5) return 0;
+  const positionFactor = distBehind < 0.5 ? 1.0 : 0.25;
 
   const toDist = cubeDistance(move.to, goalCenter);
   const improvement = fromDist - toDist;
@@ -978,12 +978,11 @@ export function scoreBackPiecePriority(
   const piecesInGoal = countPiecesInGoal(state, player);
   const urgency = piecesInGoal === 0 ? 0.5 : 1 + piecesInGoal * 0.4;
 
-  // Base multiplier raised from 100 to 150 so a back-piece forward step
-  // (improvement 1, positionFactor 0.67, urgency 1.4, isolation 2) lands at
-  // ~280 — competitive with the goal-entry bonus (~200) so the AI prefers
-  // advancing back pieces over an immediate goal entry in mid-game positions
-  // where the goal entry can wait.
-  return Math.min(improvement * 150 * urgency * isolation * positionFactor, 900);
+  // Cap raised 900 → 1500 so the sharper positionFactor differential between
+  // backmost (1.0) and band pieces (0.25) is preserved at the cap — previously
+  // both hit 900 in 4+/10-in-goal positions and the back-piece preference was
+  // lost.
+  return Math.min(improvement * 150 * urgency * isolation * positionFactor, 1500);
 }
 
 /**

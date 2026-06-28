@@ -9,7 +9,7 @@ import {
   deserializeGameState,
 } from '@/game/ai';
 import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence, findEndgameMove } from '@/game/ai/endgame';
-import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource, scoreEphemeralOpponentJump, countOpponentPiecesInJump, scoreCreatesOpponentJump } from '@/game/ai/strategy';
+import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource, scoreEphemeralOpponentJump, countOpponentPiecesInJump, scoreCreatesOpponentJump, scoreBackPiecePriority } from '@/game/ai/strategy';
 import { centroid } from '@/game/coordinates';
 import { getGoalPositionsForState } from '@/game/state';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
@@ -761,6 +761,50 @@ describe('findOptimalEndgameSequence', () => {
       expect(endgame.to.q).toBe(-1);
       expect(endgame.to.r).toBe(4);
     }
+  });
+
+  // Flags 9 & 10 (game review export, Turns 29 & 30): user repeatedly flagged
+  // that the AI advanced a band piece (1 cell behind the backmost) with a
+  // bigger single-move gain while leaving the truly-backmost piece behind.
+  // The fix sharpens scoreBackPiecePriority's positionFactor — backmost gets
+  // 1.0, 1-cell-behind gets 0.25 — and raises the cap so the differential is
+  // preserved at the strategic-bonus stage.
+  it('prioritises the truly-backmost piece over band pieces with bigger jump gains (Flags 9/10)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // Two P2 pieces at maxDist (back), three at maxDist-1 (band).
+    // Plus four in-goal pieces so the bonus's "urgency" multiplier kicks in.
+    const p2Outside: Array<[number, number]> = [
+      [-1, -1], [2, -1],            // back-most (cubeDist 5 to centroid (3,-6))
+      [0, -3], [3, -2], [-1, -2],   // band pieces (dist 4)
+    ];
+    const p2InGoal: Array<[number, number]> = [
+      [1, -5], [3, -5], [3, -7], [4, -8],
+    ];
+    for (const [q, r] of [...p2Outside, ...p2InGoal]) {
+      ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    }
+    ts.currentPlayer = 2;
+
+    // Backmost piece (-1,-1) makes a small forward step.
+    const backStep: Move = makeMove(-1, -1, 0, -2, false);
+    // Band piece (0,-3) makes a 3-cell chain jump (a much bigger single-move gain).
+    const bandJump: Move = {
+      from: cubeCoord(0, -3),
+      to: cubeCoord(2, -5),
+      isJump: true,
+      jumpPath: [cubeCoord(1, -4)],
+    };
+
+    const backScore = scoreBackPiecePriority(ts, backStep, 2);
+    const bandScore = scoreBackPiecePriority(ts, bandJump, 2);
+
+    // The backmost piece's modest forward step must outrank the band piece's
+    // larger jump under back-piece priority.
+    expect(backScore).toBeGreaterThan(bandScore);
   });
 
   // Flag 8 (game review export, Turn 28): P0 stepped (2,-2)→(1,-1), letting
