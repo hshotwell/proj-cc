@@ -1047,6 +1047,17 @@ export function scoreChainEndpointSetup(
   if (goalPositions.length === 0) return 0;
   const goalCenter = centroid(goalPositions);
 
+  // Perpendicular-to-goal unit vector for lateral-drift comparisons.
+  // A teammate that gains centroid distance but drifts further off the
+  // axis-to-goal is not actually being "set up" — they're being pushed
+  // sideways. Compute once per call.
+  const gLen = Math.sqrt(goalCenter.q * goalCenter.q + goalCenter.r * goalCenter.r);
+  const haveAxis = gLen > 0.01;
+  const px = haveAxis ? -goalCenter.r / gLen : 0;
+  const py = haveAxis ?  goalCenter.q / gLen : 0;
+  const lateralDrift = (p: CubeCoord) =>
+    haveAxis ? Math.abs(p.q * px + p.r * py) : 0;
+
   let score = 0;
 
   for (const dir of DIRECTIONS) {
@@ -1070,11 +1081,23 @@ export function scoreChainEndpointSetup(
       neighborContent.player === player &&
       destContent?.type === 'empty'
     ) {
-      // Reward only if the jump would be FORWARD for the teammate.
+      // Reward only if the jump would be FORWARD for the teammate AND not
+      // push them further off the axis-to-goal. A "forward" hop that swings
+      // a teammate from on-axis to off-axis pays the user back later — Flag
+      // 1/2 pattern: chain endpoint (3,-3) used to score +16 here because
+      // (3,-4) → (3,-2) registers as forward, but (3,-2) sits much further
+      // off the goal-axis than (3,-4). The off-axis stop (1,-3) doesn't
+      // unlock any teammate hop, so it lost the comparison.
       const teammateGain = cubeDistance(neighbor, goalCenter) - cubeDistance(dest, goalCenter);
       if (teammateGain >= 1) {
-        // Capped to avoid double-counting very long teammate chains.
-        score += Math.min(teammateGain, 4) * 8;
+        const teammateLateralBefore = lateralDrift(neighbor);
+        const teammateLateralAfter = lateralDrift(dest);
+        // Small tolerance: a tiny lateral wobble is fine, but a clear push
+        // off-axis voids the setup credit.
+        if (teammateLateralAfter <= teammateLateralBefore + 0.25) {
+          // Capped to avoid double-counting very long teammate chains.
+          score += Math.min(teammateGain, 4) * 8;
+        }
       }
     }
 

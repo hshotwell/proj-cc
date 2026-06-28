@@ -9,7 +9,7 @@ import {
   deserializeGameState,
 } from '@/game/ai';
 import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence, findEndgameMove } from '@/game/ai/endgame';
-import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource, scoreEphemeralOpponentJump, countOpponentPiecesInJump, scoreCreatesOpponentJump, scoreBackPiecePriority } from '@/game/ai/strategy';
+import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource, scoreEphemeralOpponentJump, countOpponentPiecesInJump, scoreCreatesOpponentJump, scoreBackPiecePriority, scoreChainEndpointSetup } from '@/game/ai/strategy';
 import { centroid } from '@/game/coordinates';
 import { getGoalPositionsForState } from '@/game/state';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
@@ -761,6 +761,46 @@ describe('findOptimalEndgameSequence', () => {
       expect(endgame.to.q).toBe(-1);
       expect(endgame.to.r).toBe(4);
     }
+  });
+
+  // Flags 1 & 2 (game review export, Turn 6, both players): chain stops with
+  // equal forward gain but different lateral drift. The AI consistently picks
+  // the off-axis stop because scoreChainEndpointSetup rewards an
+  // "on-axis teammate hop" without checking whether the teammate actually
+  // ends up more on-axis. P0 at (3,-7) chains to either (3,-3) or (1,-3) for
+  // the same forward gain; the (3,-3) version triggers a +16 reward because
+  // P0's teammate (3,-4) can hop over (3,-3) "forward" to (3,-2) — but
+  // (3,-2) is further off the goal axis than (3,-4), so the setup isn't
+  // actually useful. The fix discounts the reward when the teammate's lateral
+  // drift gets worse.
+  it('does not reward a teammate hop that pushes the teammate further off the goal axis (Flags 1/2)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // P0's goal centroid sits around (-3, 6). A landing at (3,-3) lines up
+    // teammate (3,-4) → (3,-2) as "forward" in centroid distance, but (3,-2)
+    // sits further off the (-3,6) axis than (3,-4).
+    ts.board.set(coordKey(cubeCoord(3, -4)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(3, -7)), { type: 'piece', player: 0 });
+    ts.currentPlayer = 0;
+
+    // Move: P0 jumps from (3,-7) over (3,-5)/(3,-6) ending at (3,-3). For the
+    // scorer we only need a Move object that lands at (3,-3); chain validity
+    // isn't checked here.
+    const offAxisLanding: Move = {
+      from: cubeCoord(3, -7),
+      to: cubeCoord(3, -3),
+      isJump: true,
+      jumpPath: [cubeCoord(3, -6), cubeCoord(3, -4)],
+    };
+
+    const score = scoreChainEndpointSetup(ts, offAxisLanding, 0);
+    // Pre-fix: +16 (teammate gain 1 × 8, plus a second-dir hit). The fix
+    // suppresses the lateral-worsening setup; no other reward path fires for
+    // this fixture, so the score is now zero.
+    expect(score).toBe(0);
   });
 
   // Flags 9 & 10 (game review export, Turns 29 & 30): user repeatedly flagged
