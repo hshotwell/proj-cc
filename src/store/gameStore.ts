@@ -40,7 +40,7 @@ interface GameStore {
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
   startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
   selectPiece: (coord: CubeCoord) => void;
-  makeMove: (to: CubeCoord, animate?: boolean) => boolean;
+  makeMove: (to: CubeCoord, animate?: boolean, aiDebug?: import('@/types/game').AIDebugInfo) => boolean;
   clearSelection: () => void;
   confirmMove: () => void;
   undoLastMove: () => boolean;
@@ -159,13 +159,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   // Make a move to the specified destination
-  makeMove: (to: CubeCoord, animate?: boolean) => {
+  makeMove: (to: CubeCoord, animate?: boolean, aiDebug?: import('@/types/game').AIDebugInfo) => {
     const { gameState, selectedPiece, validMovesForSelected, pendingConfirmation, stateBeforeMove: existingStateBeforeMove, originalPiecePosition: existingOriginalPosition } = get();
     if (!gameState || !selectedPiece || isGameFullyOver(gameState)) return false;
 
     // Find the move in valid moves
-    const move = validMovesForSelected.find((m) => cubeEquals(m.to, to));
-    if (!move) return false;
+    const baseMove = validMovesForSelected.find((m) => cubeEquals(m.to, to));
+    if (!baseMove) return false;
+    // Attach AI debug info if provided (passed in by useAITurn)
+    const move = aiDebug ? { ...baseMove, debug: aiDebug } : baseMove;
 
     // Store state and original position before first move of this turn
     // If already pending (continuing to move same piece), keep the originals

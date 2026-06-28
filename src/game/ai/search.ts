@@ -1,14 +1,14 @@
 import type { Move, GameState, PlayerIndex, CubeCoord } from '@/types/game';
 import type { AIDifficulty, AIPersonality } from '@/types/ai';
 import { AI_DEPTH, AI_OPENING_DEPTH, AI_ENDGAME_DEPTH, AI_MOVE_LIMIT, AI_TIME_BUDGET_MS } from '@/types/ai';
-import { getAllValidMoves, canJumpOver } from '../moves';
+import { getAllValidMoves, getValidMoves, canJumpOver } from '../moves';
 import { applyMove, getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
 import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreBackPieceChainSetup } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreBackPieceChainSetup, scoreBackPiecePriority, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
@@ -340,15 +340,105 @@ export function computeRegressionPenalty(
   const progressAfter = computePlayerProgress(nextState, player);
   const progressDelta = progressAfter - progressBefore; // Positive = good
 
+  // Hard-veto in-goal backward moves: from a goal cell to a shallower goal
+  // cell. The user has flagged "full back jumps" as the worst kind of error —
+  // they're never justified outside the rare immediate stepping-stone case.
+  // Detected here as a regression that progressDelta misses (centroid-distance
+  // can be equal for both endpoints inside the goal triangle).
+  {
+    const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
+    const fromInGoal = goalKeys.has(coordKey(move.from));
+    const toInGoal = goalKeys.has(coordKey(move.to));
+    if (fromInGoal && toInGoal) {
+      const origin = { q: 0, r: 0, s: 0 };
+      const fromDepth = cubeDistance(move.from, origin);
+      const toDepth = cubeDistance(move.to, origin);
+      if (toDepth < fromDepth) {
+        // Allow only if it enables an immediate stepping-stone chain.
+        const steppingStoneResult = isImmediateSteppingStone(state, move, player, goalCenter);
+        if (steppingStoneResult === 'none') return Infinity;
+      }
+    }
+    // Hard-veto pieces leaving the goal triangle. Flag 3 — `(4,-5) → (3,-4)`
+    // is lateral by cube distance to centroid but the piece exits the goal,
+    // dropping in-goal count by 1. User has flagged this as "BACKSTEP = BAD,
+    // NEVER, NOT WORTH IT".
+    if (fromInGoal && !toInGoal && difficulty === 'hard') return Infinity;
+
+    // Hard-veto in-goal-to-in-goal LATERAL moves on hard when any outside
+    // piece still has a forward move available. The user has flagged these
+    // four rounds running as "total waste of a turn" — the soft penalty
+    // (even at −800) loses to `evaluatePosition` deltas of 1000+ that can
+    // arise from cohesion/alignment shifts in the leaf eval. There is no
+    // legitimate case for shuffling pieces sideways inside the goal while
+    // outside pieces still need to advance.
+    if (fromInGoal && toInGoal && difficulty === 'hard') {
+      const origin = { q: 0, r: 0, s: 0 };
+      const fromDepthGoal = cubeDistance(move.from, origin);
+      const toDepthGoal = cubeDistance(move.to, origin);
+      if (toDepthGoal === fromDepthGoal) {
+        const pieces = getPlayerPieces(state, player);
+        for (const piece of pieces) {
+          if (goalKeys.has(coordKey(piece))) continue;
+          const pieceDist = cubeDistance(piece, goalCenter);
+          for (const dir of DIRECTIONS) {
+            const adj = { q: piece.q + dir.q, r: piece.r + dir.r, s: piece.s + dir.s };
+            const content = state.board.get(coordKey(adj));
+            if (content?.type !== 'empty') continue;
+            const adjDist = cubeDistance(adj, goalCenter);
+            if (pieceDist - adjDist >= 1) return Infinity;
+          }
+        }
+      }
+    }
+  }
+
+  // Cube-distance check supplements progressDelta because computePlayerProgress
+  // clamps to [0,100]; in the opening (progress = 0), a backward step keeps
+  // progress at 0 and slips through the progressDelta < 0 gate. Cube distance
+  // is unclamped and detects every move that physically increases the moving
+  // piece's distance to goal centroid.
+  const fromCubeDist = cubeDistance(move.from, goalCenter);
+  const toCubeDist = cubeDistance(move.to, goalCenter);
+  const cubeBackward = toCubeDist > fromCubeDist + 0.01;
+
+  // Hard-veto: outside-source lateral move when the SAME piece has a forward
+  // move with gain ≥ 2 available (jump OR step). User has flagged this pattern
+  // four rounds running ("this piece had a forward jump available, took a
+  // sidestep instead"). Soft penalties up to −700 lose to evaluatePosition
+  // deltas the minimax tree returns from cohesion/alignment shifts at the
+  // leaves — making this a hard veto removes the move from candidates entirely
+  // so the high leaf eval never matters.
+  if (difficulty === 'hard' && !state.isCustomLayout) {
+    const moveGain = fromCubeDist - toCubeDist;
+    const fromInGoalCheck = (() => {
+      for (const g of goalPositions) {
+        if (g.q === move.from.q && g.r === move.from.r) return true;
+      }
+      return false;
+    })();
+    if (moveGain < 0.5 && !fromInGoalCheck) {
+      const sourceMoves = getValidMoves(state, move.from);
+      for (const sm of sourceMoves) {
+        const smGain = cubeDistance(sm.from, goalCenter) - cubeDistance(sm.to, goalCenter);
+        if (smGain >= 2) return Infinity;
+      }
+    }
+  }
+
   // Hard-veto backward moves per difficulty rules
-  if (progressDelta < 0) {
-    // Easy: absolute ban on all backward moves
-    if (difficulty === 'easy') return Infinity;
+  if (progressDelta < 0 || cubeBackward) {
+    // Easy and HARD: absolute ban on all backward moves. The user has
+    // repeatedly flagged backsteps and back-hops as "terrible move, no reason
+    // ever" — the prior hard-difficulty exception (allow if 2-ply net positive)
+    // produced too many false positives where the "saved" gain never
+    // materialised after opponent responses.
+    if (difficulty === 'easy' || difficulty === 'hard') return Infinity;
 
     // Medium: backward steps (non-jump) are never justified — a step back by
     // 1 cell cannot reliably set up a better chain within the shallow lookahead.
     // Backward jumps (over a piece) may still pass the 2-move net check below.
-    if (difficulty === 'medium' && !move.isJump) return Infinity;
+    if (!move.isJump) return Infinity;
 
     const nextMoves = getAllValidMoves(nextState, player);
     let bestNextDelta = 0;
@@ -361,16 +451,9 @@ export function computeRegressionPenalty(
       }
     }
 
-    if (difficulty === 'hard') {
-      // Hard: only allow if the net gain is more than double the loss
-      if (progressDelta + bestNextDelta <= Math.abs(progressDelta)) {
-        return Infinity;
-      }
-    } else {
-      // Medium: veto backward jumps if 2-move net is not positive
-      if (progressDelta + bestNextDelta <= 0) {
-        return Infinity;
-      }
+    // Medium: veto backward jumps if 2-move net is not positive
+    if (progressDelta + bestNextDelta <= 0) {
+      return Infinity;
     }
   }
 
@@ -694,6 +777,8 @@ function getTopMoves(
   const goalCenterForBonus = centroid(goalPositionsForBonus);
   const goalKeySetForBonus = new Set(goalPositionsForBonus.map(g => coordKey(g)));
   const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
+  const currentFwdJumpsLocal = computeCurrentForwardJumps(state, player, goalCenterForBonus);
+  const bestFwdGainBySrcLocal = computeBestForwardGainBySource(state, player, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
@@ -705,6 +790,14 @@ function getTopMoves(
       ? 1000000
       : regPenalty + repPenalty;
     score -= totalPenalty;
+
+    // Pre-filter must see the same sidestep penalties the root sort sees, or
+    // bad lateral chains slip into the top 8 protected by `selectBestChainStop`.
+    score += scoreFrontPieceSidestepPenalty(state, move, player, goalCenterForBonus, currentFwdJumpsLocal);
+    score += scoreInGoalLateralPenalty(state, move, player, goalCenterForBonus, currentFwdJumpsLocal);
+    score += scoreSamePieceMissedForwardPenalty(state, move, player, goalCenterForBonus, bestFwdGainBySrcLocal);
+    score += scoreLateralReachableByForwardPenalty(state, move, player, goalCenterForBonus);
+    score += scoreShallowGoalEntryPenalty(state, move, player);
 
     // Add strategic scoring (more important in endgame and for medium+ difficulty)
     {
@@ -753,6 +846,36 @@ function getTopMoves(
     // step from a front piece (Flag 4 — the "3-piece setup" pattern).
     score += scoreBackPieceChainSetup(state, move, player);
 
+    // STRICT back-piece priority: a forward move on the back-most outside
+    // piece(s) is unconditionally preferred. Catches "tied back pieces" and
+    // "1-cell gap" cases that hasSignificantStraggler (gap≥2) misses.
+    score += scoreBackPiecePriority(state, move, player);
+
+    // Lateral cohesion: reward outside-piece moves whose destination closes
+    // the gap to the centroid of other outside pieces. Counter-pressure on
+    // forward steps that drift to the board edge and abandon teammates.
+    score += scoreLateralCohesion(state, move, player);
+
+    // Chain extension: quadratic in jump improvement so longer chain stops
+    // beat shorter stops in the same BFS tree.
+    score += scoreChainExtension(state, move, player);
+
+    // Make-room: in-goal piece relocation that vacates a cell adjacent to a
+    // back piece's chain approach. Rewards strategic stepping-stone setup
+    // before the dedicated endgame solver kicks in at inGoal ≥ 6.
+    score += scoreMakeRoomSetup(state, move, player);
+
+    // In-goal regression: heavily penalize in-goal moves to shallower cells.
+    score += scoreInGoalRegression(state, move, player);
+
+    // Chain endpoint setup: for jumps, reward landing positions that enable
+    // a teammate to jump over us forward, or block an opponent's planned jump.
+    score += scoreChainEndpointSetup(state, move, player);
+
+    // Backward-hop penalty: chains that go deeper into goal then come back to
+    // a shallower cell are penalized — the deeper stop was better.
+    score += scoreChainBackwardHop(state, move, player);
+
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
 
@@ -797,7 +920,37 @@ function getTopMoves(
 
   const deduped = selectBestChainStop(scored);
   deduped.sort((a, b) => b.score - a.score);
-  return deduped.slice(0, limit).map((s) => s.move);
+  return keepGoalEntryJumps(deduped, goalKeySetForBonus, limit, state).map((s) => s.move);
+}
+
+/**
+ * Slice to `limit`, but guarantee that every chain jump entering the goal zone
+ * survives. Without this, a piece's longest goal-entering chain can rank just
+ * below the limit and get dropped — the AI then never sees its best move (the
+ * "didn't jump all the way into the end zone" failure mode).
+ *
+ * "Goal-entering" = jump whose source is outside the goal but lands inside it.
+ * Already-in-goal shuffles do not get the guarantee (they get vetoed elsewhere).
+ */
+function keepGoalEntryJumps(
+  sortedByScore: Array<{ move: Move; score: number }>,
+  goalKeys: Set<string>,
+  limit: number,
+  state: GameState,
+): Array<{ move: Move; score: number }> {
+  if (state.isCustomLayout || sortedByScore.length <= limit) return sortedByScore.slice(0, limit);
+  const top = sortedByScore.slice(0, limit);
+  const topSet = new Set(top.map((s) => s.move));
+  const protectedExtras: Array<{ move: Move; score: number }> = [];
+  for (const entry of sortedByScore.slice(limit)) {
+    if (topSet.has(entry.move)) continue;
+    const { move } = entry;
+    if (!move.isJump) continue;
+    if (!goalKeys.has(coordKey(move.to))) continue;
+    if (goalKeys.has(coordKey(move.from))) continue;
+    protectedExtras.push(entry);
+  }
+  return protectedExtras.length === 0 ? top : [...top, ...protectedExtras];
 }
 
 // Minimax with alpha-beta pruning and transposition table for 2-player games
@@ -1118,6 +1271,276 @@ function selectMoveWithVariance(
   return scored[0].move;
 }
 
+/**
+ * Re-runs each scorer individually to build a per-move breakdown for debug
+ * display. Mirrors the scoring order in getTopMoves/getTopMovesFromList.
+ */
+function captureMoveBreakdown(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  difficulty: AIDifficulty,
+  minimaxScore: number
+): import('@/types/game').AIScoreBreakdown {
+  const next = applyMove(state, move);
+  const inEndgame = isEndgame(state, player);
+  const inLateEndgameLocal = isLateEndgame(state, player);
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalCenter = centroid(goalPositions);
+  const goalKeys = new Set(goalPositions.map(g => coordKey(g)));
+  const threats = findOpponentJumpThreats(state, player);
+  const allMovesLocal = getAllValidMoves(state, player);
+  const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(allMovesLocal, goalCenter);
+
+  const evalPos = evaluatePosition(next, player, personality, difficulty);
+  const regPen = computeRegressionPenalty(state, move, player, difficulty);
+  const repPen = computeRepetitionPenalty(state, move, player, difficulty);
+
+  const strategic = computeStrategicScore(state, move, player, personality, threats);
+  const difficultyMultiplier = difficulty === 'easy' ? 0.4 : 1.0;
+  const strategicWeight = inEndgame ? 2.0 : 1.0;
+
+  const landingQ = scoreLandingQuality(state, move, player, personality, difficulty);
+  const lastMove = scoreLastMoveResponse(state, move, player, personality, difficulty);
+  const setupBlock = scoreSetupBlockRisk(state, move, player, personality, difficulty, strategic.steppingStoneValue);
+  const leapfrog = scoreLeapfrogPotential(state, move, player, personality);
+  const residual = scoreResidualTrajectory(state, move, player, goalCenter);
+
+  const endgameMoveScore = inLateEndgameLocal ? scoreEndgameMove(state, move, player, personality) : 0;
+  const endgameLatScore = evaluateEndgameLateral(state, move, player);
+  const currentFwdJumps = computeCurrentForwardJumps(state, player, goalCenter);
+  const bestFwdGainBySrc = computeBestForwardGainBySource(state, player, goalCenter);
+  const chainEnablingRaw = scoreChainEnablingStep(state, move, next, player, goalCenter, currentFwdJumps);
+  // Apply the same risk discount the strategic bonus path uses, so the debug
+  // breakdown shows the value that actually shaped the decision.
+  const chainEnabling = chainEnablingRaw > 0
+    ? chainEnablingRaw * chainEnablingRiskMultiplier(next, move.to, player)
+    : chainEnablingRaw;
+  const frontPieceSidestep = scoreFrontPieceSidestepPenalty(state, move, player, goalCenter, currentFwdJumps);
+  const inGoalLateral = scoreInGoalLateralPenalty(state, move, player, goalCenter, currentFwdJumps);
+  const samePieceMissedForward = scoreSamePieceMissedForwardPenalty(state, move, player, goalCenter, bestFwdGainBySrc);
+  const lateralReachableByForward = scoreLateralReachableByForwardPenalty(state, move, player, goalCenter);
+  const shallowGoalEntry = scoreShallowGoalEntryPenalty(state, move, player);
+
+  let goalEntryBonus = 0;
+  if (move.isJump && !state.isCustomLayout && goalKeys.has(coordKey(move.to))) {
+    const depthBonus = cubeDistance(move.to, { q: 0, r: 0, s: 0 });
+    const chainLenBonus = (move.jumpPath?.length ?? 1) * 60;
+    goalEntryBonus = 100 + depthBonus * 8 + chainLenBonus;
+  }
+
+  let landingHop = 0;
+  if (move.isJump) {
+    let bestNextHopGain = 0;
+    for (const dir of DIRECTIONS) {
+      const over = { q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s };
+      const land = { q: move.to.q + dir.q * 2, r: move.to.r + dir.r * 2, s: move.to.s + dir.s * 2 };
+      if (canJumpOver(next, over, player) && next.board.get(coordKey(land))?.type === 'empty') {
+        const gain = cubeDistance(move.to, goalCenter) - cubeDistance(land, goalCenter);
+        if (gain > bestNextHopGain) bestNextHopGain = gain;
+      }
+    }
+    landingHop = bestNextHopGain * 5;
+  }
+
+  return {
+    evaluatePosition: evalPos,
+    regressionPenalty: regPen === Infinity ? -999999 : -regPen,
+    repetitionPenalty: repPen === Infinity ? -999999 : -repPen,
+    strategicTotal: strategic.total * strategicWeight * difficultyMultiplier,
+    landingQuality: landingQ,
+    lastMoveResponse: lastMove,
+    setupBlockRisk: setupBlock,
+    leapfrogPotential: leapfrog,
+    residualTrajectory: residual,
+    sourceDominance: scoreSourceDominance(state, move, player),
+    backPieceChainSetup: scoreBackPieceChainSetup(state, move, player),
+    backPiecePriority: scoreBackPiecePriority(state, move, player),
+    chainEnablingStep: chainEnabling,
+    frontPieceSidestep,
+    inGoalLateral,
+    samePieceMissedForward,
+    lateralReachableByForward,
+    shallowGoalEntry,
+    lateralCohesion: scoreLateralCohesion(state, move, player),
+    chainExtension: scoreChainExtension(state, move, player),
+    makeRoomSetup: scoreMakeRoomSetup(state, move, player),
+    inGoalRegression: scoreInGoalRegression(state, move, player),
+    chainEndpointSetup: scoreChainEndpointSetup(state, move, player),
+    chainBackwardHop: scoreChainBackwardHop(state, move, player),
+    goalEntryBonus,
+    endgameLateral: endgameLatScore,
+    endgameMove: endgameMoveScore,
+    landingHopQuality: landingHop,
+    bigJumpOpportunity: computeBigJumpOpportunityBonus(move, goalCenter, hasBigOpportunity),
+    minimaxScore,
+  };
+}
+
+function buildDebugInfo(
+  state: GameState,
+  player: PlayerIndex,
+  bestScoredMoves: Array<{ move: Move; score: number }>,
+  pickedMove: Move,
+  difficulty: AIDifficulty,
+  personality: AIPersonality,
+  depthReached: number
+): import('@/types/game').AIDebugInfo {
+  const topCandidates = bestScoredMoves.slice(0, 8);
+  return {
+    difficulty,
+    personality,
+    depthReached,
+    candidateCount: bestScoredMoves.length,
+    candidates: topCandidates.map(s => ({
+      from: s.move.from,
+      to: s.move.to,
+      isJump: s.move.isJump,
+      jumpPath: s.move.jumpPath,
+      finalScore: s.score,
+      breakdown: captureMoveBreakdown(state, s.move, player, personality, difficulty, s.score),
+      picked: s.move === pickedMove,
+    })),
+  };
+}
+
+function buildMinimalDebugInfo(
+  move: Move,
+  difficulty: AIDifficulty,
+  personality: AIPersonality,
+  note: string
+): import('@/types/game').AIDebugInfo {
+  const zeroBreakdown: import('@/types/game').AIScoreBreakdown = {
+    evaluatePosition: 0, regressionPenalty: 0, repetitionPenalty: 0,
+    strategicTotal: 0, landingQuality: 0, lastMoveResponse: 0,
+    setupBlockRisk: 0, leapfrogPotential: 0, residualTrajectory: 0,
+    sourceDominance: 0, backPieceChainSetup: 0, backPiecePriority: 0, chainEnablingStep: 0, frontPieceSidestep: 0, inGoalLateral: 0, samePieceMissedForward: 0, lateralReachableByForward: 0, shallowGoalEntry: 0,
+    lateralCohesion: 0, chainExtension: 0, makeRoomSetup: 0,
+    inGoalRegression: 0, chainEndpointSetup: 0, chainBackwardHop: 0,
+    goalEntryBonus: 0, endgameLateral: 0, endgameMove: 0,
+    landingHopQuality: 0, bigJumpOpportunity: 0, minimaxScore: 0,
+  };
+  return {
+    difficulty,
+    personality,
+    depthReached: 0,
+    candidateCount: 1,
+    candidates: [{
+      from: move.from, to: move.to, isJump: move.isJump,
+      jumpPath: move.jumpPath, finalScore: 0,
+      breakdown: zeroBreakdown, picked: true,
+    }],
+    note,
+  };
+}
+
+interface StrategicMoveContext {
+  inEndgame: boolean;
+  inLateEndgame: boolean;
+  goalCenter: CubeCoord;
+  goalKeySet: Set<string>;
+  hasBigOpportunity: boolean;
+  threats: ReturnType<typeof findOpponentJumpThreats> | undefined;
+  currentForwardJumps: Array<{ sourceDist: number; gain: number }>;
+  bestForwardGainBySource: Map<string, number>;
+}
+
+/**
+ * Strategic-bonus portion of the 1-ply pre-filter score.
+ *
+ * Excludes `evaluatePosition` (minimax already computes that at leaves) and
+ * penalties (added separately). Mirrors the inline scoring in getTopMoves /
+ * getTopMovesFromList so the SAME signals that pick candidates also rank
+ * them at the root sort — otherwise minimax silently discards every
+ * move-level signal (back-piece priority, goal-entry bonus, chain extension,
+ * etc.) and only positional evaluation drives the final pick.
+ */
+function computeStrategicMoveBonus(
+  state: GameState,
+  move: Move,
+  next: GameState,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  difficulty: AIDifficulty,
+  ctx: StrategicMoveContext,
+): number {
+  let bonus = 0;
+
+  const strategic = computeStrategicScore(state, move, player, personality, ctx.threats);
+  const difficultyMultiplier = difficulty === 'easy' ? 0.4 : 1.0;
+  const strategicWeight = ctx.inEndgame ? 2.0 : 1.0;
+  bonus += strategic.total * strategicWeight * difficultyMultiplier;
+  bonus += scoreLandingQuality(state, move, player, personality, difficulty);
+  bonus += scoreLastMoveResponse(state, move, player, personality, difficulty);
+  bonus += scoreSetupBlockRisk(state, move, player, personality, difficulty, strategic.steppingStoneValue);
+  bonus += scoreLeapfrogPotential(state, move, player, personality);
+  bonus += scoreResidualTrajectory(state, move, player, ctx.goalCenter);
+
+  if (ctx.inLateEndgame) {
+    bonus += scoreEndgameMove(state, move, player, personality);
+  }
+  bonus += evaluateEndgameLateral(state, move, player);
+
+  if (move.isJump && !state.isCustomLayout && ctx.goalKeySet.has(coordKey(move.to))) {
+    const depthBonus = cubeDistance(move.to, { q: 0, r: 0, s: 0 });
+    const chainLenBonus = (move.jumpPath?.length ?? 1) * 60;
+    bonus += 100 + depthBonus * 8 + chainLenBonus;
+  }
+
+  bonus += scoreSourceDominance(state, move, player);
+  {
+    const chainEnablingRaw = scoreChainEnablingStep(state, move, next, player, ctx.goalCenter, ctx.currentForwardJumps);
+    // Risk discount: if our setup piece becomes a stepping stone for an
+    // opponent's 1-ply jump, the chain we enabled is liable to be undone.
+    bonus += chainEnablingRaw > 0
+      ? chainEnablingRaw * chainEnablingRiskMultiplier(next, move.to, player)
+      : chainEnablingRaw;
+  }
+  bonus += scoreFrontPieceSidestepPenalty(state, move, player, ctx.goalCenter, ctx.currentForwardJumps);
+  bonus += scoreInGoalLateralPenalty(state, move, player, ctx.goalCenter, ctx.currentForwardJumps);
+  bonus += scoreSamePieceMissedForwardPenalty(state, move, player, ctx.goalCenter, ctx.bestForwardGainBySource);
+  bonus += scoreLateralReachableByForwardPenalty(state, move, player, ctx.goalCenter);
+  bonus += scoreShallowGoalEntryPenalty(state, move, player);
+  bonus += scoreBackPieceChainSetup(state, move, player);
+  bonus += scoreBackPiecePriority(state, move, player);
+  bonus += scoreLateralCohesion(state, move, player);
+  bonus += scoreChainExtension(state, move, player);
+  bonus += scoreMakeRoomSetup(state, move, player);
+  bonus += scoreInGoalRegression(state, move, player);
+  bonus += scoreChainEndpointSetup(state, move, player);
+  bonus += scoreChainBackwardHop(state, move, player);
+  bonus += computeBigJumpOpportunityBonus(move, ctx.goalCenter, ctx.hasBigOpportunity);
+
+  if (move.isJump) {
+    let bestNextHopGain = 0;
+    for (const dir of DIRECTIONS) {
+      const over = { q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s };
+      const land = { q: move.to.q + dir.q * 2, r: move.to.r + dir.r * 2, s: move.to.s + dir.s * 2 };
+      if (canJumpOver(next, over, player) && next.board.get(coordKey(land))?.type === 'empty') {
+        const gain = cubeDistance(move.to, ctx.goalCenter) - cubeDistance(land, ctx.goalCenter);
+        if (gain > bestNextHopGain) bestNextHopGain = gain;
+      }
+    }
+    bonus += bestNextHopGain * 5;
+  }
+
+  if (!move.isJump && !state.isCustomLayout) {
+    let bestStepHop = 0;
+    for (const dir of DIRECTIONS) {
+      const over = { q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s };
+      const land = { q: move.to.q + dir.q * 2, r: move.to.r + dir.r * 2, s: move.to.s + dir.s * 2 };
+      if (canJumpOver(next, over, player) && next.board.get(coordKey(land))?.type === 'empty') {
+        const gain = cubeDistance(move.to, ctx.goalCenter) - cubeDistance(land, ctx.goalCenter);
+        if (gain > bestStepHop) bestStepHop = gain;
+      }
+    }
+    bonus += bestStepHop * 8;
+  }
+
+  return bonus;
+}
+
 export function findBestMove(
   state: GameState,
   difficulty: AIDifficulty,
@@ -1145,7 +1568,10 @@ export function findBestMove(
         const s = evaluatePosition(applyMove(state, m), player, personality, difficulty);
         if (s > bestAltScore) bestAltScore = s;
       }
-      if (bestAltScore <= bookScore + 300) return bookMove;
+      if (bestAltScore <= bookScore + 300) {
+        bookMove.debug = buildMinimalDebugInfo(bookMove, difficulty, personality, 'opening book');
+        return bookMove;
+      }
       // A significantly better move exists — fall through to normal search
     }
   }
@@ -1156,7 +1582,10 @@ export function findBestMove(
     const optimalMove = findOptimalEndgameSequence(state, player);
     if (optimalMove) {
       const { repeats } = wouldRepeatState(state, optimalMove);
-      if (!repeats) return optimalMove;
+      if (!repeats) {
+        optimalMove.debug = buildMinimalDebugInfo(optimalMove, difficulty, personality, 'optimal endgame BFS');
+        return optimalMove;
+      }
     }
   }
 
@@ -1196,6 +1625,7 @@ export function findBestMove(
         // (which has its own anti-cycle penalties) handles escape.
         const { repeats } = wouldRepeatState(state, endgameMove);
         if (!repeats) {
+          endgameMove.debug = buildMinimalDebugInfo(endgameMove, difficulty, personality, 'late-endgame solver');
           return endgameMove;
         }
       }
@@ -1206,7 +1636,11 @@ export function findBestMove(
   // For custom layouts, use the simple progress-maximizing approach
   // This is more reliable than layered penalties for arbitrary board shapes
   if (state.isCustomLayout) {
-    return findBestMoveForCustomLayout(state, player);
+    const customMove = findBestMoveForCustomLayout(state, player);
+    if (customMove) {
+      customMove.debug = buildMinimalDebugInfo(customMove, difficulty, personality, 'custom layout');
+    }
+    return customMove;
   }
 
   // Standard layouts use iterative deepening within a time budget.
@@ -1306,13 +1740,44 @@ export function findBestMove(
     movePenalties.set(move, penalty);
   }
 
+  // Pre-compute per-move strategic bonuses (depth-independent — they only
+  // depend on root state + move, so we compute once and reuse every depth).
+  // Minimax leaves use evaluatePosition only; without re-adding these signals
+  // at the root sort, back-piece priority, goal-entry bonus, chain extension,
+  // setup-block risk, etc. silently drop out of the final ranking.
+  const moveStrategicBonuses = new Map<Move, number>();
+  {
+    const goalPositionsRoot = getGoalPositionsForState(state, player);
+    const goalCenterRoot = centroid(goalPositionsRoot);
+    const goalKeySetRoot = new Set(goalPositionsRoot.map(g => coordKey(g)));
+    const hasBigOpportunityRoot = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterRoot);
+    const threatsRoot = (difficulty !== 'easy' && (personality === 'defensive' || personality === 'generalist'))
+      ? findOpponentJumpThreats(state, player)
+      : undefined;
+    const ctx: StrategicMoveContext = {
+      inEndgame: isEndgame(state, player),
+      inLateEndgame: isLateEndgame(state, player),
+      goalCenter: goalCenterRoot,
+      goalKeySet: goalKeySetRoot,
+      hasBigOpportunity: hasBigOpportunityRoot,
+      threats: threatsRoot,
+      currentForwardJumps: computeCurrentForwardJumps(state, player, goalCenterRoot),
+      bestForwardGainBySource: computeBestForwardGainBySource(state, player, goalCenterRoot),
+    };
+    for (const move of moves) {
+      const next = applyMove(state, move);
+      moveStrategicBonuses.set(move, computeStrategicMoveBonus(state, move, next, player, personality, difficulty, ctx));
+    }
+  }
+
   // Iterative deepening: search depth 1, then 2, ... up to maxDepth.
   // Each iteration overwrites the previous result, so even if we abort
   // mid-iteration we still have the previous depth's best move.
   let bestScoredMoves: Array<{ move: Move; score: number }> = moves.map(m => ({
     move: m,
-    score: -(movePenalties.get(m) ?? 0),
+    score: -(movePenalties.get(m) ?? 0) + (moveStrategicBonuses.get(m) ?? 0),
   }));
+  let depthReached = 0;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     // Check time budget before starting a new iteration
@@ -1329,6 +1794,7 @@ export function findBestMove(
       }
 
       const penalty = movePenalties.get(move) ?? 0;
+      const strategicBonus = moveStrategicBonuses.get(move) ?? 0;
       const next = applyMove(state, move);
       let score: number;
 
@@ -1339,12 +1805,14 @@ export function findBestMove(
       }
 
       score -= penalty;
+      score += strategicBonus;
       iterationScores.push({ move, score });
     }
 
     // Only commit this iteration's results if it completed fully
     if (!aborted && iterationScores.length === moves.length) {
       bestScoredMoves = iterationScores;
+      depthReached = depth;
       // Reorder moves by score so the next depth searches the best-looking move
       // first — significantly improves alpha-beta pruning at deeper depths.
       const sortedThisDepth = [...iterationScores].sort((a, b) => b.score - a.score);
@@ -1356,7 +1824,9 @@ export function findBestMove(
 
   bestScoredMoves.sort((a, b) => b.score - a.score);
 
-  return selectMoveWithVariance(bestScoredMoves, difficulty);
+  const pickedMove = selectMoveWithVariance(bestScoredMoves, difficulty);
+  pickedMove.debug = buildDebugInfo(state, player, bestScoredMoves, pickedMove, difficulty, personality, depthReached);
+  return pickedMove;
 }
 
 /**
@@ -1381,6 +1851,8 @@ function getTopMovesFromList(
   const goalCenterForBonus = centroid(goalPositionsForBonus);
   const goalKeySetForBonus = new Set(goalPositionsForBonus.map(g => coordKey(g)));
   const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
+  const currentFwdJumpsLocal = computeCurrentForwardJumps(state, player, goalCenterForBonus);
+  const bestFwdGainBySrcLocal = computeBestForwardGainBySource(state, player, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
@@ -1395,6 +1867,14 @@ function getTopMovesFromList(
       : regPenalty + repPenalty;
 
     score -= totalPenalty;
+
+    // Pre-filter must see the same sidestep penalties the root sort sees, or
+    // bad lateral chains slip into the top 8 protected by `selectBestChainStop`.
+    score += scoreFrontPieceSidestepPenalty(state, move, player, goalCenterForBonus, currentFwdJumpsLocal);
+    score += scoreInGoalLateralPenalty(state, move, player, goalCenterForBonus, currentFwdJumpsLocal);
+    score += scoreSamePieceMissedForwardPenalty(state, move, player, goalCenterForBonus, bestFwdGainBySrcLocal);
+    score += scoreLateralReachableByForwardPenalty(state, move, player, goalCenterForBonus);
+    score += scoreShallowGoalEntryPenalty(state, move, player);
 
     // Add strategic scoring
     {
@@ -1430,6 +1910,13 @@ function getTopMovesFromList(
     // Source-dominance bonus (match getTopMoves)
     score += scoreSourceDominance(state, move, player);
     score += scoreBackPieceChainSetup(state, move, player);
+    score += scoreBackPiecePriority(state, move, player);
+    score += scoreLateralCohesion(state, move, player);
+    score += scoreChainExtension(state, move, player);
+    score += scoreMakeRoomSetup(state, move, player);
+    score += scoreInGoalRegression(state, move, player);
+    score += scoreChainEndpointSetup(state, move, player);
+    score += scoreChainBackwardHop(state, move, player);
 
     // Prioritize large chain jumps when available (transition timing heuristic)
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
@@ -1474,6 +1961,6 @@ function getTopMovesFromList(
 
   const deduped = selectBestChainStop(scored);
   deduped.sort((a, b) => b.score - a.score);
-  return deduped.slice(0, limit).map((s) => s.move);
+  return keepGoalEntryJumps(deduped, goalKeySetForBonus, limit, state).map((s) => s.move);
 }
 

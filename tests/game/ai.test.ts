@@ -8,8 +8,10 @@ import {
   serializeGameState,
   deserializeGameState,
 } from '@/game/ai';
-import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence } from '@/game/ai/endgame';
-import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential } from '@/game/ai/strategy';
+import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence, findEndgameMove } from '@/game/ai/endgame';
+import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource } from '@/game/ai/strategy';
+import { centroid } from '@/game/coordinates';
+import { getGoalPositionsForState } from '@/game/state';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
 
 // Helper: create a simple move
@@ -611,6 +613,225 @@ describe('findOptimalEndgameSequence', () => {
     // All 10 goal positions are empty — emptyGoals.length > 4 guard fires before BFS even starts
     const result = findOptimalEndgameSequence(ts, 0);
     expect(result).toBeNull();
+  });
+
+  // Flag 7 (game review export, Turn 49): P2 has 7/10 in goal with three pieces
+  // outside on the q axis. A chain (2,-4) → (4,-4) → (4,-6) → (4,-8) is available.
+  // BFS used to return the shallower stop at (4,-6); the deeper (4,-8) leaves
+  // the goal corner unreachable for any other piece, so it must be filled now.
+  // Sorting candidates by goal-depth + chain length biases the BFS to (4,-8).
+  it('prefers the deepest goal-entry stop when multiple chain stops solve in min moves (Flag 7)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    // Clear all existing pieces (the default 2-player setup has P0 in P2's goal
+    // area, which collides with the test fixture).
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    const p2Positions: Array<[number, number]> = [
+      [1, -4], [2, -4], [3, -4],      // 3 outside the goal triangle
+      [1, -5], [2, -5], [3, -5], [4, -5],
+      [3, -6], [3, -7], [4, -7],       // 7 in goal
+    ];
+    for (const [q, r] of p2Positions) {
+      ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    }
+    ts.currentPlayer = 2;
+
+    // findOptimalEndgameSequence may return null when the min-move count exceeds
+    // its BFS budget (≥ 5 moves with 30+ branching factor). The fallback that
+    // actually runs in this Flag 7 position is findEndgameMove (called from
+    // findBestMove after the optimal-sequence path returns null). We test BOTH —
+    // whichever fires, the deepest goal entry should win.
+    const optimal = findOptimalEndgameSequence(ts, 2);
+    if (optimal) {
+      expect(optimal.to.q).toBe(4);
+      expect(optimal.to.r).toBe(-8);
+    }
+    const endgame = findEndgameMove(ts, 2);
+    expect(endgame).not.toBeNull();
+    if (endgame) {
+      expect(endgame.to.q).toBe(4);
+      expect(endgame.to.r).toBe(-8);
+    }
+  });
+
+  // Flag 6 (game review export, Turn 48): P2 has 7/10 in goal. The back piece
+  // (3,-3) can step forward to (3,-4) (gains 1 cell centroid distance) or
+  // lateral to (4,-4) (gains 0 cells but unlocks a chain (4,-4)→(4,-6)→(4,-8)
+  // straight into the corner of the goal). The lateral wins because next turn
+  // it puts a piece directly into the deepest empty goal slot, while the
+  // straight-forward step doesn't enable any goal-entry chain.
+  it('prefers the lateral back-piece step that opens a goal-entry chain (Flag 6)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    const p2Positions: Array<[number, number]> = [
+      [1, -4], [2, -4], [3, -3],       // 3 outside: (3,-3) is the back piece
+      [1, -5], [2, -5], [3, -5], [4, -5],
+      [3, -6], [3, -7], [4, -7],        // 7 in goal
+    ];
+    for (const [q, r] of p2Positions) {
+      ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    }
+    ts.currentPlayer = 2;
+
+    const endgame = findEndgameMove(ts, 2);
+    expect(endgame).not.toBeNull();
+    if (endgame) {
+      // Back piece (3,-3) should step laterally to (4,-4) — not forward to (3,-4) —
+      // because (4,-4) unlocks the chain into the deepest empty goal cell (4,-8).
+      expect(endgame.from.q).toBe(3);
+      expect(endgame.from.r).toBe(-3);
+      expect(endgame.to.q).toBe(4);
+      expect(endgame.to.r).toBe(-4);
+    }
+  });
+
+  // Flag 2 (game review export, Turn 39): P0 has 6/10 in goal. Two back pieces
+  // (1,2) and (1,3) can both step to (0,3) with the same centroid improvement.
+  // The (1,3)→(0,3) version is better because it lets (1,2) leapfrog over the
+  // new piece to (-1,4) for a 2-cell gain next turn, whereas (1,2)→(0,3) only
+  // lets (1,3) leapfrog to (-1,3) for a 1-cell gain.
+  it('prefers the same-destination step whose source enables a bigger leapfrog (Flag 2)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    const p0Positions: Array<[number, number]> = [
+      [-3, 3], [1, 2], [1, 3], [-3, 4],         // 4 outside; (1,2) and (1,3) are tied back
+      [-1, 5], [-4, 5], [-4, 6], [-2, 6],
+      [-3, 7], [-4, 8],                          // 6 in goal
+    ];
+    for (const [q, r] of p0Positions) {
+      ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    }
+    ts.currentPlayer = 0;
+
+    const endgame = findEndgameMove(ts, 0);
+    expect(endgame).not.toBeNull();
+    if (endgame) {
+      // The source should be (1,3), letting the (1,2) piece leapfrog further next turn.
+      expect(endgame.from.q).toBe(1);
+      expect(endgame.from.r).toBe(3);
+      expect(endgame.to.q).toBe(0);
+      expect(endgame.to.r).toBe(3);
+    }
+  });
+
+  // Flag 3 (game review export, Turn 42): P0 has 7/10 in goal. Two back pieces
+  // (0,3) and (-1,3) can both step to (-1,4) — but (-1,3)→(-1,4) lets the
+  // remaining piece (0,3) leapfrog over to (-2,5), an EMPTY GOAL CELL.
+  // (0,3)→(-1,4) blocks (-1,3) because the would-be landing (-1,5) is occupied.
+  it('prefers the same-destination step whose leapfrog lands in a goal cell (Flag 3)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    const p0Positions: Array<[number, number]> = [
+      [0, 3], [-1, 3], [-3, 4],                  // 3 outside; (0,3) and (-1,3) tied back
+      [-1, 5], [-3, 5], [-4, 5],
+      [-4, 6], [-2, 6], [-3, 7], [-4, 8],        // 7 in goal
+    ];
+    for (const [q, r] of p0Positions) {
+      ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    }
+    ts.currentPlayer = 0;
+
+    // findOptimalEndgameSequence may or may not succeed; whichever path runs,
+    // the chosen first move should make (0,3)→leapfrog→(-2,5) possible next turn,
+    // which requires moving (-1,3), not (0,3).
+    const endgame = findEndgameMove(ts, 0);
+    expect(endgame).not.toBeNull();
+    if (endgame) {
+      expect(endgame.from.q).toBe(-1);
+      expect(endgame.from.r).toBe(3);
+      expect(endgame.to.q).toBe(-1);
+      expect(endgame.to.r).toBe(4);
+    }
+  });
+
+  // Flag 1 (game review export, Turn 31): P2 has 4/10 in goal. Piece at (0,1)
+  // can either step forward to (0,0) (gain 1) or jump over the P0 piece at (1,0)
+  // landing at (2,-1) (gain 2). The step was taken; the penalty should make the
+  // step strictly worse than the jump from the same source.
+  it('penalises a forward step when the same piece has a bigger forward jump available (Flag 1)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // Minimal fixture: P2 piece at (0,1), P0 piece at (1,0) as the jump-over target.
+    ts.board.set(coordKey(cubeCoord(0, 1)), { type: 'piece', player: 2 });
+    ts.board.set(coordKey(cubeCoord(1, 0)), { type: 'piece', player: 0 });
+    ts.currentPlayer = 2;
+
+    const goalCenter = centroid(getGoalPositionsForState(ts, 2));
+    const bestFwd = computeBestForwardGainBySource(ts, 2, goalCenter);
+
+    const stepMove: Move = makeMove(0, 1, 0, 0, false);
+    const jumpMove: Move = {
+      from: cubeCoord(0, 1),
+      to: cubeCoord(2, -1),
+      isJump: true,
+      jumpPath: [cubeCoord(1, 0)],
+    };
+
+    const stepPenalty = scoreSamePieceMissedForwardPenalty(ts, stepMove, 2, goalCenter, bestFwd);
+    const jumpPenalty = scoreSamePieceMissedForwardPenalty(ts, jumpMove, 2, goalCenter, bestFwd);
+
+    // The jump matches the best forward gain → no penalty.
+    expect(jumpPenalty).toBe(0);
+    // The step is forward (gain 1) but misses a gain-2 jump → meaningful penalty.
+    expect(stepPenalty).toBeLessThan(-100);
+    // And it must be strictly worse than the jump.
+    expect(stepPenalty).toBeLessThan(jumpPenalty);
+  });
+
+  // Flag 4 (game review export, Turn 40): P0 has 6/10 in goal. The back piece
+  // (-3,3) can step forward in two q directions: (-3,4) (purely forward, no
+  // follow-up jump) or (-4,4) (lateral that opens a jump (-4,4) over (-4,5)
+  // into the empty goal cell (-4,6) next turn). The lateral wins.
+  it('prefers the lateral back-piece step that opens a goal-entry chain (Flag 4)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') {
+        ts.board.set(key, { type: 'empty' });
+      }
+    }
+    const p0Positions: Array<[number, number]> = [
+      [-2, 3], [-1, 4], [-2, 4], [-3, 3],     // 4 outside the goal triangle
+      [-1, 5], [-2, 5], [-3, 5], [-4, 5],
+      [-2, 6], [-3, 6],                         // 6 in goal
+    ];
+    for (const [q, r] of p0Positions) {
+      ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    }
+    ts.currentPlayer = 0;
+
+    const endgame = findEndgameMove(ts, 0);
+    expect(endgame).not.toBeNull();
+    if (endgame) {
+      // Back piece (-3,3) should step to (-4,4), not (-3,4), because (-4,4)
+      // unlocks a jump into the empty goal cell (-4,6) next turn.
+      expect(endgame.from.q).toBe(-3);
+      expect(endgame.from.r).toBe(3);
+      expect(endgame.to.q).toBe(-4);
+      expect(endgame.to.r).toBe(4);
+    }
   });
 });
 

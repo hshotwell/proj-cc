@@ -14,7 +14,7 @@ import type { AIPersonality } from '@/types/ai';
 import { coordKey, cubeEquals, cubeDistance, centroid } from '../coordinates';
 import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
-import { getAllValidMoves, canJumpOver } from '../moves';
+import { getAllValidMoves, getValidMoves, canJumpOver } from '../moves';
 import { applyMove } from '../state';
 import { DIRECTIONS } from '../constants';
 import { getCachedEndgameInsights } from '../learning';
@@ -197,6 +197,17 @@ function couldEnterGoalIfEmpty(
   const tempState: GameState = { ...state, board: tempBoard };
 
   for (const piece of piecesOutside) {
+    // Single-step entry: outside piece adjacent to the vacated goal cell.
+    // Previously this only checked chains, which missed cases like an
+    // outside piece sitting one cell away from the freed goal slot.
+    for (const dir of DIRECTIONS) {
+      if (
+        piece.q + dir.q === goalPos.q &&
+        piece.r + dir.r === goalPos.r
+      ) {
+        return piece;
+      }
+    }
     if (canReachGoalViaChain(tempState, piece, goalPos, player)) {
       return piece;
     }
@@ -363,6 +374,121 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
   // If no pieces outside goal AND no empty goals, game is won - any move is fine
   if (piecesOutside.length === 0 && emptyGoals.length === 0) {
     return moves[0];
+  }
+
+  // PRIORITY 0: Back-piece preference. When 2+ pieces are outside goal and the
+  // back-most piece(s) are meaningfully behind the rest, advance one of them
+  // BEFORE running the in-goal shuffle / stepping-stone priorities. This is the
+  // fundamental "back piece first" principle that the lower priorities don't
+  // naturally capture.
+  //
+  // Tie handling: ALL pieces at the maximum outside-piece distance are treated
+  // as back pieces; the gap is measured against the closest piece below max.
+  // This catches scenarios with two symmetric back pieces.
+  //
+  // Strictness: no "give way to a big chain elsewhere" safety. The user's
+  // principle is unconditional — a forward move on the back piece always wins
+  // over any move from a non-back piece. Big chains from front pieces remain
+  // available next turn; back-piece neglect compounds over many turns.
+  if (piecesOutside.length >= 2) {
+    const pieceDists = piecesOutside.map(p => ({ p, d: cubeDistance(p, goalCenter) }));
+    pieceDists.sort((a, b) => b.d - a.d);
+    const maxDist = pieceDists[0].d;
+    const firstBelow = pieceDists.find(pd => pd.d < maxDist);
+    const nextBestDist = firstBelow ? firstBelow.d : -Infinity;
+
+    if (maxDist - nextBestDist >= 1) {
+      const backPieces = pieceDists.filter(pd => pd.d === maxDist).map(pd => pd.p);
+      const backForwards = moves
+        .filter(m => backPieces.some(bp => cubeEquals(m.from, bp)))
+        .map(m => {
+          const isEntry = isDirectGoalEntry(state, m, player);
+          const nextState = applyMove(state, m);
+
+          // (a) Self-jump lookahead: from m.to, what is the deepest goal cell
+          // the moved piece can directly jump into next turn? Catches the
+          // "lateral step that opens a chain into the corner" pattern (Flag 6).
+          let nextTurnGoalEntryDepth = 0;
+          if (!isEntry) {
+            for (const nm of getValidMoves(nextState, m.to)) {
+              if (nm.isJump && goalKeys.has(coordKey(nm.to))) {
+                const d = getGoalPositionDepth(nm.to);
+                if (d > nextTurnGoalEntryDepth) nextTurnGoalEntryDepth = d;
+              }
+            }
+          }
+
+          // (b) Leapfrog lookahead: can a DIFFERENT friendly piece adjacent to
+          // m.to now jump OVER m.to to an empty cell? When yes, our move
+          // converted itself into a stepping stone. Catches the "same-destination
+          // tiebreak — pick the source the other piece can jump over" pattern
+          // (Flag 2) and the goal-entry leapfrog (Flag 3, lands in goal).
+          let leapfrogGain = 0;
+          let leapfrogIntoGoal = false;
+          for (const dir of DIRECTIONS) {
+            const neighbor: CubeCoord = {
+              q: m.to.q + dir.q, r: m.to.r + dir.r, s: m.to.s + dir.s,
+            };
+            const nc = nextState.board.get(coordKey(neighbor));
+            if (!nc || nc.type !== 'piece' || nc.player !== player) continue;
+            const land: CubeCoord = {
+              q: m.to.q - dir.q, r: m.to.r - dir.r, s: m.to.s - dir.s,
+            };
+            const lc = nextState.board.get(coordKey(land));
+            if (!lc || lc.type !== 'empty') continue;
+            const gain = cubeDistance(neighbor, goalCenter) - cubeDistance(land, goalCenter);
+            if (gain <= 0) continue;
+            if (gain > leapfrogGain) leapfrogGain = gain;
+            if (goalKeys.has(coordKey(land))) leapfrogIntoGoal = true;
+          }
+
+          return {
+            move: m,
+            improvement: cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter),
+            isEntry,
+            entryDepth: isEntry ? getGoalPositionDepth(m.to) : 0,
+            nextTurnGoalEntryDepth,
+            leapfrogGain,
+            leapfrogIntoGoal,
+            jumpLen: m.jumpPath?.length || 0,
+          };
+        })
+        // Allow: direct goal entries, forward steps/jumps, AND lateral moves
+        // that open a chain into goal next turn. Goal entries always pass even
+        // when the centroid metric shows zero improvement (Flag 7: chain into
+        // the corner). Lateral setup moves pass when the destination unlocks
+        // a chain into goal (Flag 6: step to a stepping-stone cell).
+        .filter(s => s.isEntry || s.improvement >= 1 || s.nextTurnGoalEntryDepth > 0);
+      backForwards.sort((a, b) => {
+        if (a.isEntry !== b.isEntry) return a.isEntry ? -1 : 1;
+        // Among goal entries, the DEEPEST cell wins. Corner goal cells become
+        // unreachable for other pieces once the chain pieces are spent, so they
+        // must be claimed by the chain that can reach them now.
+        if (a.isEntry && b.isEntry && a.entryDepth !== b.entryDepth) {
+          return b.entryDepth - a.entryDepth;
+        }
+        // Among non-entry moves, prefer the one whose destination unlocks the
+        // deepest next-turn goal entry. A "0-improvement" step into a chain
+        // launchpad beats a "+1-improvement" step that dead-ends.
+        if (a.nextTurnGoalEntryDepth !== b.nextTurnGoalEntryDepth) {
+          return b.nextTurnGoalEntryDepth - a.nextTurnGoalEntryDepth;
+        }
+        // Leapfrog landing INSIDE the goal is the strongest tiebreak — Flag 3:
+        // moving (-1,3) to (-1,4) lets (0,3) leapfrog into the empty goal cell
+        // (-2,5), while moving (0,3) to the same spot does not.
+        if (a.leapfrogIntoGoal !== b.leapfrogIntoGoal) return a.leapfrogIntoGoal ? -1 : 1;
+        // Otherwise, the bigger leapfrog gain wins — Flag 2: among same-
+        // destination steps, prefer the source whose neighbor can leapfrog
+        // farther forward next turn.
+        if (a.leapfrogGain !== b.leapfrogGain) return b.leapfrogGain - a.leapfrogGain;
+        if (Math.abs(b.improvement - a.improvement) > 0.5) return b.improvement - a.improvement;
+        return b.jumpLen - a.jumpLen;
+      });
+
+      if (backForwards.length > 0) {
+        return backForwards[0].move;
+      }
+    }
   }
 
   // PRIORITY 1: Direct goal entry — usually first choice, but DEFERRED when a
@@ -703,7 +829,27 @@ export function findOptimalEndgameSequence(
       return cell?.type === 'piece' && (cell as { type: 'piece'; player: number }).player === player;
     });
 
-  // Get candidate moves for our pieces: no goal-leaving allowed
+  // Tiebreak weight for a single move. The BFS finds A min-depth sequence — but
+  // when several first moves lead to min-depth solutions, iteration order picks
+  // among them. Sorting "best move first" makes BFS return the strongest
+  // first move: fill the deepest goal cell, then prefer longer chain jumps,
+  // then any forward jump, then steps. Matches the user's repeated flag pattern
+  // (Flag 7: deepest endzone, Flag 6: jump-enabling step).
+  const moveTiebreakScore = (m: Move): number => {
+    let s = 0;
+    if (goalKeys.has(coordKey(m.to))) {
+      s += 10_000 + getGoalPositionDepth(m.to) * 100;
+    }
+    if (m.isJump) {
+      s += 100;
+      if (m.jumpPath) s += m.jumpPath.length * 10;
+    }
+    return s;
+  };
+
+  // Get candidate moves for our pieces: no goal-leaving allowed.
+  // Sorted by tiebreak score so the BFS naturally prefers stronger first moves
+  // when multiple min-depth solutions exist.
   const getCandidates = (board: Map<string, BoardCell>): Move[] => {
     const simState: GameState = {
       ...state,
@@ -711,12 +857,14 @@ export function findOptimalEndgameSequence(
       currentPlayer: player,
     };
     const moves = getAllValidMoves(simState, player);
-    return moves.filter(m => {
+    const filtered = moves.filter(m => {
       const fromInGoal = goalKeys.has(coordKey(m.from));
       const toInGoal = goalKeys.has(coordKey(m.to));
       if (fromInGoal && !toInGoal) return false; // Never leave goal
       return true;
     });
+    filtered.sort((a, b) => moveTiebreakScore(b) - moveTiebreakScore(a));
+    return filtered;
   };
 
   // BFS
@@ -769,6 +917,14 @@ export function evaluateEndgameLateral(
   const phase = getPiecePhase(state, move.from, player);
   if (phase === 'midgame') return 0;
 
+  // Premature-endgame guard: getPiecePhase classifies any piece within 3 cells
+  // of a goal cell as "endgame", which lets this scorer fire when 0/10 pieces
+  // are actually in goal. In that situation a lateral move is not yet an
+  // endgame-shaped decision and the (state-sensitive) chain-unlock heuristic
+  // tends to over-reward routine forward-staging laterals. Require at least
+  // a couple of pieces actually in the goal before this scorer takes over.
+  if (countPiecesInGoal(state, player) < 2) return 0;
+
   const goalPositions = getGoalPositionsForState(state, player);
   const goalCenter = centroid(goalPositions);
   const distBefore = cubeDistance(move.from, goalCenter);
@@ -777,7 +933,7 @@ export function evaluateEndgameLateral(
 
   const nextState = applyMove(state, move);
   const emptyGoals = getEmptyGoalsByDepth(nextState, player);
-  if (emptyGoals.length === 0) return -2000; // Goal is full
+  if (emptyGoals.length === 0) return -800; // Goal is full
 
   const piecesOutsideBefore = getPiecesOutsideGoal(state, player);
   const piecesOutsideAfter = getPiecesOutsideGoal(nextState, player);
@@ -803,10 +959,13 @@ export function evaluateEndgameLateral(
   }
 
   if (bestDepthUnlocked > 0) {
-    return bestDepthUnlocked * 500; // Bonus: unlocks deeper goal access
+    // Capped + scaled: previous 500/depth was so large it swamped every
+    // anti-sidestep penalty in the codebase. 150/depth, capped at depth 4,
+    // means max +600 — still a meaningful tiebreaker, no longer a steamroller.
+    return Math.min(bestDepthUnlocked, 4) * 150;
   }
 
-  return -2000; // No setup value detected: heavy endgame lateral penalty
+  return -800; // No setup value detected
 }
 
 /**
@@ -863,12 +1022,14 @@ export function scoreEndgameMove(
         if (d > maxOutsideDist) maxOutsideDist = d;
       }
       const movingFromDist = cubeDistance(move.from, goalCenter);
-      // Significant gap (5+ cells) AND a truly back piece (9+ from centre) ⇒
-      // discount aggressively. This still leaves a positive bonus so the entry
-      // remains preferable to wasteful sidesteps; it just no longer beats a
-      // genuine straggler-advancing move.
+      // Tiered discount. The strict tier (gap≥5 AND maxDist>9) stays at 0.08x
+      // for extreme strandings. A new looser tier (gap≥3 AND maxDist>6) cuts
+      // the entry by half — catches the "front piece grabs goal slot while
+      // back piece is moderately behind" pattern (Flag 2: gap=4, maxDist=7).
       if (maxOutsideDist - movingFromDist >= 5 && maxOutsideDist > 9) {
         entryBonus *= 0.08;
+      } else if (maxOutsideDist - movingFromDist >= 3 && maxOutsideDist > 6) {
+        entryBonus *= 0.5;
       }
     }
     score += entryBonus;

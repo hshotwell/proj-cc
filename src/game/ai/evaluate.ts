@@ -4,11 +4,9 @@ import { getPlayerPieces } from '../setup';
 import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { cubeDistance, centroid, coordKey, cubeAdd } from '../coordinates';
 import { DIRECTIONS } from '../constants';
-import { canJumpOver } from '../moves';
+import { canJumpOver, getValidMoves } from '../moves';
 import { computePlayerProgress } from '../progress';
 import { getWorstAssignmentCost } from '../pathfinding';
-import { loadEndgameGenome } from '../training/persistence';
-import { evaluateWithGenome } from '../training/evaluate';
 import { getCachedLearnedWeights, getCachedEndgameInsights } from '../learning';
 import { getApproachLaneMap } from './corridors';
 
@@ -188,7 +186,7 @@ function computeBackConvoyScore(
   goalCenter: CubeCoord,
   inGoal: number
 ): number {
-  if (pieces.length < 3 || inGoal >= 7) return 0;
+  if (pieces.length < 3 || inGoal >= 9) return 0;
 
   const sorted = pieces
     .map(p => ({ pos: p, dist: cubeDistance(p, goalCenter) }))
@@ -220,7 +218,7 @@ function computeConvoyFormationScore(
   goalCenter: CubeCoord,
   inGoal: number
 ): number {
-  if (pieces.length < 2 || inGoal >= 7) return 0;
+  if (pieces.length < 2 || inGoal >= 9) return 0;
 
   const pieceSet = new Set(pieces.map(p => coordKey(p)));
   let score = 0;
@@ -326,7 +324,7 @@ function computeApproachLaneScore(
   goalKeySet: Set<string>,
   inGoal: number
 ): number {
-  if (inGoal >= 7) return 0;
+  if (inGoal >= 9) return 0;
 
   const laneMap = getApproachLaneMap(player, goalPositions);
   let score = 0;
@@ -350,15 +348,7 @@ export function evaluatePosition(
   personality: AIPersonality,
   difficulty: AIDifficulty = 'hard'
 ): number {
-  // In endgame phase, all difficulties use the puzzle-trained endgame genome
   const inGoal = countPiecesInGoal(state, player);
-  if (inGoal >= 7) {
-    const endgameGenome = loadEndgameGenome();
-    if (endgameGenome) {
-      return evaluateWithGenome(state, player, endgameGenome);
-    }
-    // Fall through to personality-based evaluation if genome not yet loaded
-  }
 
   const pieces = getPlayerPieces(state, player);
   const goalPositions = getGoalPositionsForState(state, player);
@@ -425,27 +415,24 @@ export function evaluatePosition(
     }
   }
 
-  // 3b. Extreme straggler penalty: when pieces are entering the goal but a piece
-  //     is still far back, apply a steep extra penalty that grows faster than the
-  //     goal-entry bonus. The threshold scales with `inGoal`: the more pieces are
-  //     home, the less excuse there is for any single piece to be left lagging.
-  //     - inGoal < 4 : disabled (early game — distance varies naturally)
-  //     - inGoal 4   : 12 cells (original behaviour)
-  //     - inGoal 5+  : threshold drops by 2 per piece, floor 5
-  //       (5→10, 6→8, 7→6, 8→5, 9→5)
-  //     This catches "mid-distance" stragglers (8–11 cells) that the original
-  //     >12 cliff missed, which were the persistent back-piece-neglect flag source.
+  // 3b. Extreme straggler penalty: penalize outside pieces that have drifted
+  //     far from the goal. Uses a FIXED threshold of 6 to avoid the
+  //     discontinuity that previously occurred when `inGoal` incremented
+  //     (e.g., 2→3 used to tighten threshold 6→5, making goal entries look
+  //     ~800 worse just from the threshold shift — pushing the AI to stop
+  //     just outside goal). Fixed threshold means goal entries are no longer
+  //     penalized by threshold growth; they just gain progress and goalDepth.
+  //     Back-piece neglect is still penalized strongly through the per-piece
+  //     excess² × 18 formula.
   let extremeStragPenalty = 0;
-  if (inGoal >= 4 && !state.isCustomLayout) {
+  if (inGoal >= 3 && !state.isCustomLayout) {
     const piecesOutsideGoal = pieces.filter(p => !goalKeySet.has(coordKey(p)));
-    const stragglerThreshold = inGoal >= 5
-      ? Math.max(5, 12 - (inGoal - 4) * 2)
-      : 12;
+    const stragglerThreshold = 6;
     for (const piece of piecesOutsideGoal) {
       const dist = cubeDistance(piece, goalCenter);
       if (dist > stragglerThreshold) {
         const excess = dist - stragglerThreshold;
-        extremeStragPenalty -= excess * excess * 10;
+        extremeStragPenalty -= excess * excess * 18;
       }
     }
   }
@@ -504,6 +491,94 @@ export function evaluatePosition(
   const approachLaneScore = !state.isCustomLayout
     ? computeApproachLaneScore(pieces, player, goalPositions, goalKeySet, inGoal)
     : 0;
+
+  // 13. Goal-cell depth score: rewards positions where the FILLED goal cells
+  //     are deeper (farther from board origin). Without this, two positions
+  //     with identical inGoal counts but different goal cells filled look
+  //     equivalent — yet the deeper cells are strategically better (fill back-
+  //     to-front, opens shallow cells for future entries). Depth² gives a
+  //     steeper preference for the deepest cells.
+  let goalDepthScore = 0;
+  if (!state.isCustomLayout) {
+    const origin = { q: 0, r: 0, s: 0 };
+    for (const piece of pieces) {
+      if (goalKeySet.has(coordKey(piece))) {
+        const d = cubeDistance(piece, origin);
+        goalDepthScore += d * d;
+      }
+    }
+  }
+
+  // 15. Back-piece isolation penalty: penalizes positions where the back-most
+  //     outside piece is far from its nearest teammate. Without this, two
+  //     forward steps for the back piece that end at the same goal-centroid
+  //     distance look identical to the eval — and `selectMoveWithVariance`
+  //     can randomly pick the one that drifts toward the board edge.
+  //
+  //     For TIED back pieces (multiple at max outside distance), penalize the
+  //     WORST case (max nearest-teammate distance) — deterministic and reflects
+  //     the most-isolated tied piece. Scales with inGoal because back-piece
+  //     cohesion matters most as the game enters its endgame phase.
+  let backPieceIsolationPenalty = 0;
+  if (!state.isCustomLayout && inGoal >= 3) {
+    const outsidePieces = pieces.filter(p => !goalKeySet.has(coordKey(p)));
+    if (outsidePieces.length >= 2) {
+      let maxOutsideDist = 0;
+      for (const p of outsidePieces) {
+        const d = cubeDistance(p, goalCenter);
+        if (d > maxOutsideDist) maxOutsideDist = d;
+      }
+      let worstNearest = 0;
+      for (const bp of outsidePieces) {
+        if (Math.abs(cubeDistance(bp, goalCenter) - maxOutsideDist) > 0.01) continue;
+        let nearestTeammateDist = Infinity;
+        for (const p of outsidePieces) {
+          if (p.q === bp.q && p.r === bp.r) continue;
+          const d = cubeDistance(bp, p);
+          if (d < nearestTeammateDist) nearestTeammateDist = d;
+        }
+        if (nearestTeammateDist !== Infinity && nearestTeammateDist > worstNearest) {
+          worstNearest = nearestTeammateDist;
+        }
+      }
+      backPieceIsolationPenalty = -worstNearest * 8 * inGoal;
+    }
+  }
+
+  // 14. Chain potential score: BFS for the back-most outside piece(s) only.
+  //     Back-piece chain improvement² captures the "step deeper, then jump
+  //     further next turn" pattern: positions where the back piece's chain
+  //     reach is unblocked score higher.
+  //
+  //     Limited to back-most pieces (tied at max-dist) to bound per-eval cost
+  //     — full per-piece BFS was timing out depth-3 minimax at hard.
+  //     Activates at inGoal ≥ 4.
+  let chainPotentialScore = 0;
+  if (!state.isCustomLayout && inGoal >= 4) {
+    const outsidePieces: CubeCoord[] = [];
+    for (const piece of pieces) {
+      if (!goalKeySet.has(coordKey(piece))) outsidePieces.push(piece);
+    }
+    if (outsidePieces.length > 0) {
+      let maxDist = 0;
+      for (const p of outsidePieces) {
+        const d = cubeDistance(p, goalCenter);
+        if (d > maxDist) maxDist = d;
+      }
+      for (const piece of outsidePieces) {
+        const pieceDist = cubeDistance(piece, goalCenter);
+        if (pieceDist < maxDist - 0.01) continue;
+        const validMoves = getValidMoves(state, piece);
+        let bestImprovement = 0;
+        for (const m of validMoves) {
+          if (!m.isJump) continue;
+          const improvement = pieceDist - cubeDistance(m.to, goalCenter);
+          if (improvement > bestImprovement) bestImprovement = improvement;
+        }
+        chainPotentialScore += bestImprovement * bestImprovement;
+      }
+    }
+  }
 
   // Smooth endgame weight transition: linearly interpolate from midgame weights
   // (ratio=0 at ≤3 in goal) to endgame weights (ratio=1 at ≥8 in goal).
@@ -571,7 +646,10 @@ export function evaluatePosition(
     wBackConvoy        * backConvoyScore +
     wEmptyGoalTarget   * emptyGoalTargetScore +
     1.5                * approachLaneScore +
-    1.0                * convoyFormationScore;
+    1.0                * convoyFormationScore +
+    3.0                * goalDepthScore +
+    3.0                * chainPotentialScore +
+    1.0                * backPieceIsolationPenalty;
 
   // Apply learned weights if available (for medium+ difficulty)
   if (difficulty !== 'easy') {

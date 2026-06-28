@@ -10,6 +10,7 @@ import { useReplayStore } from '@/store/replayStore';
 import { useAIReviewStore } from '@/store/aiReviewStore';
 import { ReviewMoveHistory } from './ReviewMoveHistory';
 import { ReviewPanel } from './ReviewPanel';
+import { ReviewAIDebugPanel } from './ReviewAIDebugPanel';
 import type { CubeCoord } from '@/types/game';
 
 export function ReviewContainer() {
@@ -23,7 +24,7 @@ export function ReviewContainer() {
 
   const [editingMoveIndex, setEditingMoveIndex] = useState<number | null>(null);
   const [editingFlagId, setEditingFlagId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'moves' | 'review'>('moves');
+  const [activeTab, setActiveTab] = useState<'moves' | 'review' | 'ai'>('moves');
 
   const totalMoves = moves.length;
 
@@ -184,14 +185,17 @@ export function ReviewContainer() {
             />
           </div>
 
-          {/* Review panel */}
-          <div className="sticky top-4">
+          {/* Review panel + AI debug panel */}
+          <div className="sticky top-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
             <ReviewPanel
               editingMoveIndex={editingMoveIndex}
               editingFlagId={editingFlagId}
               onSave={handleSave}
               onCancel={handleCancel}
             />
+            <div className="bg-white rounded-lg shadow p-3">
+              <ReviewAIDebugPanel />
+            </div>
           </div>
         </div>
 
@@ -207,7 +211,7 @@ export function ReviewContainer() {
 
           {/* Tab strip */}
           <div className="flex border-b border-gray-200 bg-white rounded-t-lg shadow-sm">
-            {(['moves', 'review'] as const).map((tab) => (
+            {(['moves', 'review', 'ai'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -217,7 +221,11 @@ export function ReviewContainer() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {tab === 'moves' ? 'Moves' : `Review${gameFlags.length > 0 ? ` (${gameFlags.length})` : ''}`}
+                {tab === 'moves'
+                  ? 'Moves'
+                  : tab === 'review'
+                    ? `Review${gameFlags.length > 0 ? ` (${gameFlags.length})` : ''}`
+                    : 'AI'}
               </button>
             ))}
           </div>
@@ -229,13 +237,15 @@ export function ReviewContainer() {
                 editingMoveIndex={editingMoveIndex}
                 onFlagClick={handleFlagClick}
               />
-            ) : (
+            ) : activeTab === 'review' ? (
               <ReviewPanel
                 editingMoveIndex={editingMoveIndex}
                 editingFlagId={editingFlagId}
                 onSave={handleSave}
                 onCancel={handleCancel}
               />
+            ) : (
+              <ReviewAIDebugPanel />
             )}
           </div>
 

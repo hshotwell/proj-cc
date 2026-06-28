@@ -30,7 +30,8 @@ export function normalizeMoveHistory(rawMoves: Move[], activePlayers: PlayerInde
     const isContinuation = current.isJump && next.isJump && samePlayer && sameTurn && cubeEquals(current.to, next.from);
 
     if (isContinuation) {
-      // Merge: extend current move
+      // Merge: extend current move (keep first hop's debug — AI decides the
+      // whole chain at the start, so subsequent hops carry no fresh debug)
       current = {
         from: current.from,
         to: next.to,
@@ -42,6 +43,7 @@ export function normalizeMoveHistory(rawMoves: Move[], activePlayers: PlayerInde
         isSwap: current.isSwap || next.isSwap,
         player: current.player,
         turnNumber: current.turnNumber,
+        ...(current.debug ? { debug: current.debug } : {}),
       };
     } else {
       // Current move is complete, push it

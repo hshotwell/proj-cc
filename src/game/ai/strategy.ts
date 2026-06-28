@@ -10,7 +10,7 @@
 
 import type { GameState, PlayerIndex, CubeCoord, Move } from '@/types/game';
 import type { AIPersonality, AIDifficulty } from '@/types/ai';
-import { coordKey, cubeDistance, centroid, cubeAdd } from '../coordinates';
+import { coordKey, cubeDistance, centroid, cubeAdd, cubeEquals } from '../coordinates';
 import { getGoalPositionsForState, countPiecesInGoal } from '../state';
 import { getPlayerPieces } from '../setup';
 import { getAllValidMoves, getValidMoves, canJumpOver } from '../moves';
@@ -932,6 +932,824 @@ export function scoreBackPieceChainSetup(
  * this, the AI sometimes picks the step from the front piece when both options
  * exist (Flag 2 pattern).
  */
+/**
+ * STRICT back-piece priority bonus.
+ *
+ * Per-move score that fires when:
+ *   (a) at least 2 pieces are outside goal,
+ *   (b) move.from is one of the back-most outside piece(s) (tied or alone),
+ *   (c) the move strictly reduces distance to the goal centroid.
+ *
+ * Magnitude scales with:
+ *   - improvement (how many cells closer to goal)
+ *   - urgency (more pieces in goal ⇒ more urgent to advance stragglers)
+ *   - isolation (bigger gap from back piece to next group ⇒ more outlier ⇒ more urgent)
+ *
+ * No piecesInGoal threshold: the principle "back piece first" applies at every
+ * phase. In opening positions where all pieces are tied at max distance, the
+ * isolation factor is 1 (mild signal), so the bonus is broad-based rather than
+ * decisive. As gaps emerge, the bonus sharpens onto the actual back piece.
+ */
+export function scoreBackPiecePriority(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  const pieces = getPlayerPieces(state, player);
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  const goalCenter = centroid(goalPositions);
+
+  const outside = pieces.filter(p => !goalKeys.has(coordKey(p)));
+  if (outside.length < 2) return 0;
+
+  const distances = outside.map(p => ({ p, d: cubeDistance(p, goalCenter) }));
+  distances.sort((a, b) => b.d - a.d);
+  const maxDist = distances[0].d;
+
+  // Eligibility widened: any piece within 3 cells of maxDist qualifies for
+  // a back-piece bonus. Previous 1.5-cell band gave 1-cell-below-max pieces
+  // only a 0.33 positionFactor, which let front-piece forward steps win over
+  // back-piece forward steps in mid-game positions. With 3-cell band, a piece
+  // 1 cell below max gets ~0.67 factor — competitive with the front-piece
+  // bonuses without dominating early-game development.
+  const fromDist = cubeDistance(move.from, goalCenter);
+  if (fromDist < maxDist - 3) return 0;
+  const positionFactor = 1 - (maxDist - fromDist) / 3;
+
+  const toDist = cubeDistance(move.to, goalCenter);
+  const improvement = fromDist - toDist;
+  if (improvement < 0.5) return 0;
+
+  // Isolation: how big is the gap from the back to the rest?
+  const firstBelow = distances.find(d => d.d < maxDist);
+  const gap = firstBelow ? maxDist - firstBelow.d : 0;
+  const isolation = 1 + gap;
+
+  // Urgency: scales with how many pieces are home. In the opening (0 in goal)
+  // the back piece isn't actually behind yet — formation development matters
+  // more than "advance the back piece" — so we damp urgency below 1.
+  const piecesInGoal = countPiecesInGoal(state, player);
+  const urgency = piecesInGoal === 0 ? 0.5 : 1 + piecesInGoal * 0.4;
+
+  // Base multiplier raised from 100 to 150 so a back-piece forward step
+  // (improvement 1, positionFactor 0.67, urgency 1.4, isolation 2) lands at
+  // ~280 — competitive with the goal-entry bonus (~200) so the AI prefers
+  // advancing back pieces over an immediate goal entry in mid-game positions
+  // where the goal entry can wait.
+  return Math.min(improvement * 150 * urgency * isolation * positionFactor, 900);
+}
+
+/**
+ * Backward-hop chain penalty: for jumps, reconstructs the chain's intermediate
+ * landings and penalizes any move whose path visited a DEEPER cell than the
+ * final landing. Catches the "chain ends with backward hop" pattern where the
+ * BFS reaches a deep goal cell and then jumps back out to a shallower one —
+ * the user has flagged this as "questionable, deeper would have been better."
+ *
+ * Penalty is `(maxIntermediate - finalDepth) × 100` so a 2-cell backward hop
+ * subtracts 200, which is large enough to outweigh the +60 per-hop chainLen
+ * bonus that would otherwise reward the longer-but-worse chain.
+ */
+export function scoreChainBackwardHop(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  if (!move.isJump || !move.jumpPath || move.jumpPath.length === 0) return 0;
+  const origin = { q: 0, r: 0, s: 0 };
+  const finalDepth = cubeDistance(move.to, origin);
+
+  let prev = move.from;
+  let maxIntermediate = 0;
+  for (const over of move.jumpPath) {
+    const landing: CubeCoord = {
+      q: 2 * over.q - prev.q,
+      r: 2 * over.r - prev.r,
+      s: 2 * over.s - prev.s,
+    };
+    const depth = cubeDistance(landing, origin);
+    if (depth > maxIntermediate) maxIntermediate = depth;
+    prev = landing;
+  }
+
+  if (maxIntermediate > finalDepth + 0.01) {
+    return -(maxIntermediate - finalDepth) * 100;
+  }
+  return 0;
+}
+
+/**
+ * Chain-endpoint setup bonus: for jumps, evaluates the QUALITY of the landing
+ * position beyond raw progress. Differentiates between chain stops that have
+ * similar distance gain but differ in:
+ *   1. Teammate-setup: friendly pieces that can now jump OVER our new position
+ *      forward, using us as a stepping stone next turn.
+ *   2. Opponent-blocking: opponent jumps that our landing now prevents because
+ *      we occupy the would-be destination cell.
+ *
+ * Only fires for jumps. Magnitude tuned to differentiate similar-progress
+ * landings (~20-40 points per benefit) without overriding bigger strategic
+ * signals like back-piece priority or chain extension.
+ */
+export function scoreChainEndpointSetup(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  if (!move.isJump) return 0;
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalCenter = centroid(goalPositions);
+
+  let score = 0;
+
+  for (const dir of DIRECTIONS) {
+    // 1. Teammate-setup: friendly piece at (to + dir) with empty (to - dir).
+    //    Pattern: teammate at neighbor → jumps OVER us (at move.to) → lands
+    //    at (to - dir) which must be empty. This uses us as a stepping stone.
+    const neighbor: CubeCoord = {
+      q: move.to.q + dir.q,
+      r: move.to.r + dir.r,
+      s: move.to.s + dir.s,
+    };
+    const dest: CubeCoord = {
+      q: move.to.q - dir.q,
+      r: move.to.r - dir.r,
+      s: move.to.s - dir.s,
+    };
+    const neighborContent = state.board.get(coordKey(neighbor));
+    const destContent = state.board.get(coordKey(dest));
+    if (
+      neighborContent?.type === 'piece' &&
+      neighborContent.player === player &&
+      destContent?.type === 'empty'
+    ) {
+      // Reward only if the jump would be FORWARD for the teammate.
+      const teammateGain = cubeDistance(neighbor, goalCenter) - cubeDistance(dest, goalCenter);
+      if (teammateGain >= 1) {
+        // Capped to avoid double-counting very long teammate chains.
+        score += Math.min(teammateGain, 4) * 8;
+      }
+    }
+
+    // 2. Opponent-blocking: opponent piece at (to - 2*dir) with any piece at
+    //    (to - dir) means that opponent could have jumped to our cell.
+    //    Now we occupy it, blocking their jump.
+    const oppSource: CubeCoord = {
+      q: move.to.q - dir.q * 2,
+      r: move.to.r - dir.r * 2,
+      s: move.to.s - dir.s * 2,
+    };
+    const oppMid: CubeCoord = {
+      q: move.to.q - dir.q,
+      r: move.to.r - dir.r,
+      s: move.to.s - dir.s,
+    };
+    const oppSourceContent = state.board.get(coordKey(oppSource));
+    const oppMidContent = state.board.get(coordKey(oppMid));
+    if (
+      oppSourceContent?.type === 'piece' &&
+      oppSourceContent.player !== player &&
+      oppMidContent?.type === 'piece'
+    ) {
+      // Reward only if the jump would have been FORWARD for the opponent.
+      const oppGoalPositions = getGoalPositionsForState(state, oppSourceContent.player);
+      if (oppGoalPositions.length > 0) {
+        const oppGoalCenter = centroid(oppGoalPositions);
+        const oppGain = cubeDistance(oppSource, oppGoalCenter) - cubeDistance(move.to, oppGoalCenter);
+        if (oppGain >= 1) {
+          score += Math.min(oppGain, 4) * 8;
+        }
+      }
+    }
+  }
+
+  return score;
+}
+
+/**
+ * Chain-extension bonus: rewards jumps for progress, weighted so goal entries
+ * beat comparable-distance non-goal landings.
+ *
+ * Three cases:
+ *   1. Goal entry (move.from outside, move.to in goal):
+ *      flat bonus + depth × 18 — entering goal is high-value, deeper cells better.
+ *   2. In-goal-to-deeper (both in goal, toDepth > fromDepth):
+ *      depthGain² × 12 — disambiguates between in-goal stops.
+ *   3. Non-goal landing:
+ *      improvement² × 5 — moderate; should not dominate goal entries.
+ *
+ * The centroid-distance metric for non-goal landings was previously × 10, which
+ * could make a deep non-goal landing outrank a comparable goal entry — exactly
+ * Flag 2's pattern. Reducing to × 5 + reweighting entries fixes it.
+ */
+export function scoreChainExtension(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  if (!move.isJump) return 0;
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  const origin = { q: 0, r: 0, s: 0 };
+
+  const toInGoal = goalKeys.has(coordKey(move.to));
+  const fromInGoal = goalKeys.has(coordKey(move.from));
+
+  if (toInGoal) {
+    const toDepth = cubeDistance(move.to, origin);
+    if (!fromInGoal) {
+      // Goal entry from outside — quadratic in depth so deeper landings
+      // dominate decisively (gap of ~100 between depth 5 and depth 7).
+      return 100 + toDepth * toDepth * 4;
+    }
+    // In-goal to in-goal — only reward deeper
+    const fromDepth = cubeDistance(move.from, origin);
+    const depthGain = toDepth - fromDepth;
+    if (depthGain < 0.5) return 0;
+    return depthGain * depthGain * 12;
+  }
+
+  // Non-goal landing — moderate reward by centroid improvement, CAPPED so
+  // very-long non-goal chains can't out-score goal entries. Goal entries top
+  // out at ~200 from this function; capping non-goal at min(improvement, 5)²
+  // × 5 = 125 max ensures the goal-entry path always wins by ≥75 in chain
+  // extension alone, plus the search.ts goal-entry bonus on top.
+  const goalCenter = centroid(goalPositions);
+  const improvement = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  if (improvement < 0.5) return 0;
+  const cappedImp = Math.min(improvement, 5);
+  return cappedImp * cappedImp * 5;
+}
+
+/**
+ * In-goal regression penalty: heavily discourages moving an in-goal piece to
+ * a shallower in-goal cell. The user has repeatedly flagged this — there is
+ * almost never a strategic reason to "give back" depth that's already earned.
+ *
+ * -120 per cell of lost depth. Strong enough to overcome any other heuristic
+ * that might be tempted to reward such a move (e.g., setup positioning).
+ *
+ * The endgame solver already filters most of these via its priority chain,
+ * but the regular minimax (which controls at inGoal &lt; 6) does not — and
+ * recent flags show backsteps slipping through at inGoal = 5.
+ */
+export function scoreInGoalRegression(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (!goalKeys.has(coordKey(move.from)) || !goalKeys.has(coordKey(move.to))) return 0;
+
+  const origin = { q: 0, r: 0, s: 0 };
+  const fromDepth = cubeDistance(move.from, origin);
+  const toDepth = cubeDistance(move.to, origin);
+  if (toDepth >= fromDepth) return 0;
+
+  return -(fromDepth - toDepth) * 120;
+}
+
+/**
+ * Make-room bonus: rewards in-goal-to-deeper-in-goal moves that vacate a cell
+ * near an outside piece, enabling future stepping-stone chains.
+ *
+ * Triggers when:
+ *   (a) move.from and move.to are both in goal,
+ *   (b) move.to is deeper than move.from (further from board origin),
+ *   (c) at least one outside piece is within 5 hex cells of the source.
+ *
+ * Magnitude scales with proximity of the nearest outside piece to the source,
+ * and with inGoal urgency. Tuned to be substantial but not dominating: a
+ * make-room move should beat an in-goal fiddle that does nothing, but lose
+ * to an actual back-piece forward move.
+ */
+export function scoreMakeRoomSetup(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (!goalKeys.has(coordKey(move.from)) || !goalKeys.has(coordKey(move.to))) return 0;
+
+  const origin = { q: 0, r: 0, s: 0 };
+  const fromDepth = cubeDistance(move.from, origin);
+  const toDepth = cubeDistance(move.to, origin);
+  if (toDepth <= fromDepth) return 0;
+
+  const pieces = getPlayerPieces(state, player);
+  const outside = pieces.filter(p => !goalKeys.has(coordKey(p)));
+  if (outside.length === 0) return 0;
+
+  let minDist = Infinity;
+  for (const p of outside) {
+    const d = cubeDistance(p, move.from);
+    if (d < minDist) minDist = d;
+  }
+  if (minDist > 5) return 0;
+
+  const piecesInGoal = countPiecesInGoal(state, player);
+  const urgency = 1 + Math.max(0, piecesInGoal - 4) * 0.5;
+
+  return (6 - minDist) * 40 * urgency;
+}
+
+/**
+ * Lateral cohesion bonus: rewards outside-piece STEPS whose destination is
+ * closer to the centroid of the OTHER outside pieces than the source was.
+ *
+ * Restricted to step moves (not jumps). A chain jump's value comes from
+ * progress, not lateral position — penalizing it for landing far from
+ * teammates was over-counting and could outweigh a legitimate big chain
+ * (Flag 1 from 2026-06-26 21:31 export). Steps are where lateral direction
+ * actually matters, so this is where the cohesion bias belongs.
+ *
+ * Only fires for outside-piece moves; in-goal shuffles are governed by goal
+ * depth, not lateral cohesion.
+ */
+export function scoreLateralCohesion(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex
+): number {
+  if (move.isJump) return 0;
+  const pieces = getPlayerPieces(state, player);
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (goalKeys.has(coordKey(move.from))) return 0;
+
+  const outside = pieces.filter(p => !goalKeys.has(coordKey(p)));
+  const others = outside.filter(p => p.q !== move.from.q || p.r !== move.from.r);
+  if (others.length < 2) return 0;
+
+  const cq = others.reduce((s, p) => s + p.q, 0) / others.length;
+  const cr = others.reduce((s, p) => s + p.r, 0) / others.length;
+  const cs = others.reduce((s, p) => s + p.s, 0) / others.length;
+
+  const distBefore = (Math.abs(move.from.q - cq) + Math.abs(move.from.r - cr) + Math.abs(move.from.s - cs)) / 2;
+  const distAfter = (Math.abs(move.to.q - cq) + Math.abs(move.to.r - cr) + Math.abs(move.to.s - cs)) / 2;
+  const gain = distBefore - distAfter;
+
+  return gain * 70;
+}
+
+/**
+ * Chain-enabling setup bonus: a forward or lateral move (step OR jump) whose
+ * post-move state unlocks a bigger forward jump for a piece FURTHER BACK than
+ * the moving piece.
+ *
+ * Two patterns this captures:
+ *  (1) The setup piece was blocking part of a chain — moving it out of the way
+ *      lets a back piece jump farther.
+ *  (2) The setup plants a friendly piece somewhere new, creating a stepping
+ *      stone a back piece can hop over.
+ *
+ * Hard guards (so we never reward the kind of "setup" that wastes tempo):
+ *  - `setupGain >= -0.5` → forward or lateral only, never backward
+ *  - source must be outside the goal → no walking out of the goal triangle
+ *  - the beneficiary jump must originate from a piece strictly further from
+ *    goal than the setup piece — without this, "setup" would credit any
+ *    self-serving move that happens to enable its own next jump
+ *
+ * Comparison uses the BACK-piece best jump before vs after. Comparing against
+ * the overall best jump would double-count progress moves that aren't really
+ * setups (e.g. a back piece already had a great jump available — moving a
+ * front piece doesn't deserve credit for not-blocking it).
+ */
+export function scoreChainEnablingStep(
+  state: GameState,
+  move: Move,
+  next: GameState,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+  currentForwardJumps: Array<{ sourceDist: number; gain: number }>,
+): number {
+  const setupGain = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  const fromInGoal = goalKeys.has(coordKey(move.from));
+  const toInGoal = goalKeys.has(coordKey(move.to));
+
+  if (fromInGoal) {
+    // In-goal source: only useful as a setup if the piece STAYS in goal AND
+    // doesn't move shallower. Vacating a goal cell so a back piece can chain
+    // into it is the user's "step deeper before jumping" pattern (Flags 2–5).
+    // Leaving goal entirely is handled (and penalised) by other scorers.
+    if (!toInGoal) return 0;
+    const origin = { q: 0, r: 0, s: 0 };
+    if (cubeDistance(move.to, origin) < cubeDistance(move.from, origin)) return 0;
+  } else {
+    // Outside source — original gates: steps must be strictly forward, jumps
+    // may be lateral or forward.
+    if (move.isJump) {
+      if (setupGain < -0.5) return 0;
+    } else {
+      if (setupGain < 1) return 0;
+    }
+  }
+
+  const setupDistFromGoal = cubeDistance(move.from, goalCenter);
+
+  let bestBackJumpBefore = 0;
+  for (const fj of currentForwardJumps) {
+    if (fj.sourceDist < setupDistFromGoal + 0.5) continue;
+    if (fj.gain > bestBackJumpBefore) bestBackJumpBefore = fj.gain;
+  }
+
+  const nextMoves = getAllValidMoves(next, player);
+  let bestBackJumpAfter = 0;
+  for (const m2 of nextMoves) {
+    if (!m2.isJump) continue;
+    const m2FromDist = cubeDistance(m2.from, goalCenter);
+    if (m2FromDist < setupDistFromGoal + 0.5) continue;
+    const g = m2FromDist - cubeDistance(m2.to, goalCenter);
+    if (g > bestBackJumpAfter) bestBackJumpAfter = g;
+  }
+
+  // Require a substantial improvement before paying out. For in-goal setups
+  // we relax the threshold to 1 cell — vacating a single goal slot for the
+  // back piece to land in is the exact "step deeper" pattern the user flags,
+  // and the improvement there is usually small (1–2 cells) but high-value.
+  const improvement = bestBackJumpAfter - bestBackJumpBefore;
+  const improvementThreshold = fromInGoal ? 1 : 2;
+  if (improvement < improvementThreshold) return 0;
+
+  // User principle: "this piece should ALWAYS move forward first so that the
+  // back piece can double jump next turn." Magnitude raised from 30→200 per
+  // cell (cap 1000) so the setup can out-score a routine back-piece forward
+  // jump — the prior 150-cap had this signal losing to default eval bonuses.
+  return Math.min(improvement, 5) * 200;
+}
+
+/**
+ * Penalty for a lateral (non-forward) step taken from a FRONT piece when a
+ * piece further back has a clearly-forward jump available. The user has
+ * repeatedly flagged this pattern: "a further back piece could have done the
+ * same thing" / "stop sidestepping when good jumps are available".
+ *
+ * Strict gates: only applies to step moves (jumps and forward steps are fine),
+ * only applies to outside pieces (in-goal shuffles handled elsewhere), and
+ * only fires when there's a piece at least 1.5 cells further back with a
+ * forward jump gaining ≥ 2 cells. Without those gates, this would over-fire
+ * during routine cohesion moves where no good back-piece alternative exists.
+ */
+export function scoreFrontPieceSidestepPenalty(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+  currentForwardJumps: Array<{ sourceDist: number; gain: number }>,
+): number {
+  // Applies to STEPS AND JUMPS. Lateral jumps from front pieces were the
+  // most common pattern in the latest flag dump — restricting to steps only
+  // left half the bad sidesteps unpenalised.
+  const gain = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  if (gain >= 1) return 0;
+
+  // Don't penalise lateral development in the opening — no one's "behind" yet
+  // when no pieces have entered the goal. The "front piece sidestep" pattern
+  // is only a mistake once piece order across the formation matters.
+  const piecesInGoal = countPiecesInGoal(state, player);
+  if (piecesInGoal < 1) return 0;
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (goalKeys.has(coordKey(move.from))) return 0;
+
+  const fromDist = cubeDistance(move.from, goalCenter);
+
+  // Back-piece forward jump available? (any gain ≥ 1)
+  for (const fj of currentForwardJumps) {
+    if (fj.sourceDist >= fromDist + 1.5 && fj.gain >= 1) {
+      return -1200;
+    }
+  }
+
+  // Back-piece forward STEP available? Without this branch, lateral
+  // moves slip through whenever back pieces have no jumps — exactly the
+  // mid-game pattern that produced the latest flag dump (e.g. back piece at
+  // dist 7 with only step options, lateral picked anyway).
+  const pieces = getPlayerPieces(state, player);
+  for (const piece of pieces) {
+    if (goalKeys.has(coordKey(piece))) continue;
+    const pieceDist = cubeDistance(piece, goalCenter);
+    if (pieceDist < fromDist + 1.5) continue;
+    for (const dir of DIRECTIONS) {
+      const next: CubeCoord = { q: piece.q + dir.q, r: piece.r + dir.r, s: piece.s + dir.s };
+      if (state.board.get(coordKey(next))?.type !== 'empty') continue;
+      const nextDist = cubeDistance(next, goalCenter);
+      if (pieceDist - nextDist >= 1) {
+        return -1200;
+      }
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Penalty for an in-goal piece moving sideways within the goal triangle while
+ * outside pieces still have forward moves available. The latest flag dump
+ * surfaced this distinct pattern (e.g. Flag 11 `(-3,7) → (-4,7)`, Flag 17
+ * `(3,-7) → (4,-7)`) which `scoreFrontPieceSidestepPenalty` doesn't catch
+ * because it skips in-goal sources.
+ *
+ * Gates:
+ *  - source AND destination are in goal
+ *  - depth same or shallower (deeper in-goal moves are already handled by
+ *    `scoreMakeRoomSetup` / consolidation logic)
+ *  - at least one outside piece has any forward move (step or jump, gain ≥ 1)
+ */
+export function scoreInGoalLateralPenalty(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+  currentForwardJumps: Array<{ sourceDist: number; gain: number }>,
+): number {
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (!goalKeys.has(coordKey(move.from))) return 0;
+  if (!goalKeys.has(coordKey(move.to))) return 0;
+
+  const origin = { q: 0, r: 0, s: 0 };
+  if (cubeDistance(move.to, origin) > cubeDistance(move.from, origin)) return 0;
+
+  for (const fj of currentForwardJumps) {
+    if (fj.gain >= 1) return -250;
+  }
+
+  const pieces = getPlayerPieces(state, player);
+  for (const piece of pieces) {
+    if (goalKeys.has(coordKey(piece))) continue;
+    const pieceDist = cubeDistance(piece, goalCenter);
+    for (const dir of DIRECTIONS) {
+      const next: CubeCoord = { q: piece.q + dir.q, r: piece.r + dir.r, s: piece.s + dir.s };
+      if (state.board.get(coordKey(next))?.type !== 'empty') continue;
+      const nextDist = cubeDistance(next, goalCenter);
+      if (pieceDist - nextDist >= 1) return -250;
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Penalty for a goal-entry jump that stops at a shallower cell when the SAME
+ * piece could chain to a deeper goal cell. User-flagged HIGH PRIORITY: AI
+ * stops short of the deepest reachable end-zone cell "for no good reason".
+ *
+ * Only fires when the deeper alternative is strictly deeper (cube distance
+ * to origin is larger). Magnitude tuned to outweigh the typical leaf-eval
+ * preference for cells closer to goal centroid — the user's principle is
+ * "fill back-to-front, deepest first" overrides positional centroid eval.
+ */
+export function scoreShallowGoalEntryPenalty(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+): number {
+  if (!move.isJump) return 0;
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (goalKeys.has(coordKey(move.from))) return 0;
+
+  const toInGoal = goalKeys.has(coordKey(move.to));
+  if (toInGoal) {
+    const origin = { q: 0, r: 0, s: 0 };
+    const moveDepth = cubeDistance(move.to, origin);
+    let bestDeeperDepth = moveDepth;
+    for (const m of getValidMoves(state, move.from)) {
+      if (!m.isJump) continue;
+      if (!goalKeys.has(coordKey(m.to))) continue;
+      const mDepth = cubeDistance(m.to, origin);
+      if (mDepth > bestDeeperDepth) bestDeeperDepth = mDepth;
+    }
+    const shortfall = bestDeeperDepth - moveDepth;
+    if (shortfall >= 0.5) return -150 * shortfall;
+
+    // Same-depth tiebreaker (Flag 3): when same source has multiple goal
+    // entries at the same depth, prefer the one HARDER for outside-goal
+    // friendly pieces to reach. Filling those now leaves the easier cells
+    // for stragglers, ending the game sooner.
+    const piecesOutsideGoal = getPlayerPieces(state, player).filter(
+      p => !goalKeys.has(coordKey(p)) && !cubeEquals(p, move.from)
+    );
+    if (piecesOutsideGoal.length === 0) return 0;
+    const minDist = (pos: CubeCoord) =>
+      Math.min(...piecesOutsideGoal.map(p => cubeDistance(pos, p)));
+    const moveMinDist = minDist(move.to);
+    let bestMinDist = moveMinDist;
+    for (const m of getValidMoves(state, move.from)) {
+      if (!m.isJump) continue;
+      if (!goalKeys.has(coordKey(m.to))) continue;
+      const mDepth = cubeDistance(m.to, origin);
+      if (mDepth !== moveDepth) continue;
+      const d = minDist(m.to);
+      if (d > bestMinDist) bestMinDist = d;
+    }
+    const accessShortfall = bestMinDist - moveMinDist;
+    if (accessShortfall < 0.5) return 0;
+    return -100 * Math.min(accessShortfall, 4);
+  }
+
+  // Late-endgame staging branch (Flag 4): same source has a chain landing
+  // strictly closer to goal centroid. User principle: "should jump one
+  // further to the side here to clear space". Only fires once a chunk of
+  // pieces are already in goal — earlier, "clear space" isn't load-bearing.
+  if (countPiecesInGoal(state, player) < 4) return 0;
+  const goalCenter = centroid(goalPositions);
+  const moveDistToCenter = cubeDistance(move.to, goalCenter);
+  let bestCloserDist = moveDistToCenter;
+  for (const m of getValidMoves(state, move.from)) {
+    if (!m.isJump) continue;
+    const d = cubeDistance(m.to, goalCenter);
+    if (d < bestCloserDist) bestCloserDist = d;
+  }
+  const stagingShortfall = moveDistToCenter - bestCloserDist;
+  if (stagingShortfall < 1.5) return 0;
+  return -100 * Math.min(stagingShortfall, 4);
+}
+
+/**
+ * Penalty for a lateral move whose destination cell another piece could reach
+ * via a FORWARD move. If two pieces can both land on the same setup square,
+ * the one that gains progress doing so wins.
+ *
+ * User-stated principle: "rather than just looking at that piece's options,
+ * look at what other pieces could potentially fill in the same spot as the
+ * piece that was laterally stepping. If the same setup can be achieved by
+ * another piece stepping or jumping forward, that should be considered a
+ * much better move."
+ *
+ * Gated to outside source (in-goal handled elsewhere). Magnitude tuned to
+ * meaningfully bias against the lateral without dominating other signals.
+ */
+export function scoreLateralReachableByForwardPenalty(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+): number {
+  const gain = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  if (gain >= 1) return 0;
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (goalKeys.has(coordKey(move.from))) return 0;
+
+  for (const m of getAllValidMoves(state, player)) {
+    if (m.from.q === move.from.q && m.from.r === move.from.r) continue;
+    if (m.to.q !== move.to.q || m.to.r !== move.to.r) continue;
+    const mGain = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
+    if (mGain >= 1) return -400;
+  }
+  return 0;
+}
+
+/**
+ * Penalty for a lateral move when the SAME piece has a strictly-better
+ * forward move available. The Flag 3 / Flag 12 pattern: piece could have
+ * jumped (or stepped) forward 2+ cells but the AI picked a lateral chain
+ * from the same piece instead.
+ *
+ * Distinct from `scoreFrontPieceSidestepPenalty` (which checks for *other*,
+ * back pieces' forward moves) — this fires on the move itself missing its
+ * own piece's clearly-better option, no matter where the back of the
+ * formation is.
+ *
+ * Gated to outside sources only; in-goal lateral is governed by
+ * `scoreInGoalLateralPenalty`.
+ */
+export function scoreSamePieceMissedForwardPenalty(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+  bestForwardGainBySource: Map<string, number>,
+): number {
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalKeys = new Set(goalPositions.map(coordKey));
+  if (goalKeys.has(coordKey(move.from))) return 0;
+
+  const bestForward = bestForwardGainBySource.get(coordKey(move.from)) ?? 0;
+  if (bestForward < 1) return 0;
+
+  const gain = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  // The chosen move already matches or beats the best forward — no penalty.
+  if (gain >= bestForward) return 0;
+
+  // Lateral / backward when a forward exists from the same piece.
+  // Magnitudes need to beat the minimax-tree evaluation delta, which can
+  // easily be 500-1000 in evaluatePosition for cohesion/alignment shifts.
+  if (gain < 1) {
+    if (bestForward >= 2) return -1000;
+    return -500;
+  }
+
+  // Forward step from a piece that ALSO has a forward jump (gain ≥ 2) is a
+  // partial miss — the step gains progress but burns the turn that the jump
+  // would have advanced further. Flag 1: `(0,1) → (0,0)` step (gain 1) was
+  // chosen over `(0,1) → (2,-1)` jump (gain 2). Only fires when the missed
+  // option is a real jump (bestForward ≥ 2), so single-cell step-vs-step
+  // direction calls are not punished here (they belong to the lane/leapfrog
+  // signals). Magnitude ramps with the gain shortfall.
+  if (bestForward >= 2 && !move.isJump) {
+    return -(bestForward - gain) * 200;
+  }
+
+  return 0;
+}
+
+/**
+ * Best forward gain (any move type) available from each piece in the current
+ * state, keyed by source coord. Cached at root so the same-piece-missed-
+ * forward penalty doesn't re-scan moves per candidate.
+ */
+export function computeBestForwardGainBySource(
+  state: GameState,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+): Map<string, number> {
+  const result = new Map<string, number>();
+  for (const m of getAllValidMoves(state, player)) {
+    const gain = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
+    if (gain <= 0) continue;
+    const key = coordKey(m.from);
+    const current = result.get(key) ?? 0;
+    if (gain > current) result.set(key, gain);
+  }
+  return result;
+}
+
+/**
+ * Snapshot of every forward jump available at the root, indexed by source
+ * piece distance from goal. Cached once at root so scoreChainEnablingStep
+ * can query "best forward jump from a piece farther than X" cheaply.
+ */
+export function computeCurrentForwardJumps(
+  state: GameState,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+): Array<{ sourceDist: number; gain: number }> {
+  const result: Array<{ sourceDist: number; gain: number }> = [];
+  for (const m of getAllValidMoves(state, player)) {
+    if (!m.isJump) continue;
+    const sd = cubeDistance(m.from, goalCenter);
+    const gain = sd - cubeDistance(m.to, goalCenter);
+    if (gain <= 0) continue;
+    result.push({ sourceDist: sd, gain });
+  }
+  return result;
+}
+
+/**
+ * Cheap setup-risk discount for chain-enabling moves. If our setup piece (the
+ * `to` cell) gets used by an opponent's 1-ply jump as a stepping-stone (they
+ * jump OVER it), the "setup" also benefits the opponent and is likely to be
+ * undone on their turn. Returns a multiplier in [0.3, 1.0].
+ *
+ * Only checked at root strategic eval (not in pre-filter / minimax leaf) to
+ * keep cost bounded.
+ */
+export function chainEnablingRiskMultiplier(
+  next: GameState,
+  setupTo: CubeCoord,
+  player: PlayerIndex,
+): number {
+  const opponents = next.activePlayers.filter(p => p !== player);
+  const setupKey = coordKey(setupTo);
+  for (const opp of opponents) {
+    for (const om of getAllValidMoves(next, opp)) {
+      if (!om.isJump) continue;
+      // Walk every consecutive landing pair (including from→jumpPath[0])
+      const landings: CubeCoord[] = [om.from, ...(om.jumpPath ?? [om.to])];
+      for (let i = 1; i < landings.length; i++) {
+        const a = landings[i - 1];
+        const b = landings[i];
+        const mq = (a.q + b.q) / 2;
+        const mr = (a.r + b.r) / 2;
+        if (!Number.isInteger(mq) || !Number.isInteger(mr)) continue;
+        const midKey = `${mq},${mr}`;
+        if (midKey === setupKey) {
+          return 0.3;
+        }
+      }
+    }
+  }
+  return 1.0;
+}
+
 export function scoreSourceDominance(
   state: GameState,
   move: Move,

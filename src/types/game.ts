@@ -43,6 +43,66 @@ export interface Move {
   player?: PlayerIndex;
   // Turn number when this move was made (for detecting turn boundaries)
   turnNumber?: number;
+  // AI scoring debug info (only set on AI-chosen moves)
+  debug?: AIDebugInfo;
+}
+
+/**
+ * Per-candidate scoring breakdown captured by findBestMove.
+ * Keys correspond 1:1 with scorer function names so it's easy to trace which
+ * signal flipped a decision.
+ */
+export interface AIScoreBreakdown {
+  evaluatePosition: number;
+  regressionPenalty: number;
+  repetitionPenalty: number;
+  strategicTotal: number;
+  landingQuality: number;
+  lastMoveResponse: number;
+  setupBlockRisk: number;
+  leapfrogPotential: number;
+  residualTrajectory: number;
+  sourceDominance: number;
+  backPieceChainSetup: number;
+  backPiecePriority: number;
+  chainEnablingStep: number;
+  frontPieceSidestep: number;
+  inGoalLateral: number;
+  samePieceMissedForward: number;
+  lateralReachableByForward: number;
+  shallowGoalEntry: number;
+  lateralCohesion: number;
+  chainExtension: number;
+  makeRoomSetup: number;
+  inGoalRegression: number;
+  chainEndpointSetup: number;
+  chainBackwardHop: number;
+  goalEntryBonus: number;
+  endgameLateral: number;
+  endgameMove: number;
+  landingHopQuality: number;
+  bigJumpOpportunity: number;
+  minimaxScore: number;
+}
+
+export interface AIDebugCandidate {
+  from: CubeCoord;
+  to: CubeCoord;
+  isJump: boolean;
+  jumpPath?: CubeCoord[];
+  finalScore: number;
+  breakdown: AIScoreBreakdown;
+  picked: boolean;
+}
+
+export interface AIDebugInfo {
+  difficulty: 'easy' | 'medium' | 'hard';
+  personality: 'aggressive' | 'defensive' | 'generalist';
+  depthReached: number;
+  candidateCount: number;
+  candidates: AIDebugCandidate[];
+  // Free-text note for fast-path picks (opening book, endgame solver, etc.)
+  note?: string;
 }
 
 // Triangle index (0-5) representing each of the 6 points of the star

@@ -112,7 +112,7 @@ export function useAITurn(enabled: boolean = true) {
         // Small delay to let selectPiece state settle
         setTimeout(() => {
           const animate = useSettingsStore.getState().animateMoves;
-          useGameStore.getState().makeMove(move.to, animate);
+          useGameStore.getState().makeMove(move.to, animate, move.debug);
         }, 50);
       };
 

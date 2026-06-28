@@ -22,6 +22,7 @@ function serializeMove(move: Move): Move {
     ...(move.isSwap ? { isSwap: true } : {}),
     ...(move.player !== undefined ? { player: move.player } : {}),
     ...(move.turnNumber !== undefined ? { turnNumber: move.turnNumber } : {}),
+    ...(move.debug ? { debug: move.debug } : {}),
   };
 }
 
