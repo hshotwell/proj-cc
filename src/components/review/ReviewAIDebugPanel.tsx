@@ -30,6 +30,7 @@ const BREAKDOWN_FIELDS: Array<keyof AIScoreBreakdown> = [
   'leapfrogPotential',
   'residualTrajectory',
   'sourceDominance',
+  'createsOpponentJump',
   'backPieceChainSetup',
   'setupBlockRisk',
   'lastMoveResponse',

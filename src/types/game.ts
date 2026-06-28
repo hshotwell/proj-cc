@@ -63,6 +63,7 @@ export interface AIScoreBreakdown {
   leapfrogPotential: number;
   residualTrajectory: number;
   sourceDominance: number;
+  createsOpponentJump: number;
   backPieceChainSetup: number;
   backPiecePriority: number;
   chainEnablingStep: number;

@@ -9,7 +9,7 @@ import {
   deserializeGameState,
 } from '@/game/ai';
 import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence, findEndgameMove } from '@/game/ai/endgame';
-import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource } from '@/game/ai/strategy';
+import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource, scoreEphemeralOpponentJump, countOpponentPiecesInJump, scoreCreatesOpponentJump } from '@/game/ai/strategy';
 import { centroid } from '@/game/coordinates';
 import { getGoalPositionsForState } from '@/game/state';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
@@ -761,6 +761,71 @@ describe('findOptimalEndgameSequence', () => {
       expect(endgame.to.q).toBe(-1);
       expect(endgame.to.r).toBe(4);
     }
+  });
+
+  // Flag 4 (game review export, Turn 26): P0 stepped (3,-1)→(2,0). Pre-move,
+  // P2 had a piece at (2,1) but no jump over the (still-empty) (2,0). After
+  // the step, P0 occupies (2,0) and P2 can jump (2,1)→(2,-1) over us — a
+  // 2-cell forward gift. The penalty must fire for the (2,0) destination and
+  // not for an alternative step like (1,0)→(0,1) that creates no such jump.
+  it('penalises a step whose destination becomes an opponent jump midpoint (Flag 4)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // Minimal fixture: P0 stepping from (3,-1) to (2,0). P2 piece at (2,1).
+    // (2,-1) empty — the landing of the gifted jump.
+    ts.board.set(coordKey(cubeCoord(3, -1)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(2, 1)), { type: 'piece', player: 2 });
+    ts.currentPlayer = 0;
+
+    const giftMove: Move = makeMove(3, -1, 2, 0, false);
+    // (3,-2) has no P2 piece among its neighbors, so no opp jump is enabled.
+    const safeMove: Move = makeMove(3, -1, 3, -2, false);
+
+    const giftPenalty = scoreCreatesOpponentJump(ts, giftMove, 0);
+    const safePenalty = scoreCreatesOpponentJump(ts, safeMove, 0);
+
+    expect(giftPenalty).toBeLessThan(-50);
+    expect(safePenalty).toBe(0);
+  });
+
+  // Flags 5 & 6 (game review export, Turn 26+27): for two consecutive turns P2 had
+  // a forward jump (2,1)→(2,-1) over P0's (2,0) piece available, and the AI
+  // declined it both times. Root cause was a structural bug — scoreEphemeralOpponentJump
+  // and countOpponentPiecesInJump treated each jumpPath entry as a landing and
+  // computed `(currentPos + entry) / 2` as the midpoint. But jumpPath stores the
+  // jumped-over cells directly, so the computed midpoint always landed on a
+  // half-integer cell and the Number.isInteger guard silently dropped it.
+  it('correctly identifies opponent pieces jumped over in a standard chain (Flag 5/6 bug fix)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // Minimal fixture: P2 at (2,1), P0's most-backward piece at (2,0), landing
+    // (2,-1) empty. Place a few extra P0 pieces forward so getPieceBackwardness
+    // can compute a meaningful relative backwardness for (2,0).
+    ts.board.set(coordKey(cubeCoord(2, 1)), { type: 'piece', player: 2 });
+    ts.board.set(coordKey(cubeCoord(2, 0)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(-3, 5)), { type: 'piece', player: 0 });
+    ts.board.set(coordKey(cubeCoord(-4, 7)), { type: 'piece', player: 0 });
+    ts.currentPlayer = 2;
+
+    const jumpMove: Move = {
+      from: cubeCoord(2, 1),
+      to: cubeCoord(2, -1),
+      isJump: true,
+      jumpPath: [cubeCoord(2, 0)],
+    };
+
+    // Pre-fix: both returned 0 because the computed midpoint was non-integer.
+    expect(countOpponentPiecesInJump(ts, jumpMove, 2)).toBe(1);
+    const urgency = scoreEphemeralOpponentJump(ts, jumpMove, 2);
+    // (2,0) is the most-backward P0 piece (others are deep in their goal area),
+    // so backwardness should be 1.0 and urgency should be the full per-cell weight.
+    expect(urgency).toBeGreaterThan(20);
   });
 
   // Flag 1 (game review export, Turn 31): P2 has 4/10 in goal. Piece at (0,1)

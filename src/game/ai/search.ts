@@ -8,7 +8,7 @@ import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreBackPieceChainSetup, scoreBackPiecePriority, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
@@ -841,6 +841,11 @@ function getTopMoves(
     // jump moves a back piece while the step would have moved the front piece.
     score += scoreSourceDominance(state, move, player);
 
+    // Creates-opponent-jump penalty: stepping to a cell whose neighbor is an
+    // opponent piece and whose opposite cell is empty hands the opponent a
+    // free forward jump over us next turn.
+    score += scoreCreatesOpponentJump(state, move, player);
+
     // Back-piece chain setup: a step that opens a new forward jump for the
     // most-back piece is strategically more valuable than a same-improvement
     // step from a front piece (Flag 4 — the "3-piece setup" pattern).
@@ -1355,6 +1360,7 @@ function captureMoveBreakdown(
     leapfrogPotential: leapfrog,
     residualTrajectory: residual,
     sourceDominance: scoreSourceDominance(state, move, player),
+    createsOpponentJump: scoreCreatesOpponentJump(state, move, player),
     backPieceChainSetup: scoreBackPieceChainSetup(state, move, player),
     backPiecePriority: scoreBackPiecePriority(state, move, player),
     chainEnablingStep: chainEnabling,
@@ -1415,7 +1421,7 @@ function buildMinimalDebugInfo(
     evaluatePosition: 0, regressionPenalty: 0, repetitionPenalty: 0,
     strategicTotal: 0, landingQuality: 0, lastMoveResponse: 0,
     setupBlockRisk: 0, leapfrogPotential: 0, residualTrajectory: 0,
-    sourceDominance: 0, backPieceChainSetup: 0, backPiecePriority: 0, chainEnablingStep: 0, frontPieceSidestep: 0, inGoalLateral: 0, samePieceMissedForward: 0, lateralReachableByForward: 0, shallowGoalEntry: 0,
+    sourceDominance: 0, createsOpponentJump: 0, backPieceChainSetup: 0, backPiecePriority: 0, chainEnablingStep: 0, frontPieceSidestep: 0, inGoalLateral: 0, samePieceMissedForward: 0, lateralReachableByForward: 0, shallowGoalEntry: 0,
     lateralCohesion: 0, chainExtension: 0, makeRoomSetup: 0,
     inGoalRegression: 0, chainEndpointSetup: 0, chainBackwardHop: 0,
     goalEntryBonus: 0, endgameLateral: 0, endgameMove: 0,
@@ -1489,6 +1495,7 @@ function computeStrategicMoveBonus(
   }
 
   bonus += scoreSourceDominance(state, move, player);
+  bonus += scoreCreatesOpponentJump(state, move, player);
   {
     const chainEnablingRaw = scoreChainEnablingStep(state, move, next, player, ctx.goalCenter, ctx.currentForwardJumps);
     // Risk discount: if our setup piece becomes a stepping stone for an
@@ -1909,6 +1916,7 @@ function getTopMovesFromList(
 
     // Source-dominance bonus (match getTopMoves)
     score += scoreSourceDominance(state, move, player);
+    score += scoreCreatesOpponentJump(state, move, player);
     score += scoreBackPieceChainSetup(state, move, player);
     score += scoreBackPiecePriority(state, move, player);
     score += scoreLateralCohesion(state, move, player);

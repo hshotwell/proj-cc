@@ -203,26 +203,14 @@ export function countOpponentPiecesInJump(
 ): number {
   if (!move.isJump || !move.jumpPath) return 0;
 
+  // jumpPath stores midpoints (the pieces jumped over), one per hop. For
+  // ghost-variant jumps over multi-cell runs, the entry is a "virtual" midpoint
+  // that may fall on a non-integer cell — skip those.
   let count = 0;
-  let currentPos = move.from;
-
-  for (const nextPos of move.jumpPath) {
-    // The middle position (jumped over)
-    const middlePos: CubeCoord = {
-      q: (currentPos.q + nextPos.q) / 2,
-      r: (currentPos.r + nextPos.r) / 2,
-      s: (currentPos.s + nextPos.s) / 2,
-    };
-
-    // Check if it's an integer position (valid middle)
-    if (Number.isInteger(middlePos.q) && Number.isInteger(middlePos.r)) {
-      const content = state.board.get(coordKey(middlePos));
-      if (content?.type === 'piece' && content.player !== player) {
-        count++;
-      }
-    }
-
-    currentPos = nextPos;
+  for (const mid of move.jumpPath) {
+    if (!Number.isInteger(mid.q) || !Number.isInteger(mid.r)) continue;
+    const content = state.board.get(coordKey(mid));
+    if (content?.type === 'piece' && content.player !== player) count++;
   }
 
   return count;
@@ -788,22 +776,19 @@ export function scoreEphemeralOpponentJump(
 ): number {
   if (!move.isJump || !move.jumpPath) return 0;
 
+  // jumpPath stores midpoints (the jumped-over cells), one per hop. The most-
+  // backward opponent pieces are the ones the opponent most wants to move
+  // forward — jumping over them now, while they're still in place, is the
+  // urgent play. Weight = 40 per cell of backwardness so a single hop over
+  // the opponent's farthest piece (backwardness = 1.0) yields +40 — large
+  // enough to push the AI past a same-piece forward step (Flags 5, 6).
   let urgency = 0;
-  let currentPos = move.from;
-
-  for (const nextPos of move.jumpPath) {
-    const mid: CubeCoord = {
-      q: (currentPos.q + nextPos.q) / 2,
-      r: (currentPos.r + nextPos.r) / 2,
-      s: (currentPos.s + nextPos.s) / 2,
-    };
-    if (Number.isInteger(mid.q) && Number.isInteger(mid.r)) {
-      const content = state.board.get(coordKey(mid));
-      if (content?.type === 'piece' && content.player !== player) {
-        urgency += getPieceBackwardness(state, mid, content.player) * 6;
-      }
+  for (const mid of move.jumpPath) {
+    if (!Number.isInteger(mid.q) || !Number.isInteger(mid.r)) continue;
+    const content = state.board.get(coordKey(mid));
+    if (content?.type === 'piece' && content.player !== player) {
+      urgency += getPieceBackwardness(state, mid, content.player) * 40;
     }
-    currentPos = nextPos;
   }
 
   return urgency;
@@ -1732,16 +1717,19 @@ export function chainEnablingRiskMultiplier(
   for (const opp of opponents) {
     for (const om of getAllValidMoves(next, opp)) {
       if (!om.isJump) continue;
-      // Walk every consecutive landing pair (including from→jumpPath[0])
-      const landings: CubeCoord[] = [om.from, ...(om.jumpPath ?? [om.to])];
-      for (let i = 1; i < landings.length; i++) {
-        const a = landings[i - 1];
-        const b = landings[i];
-        const mq = (a.q + b.q) / 2;
-        const mr = (a.r + b.r) / 2;
-        if (!Number.isInteger(mq) || !Number.isInteger(mr)) continue;
-        const midKey = `${mq},${mr}`;
-        if (midKey === setupKey) {
+      // jumpPath stores midpoints (jumped-over cells) directly, one per hop.
+      // If any of them is the cell our setup piece just landed on, the
+      // opponent can hop through us — discount the chain-enabling bonus.
+      for (const mid of om.jumpPath ?? []) {
+        if (!Number.isInteger(mid.q) || !Number.isInteger(mid.r)) continue;
+        if (coordKey(mid) === setupKey) return 0.3;
+      }
+      // Single-hop fallback when jumpPath is missing: the midpoint is
+      // (from + to) / 2.
+      if (!om.jumpPath || om.jumpPath.length === 0) {
+        const mq = (om.from.q + om.to.q) / 2;
+        const mr = (om.from.r + om.to.r) / 2;
+        if (Number.isInteger(mq) && Number.isInteger(mr) && `${mq},${mr}` === setupKey) {
           return 0.3;
         }
       }
@@ -1766,6 +1754,65 @@ export function scoreSourceDominance(
   // back source is strictly better — bonus large enough to overcome the slight
   // landing-quality edge the step sometimes has.
   return 60;
+}
+
+/**
+ * Penalty for step moves whose destination becomes the midpoint of a new
+ * forward jump for an opponent. The step *gifts* the opponent a stepping
+ * stone they didn't have before.
+ *
+ * Only fires for step moves: a jump move's destination is the moved piece's
+ * landing, not a stepping stone the opponent would jump over (and a jump
+ * that creates an immediate forward jump for the opponent is a separate,
+ * far rarer pattern).
+ *
+ * The pre-move cell at move.to is empty (we stepped there), so the opponent
+ * could not have jumped that line before. After the move it's our piece,
+ * which any opponent can jump over (per canJumpOver semantics for normal
+ * pieces) — so a free forward jump materialises.
+ *
+ * Magnitude is gain × 50 so a 2-cell gift (Flag 4) costs −100, comparable to
+ * a missed-jump-from-same-piece penalty. Not catastrophic so genuinely better
+ * advances can still go through.
+ */
+export function scoreCreatesOpponentJump(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+): number {
+  if (move.isJump) return 0;
+
+  let worstOppGain = 0;
+  for (const opponent of state.activePlayers) {
+    if (opponent === player) continue;
+    const oppGoalPositions = getGoalPositionsForState(state, opponent);
+    if (oppGoalPositions.length === 0) continue;
+    const oppGoalCenter = centroid(oppGoalPositions);
+
+    for (const dir of DIRECTIONS) {
+      const jumperPos: CubeCoord = {
+        q: move.to.q + dir.q, r: move.to.r + dir.r, s: move.to.s + dir.s,
+      };
+      const jumperContent = state.board.get(coordKey(jumperPos));
+      if (jumperContent?.type !== 'piece' || jumperContent.player !== opponent) continue;
+
+      const landPos: CubeCoord = {
+        q: move.to.q - dir.q, r: move.to.r - dir.r, s: move.to.s - dir.s,
+      };
+      const landContent = state.board.get(coordKey(landPos));
+      const landIsEmptyPostMove =
+        landContent?.type === 'empty' ||
+        (landPos.q === move.from.q && landPos.r === move.from.r);
+      if (!landIsEmptyPostMove) continue;
+
+      const gain = cubeDistance(jumperPos, oppGoalCenter) - cubeDistance(landPos, oppGoalCenter);
+      if (gain < 1) continue;
+      if (gain > worstOppGain) worstOppGain = gain;
+    }
+  }
+
+  if (worstOppGain <= 0) return 0;
+  return -worstOppGain * 50;
 }
 
 /**
