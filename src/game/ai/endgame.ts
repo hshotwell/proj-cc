@@ -398,6 +398,17 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
     const nextBestDist = firstBelow ? firstBelow.d : -Infinity;
 
     if (maxDist - nextBestDist >= 1) {
+      // Perpendicular-to-goal vector for lateral-drift comparisons. Vacating
+      // an on-axis cell tempts a teammate to re-fill it next turn — the
+      // back-and-forth waste pattern (Flags 13/14). Vacating an off-axis cell
+      // leaves a hole no teammate wants to step into.
+      const gLen = Math.sqrt(goalCenter.q * goalCenter.q + goalCenter.r * goalCenter.r);
+      const haveAxis = gLen > 0.01;
+      const px = haveAxis ? -goalCenter.r / gLen : 0;
+      const py = haveAxis ?  goalCenter.q / gLen : 0;
+      const lateralDrift = (p: CubeCoord) =>
+        haveAxis ? Math.abs(p.q * px + p.r * py) : 0;
+
       const backPieces = pieceDists.filter(pd => pd.d === maxDist).map(pd => pd.p);
       const backForwards = moves
         .filter(m => backPieces.some(bp => cubeEquals(m.from, bp)))
@@ -450,6 +461,7 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
             nextTurnGoalEntryDepth,
             leapfrogGain,
             leapfrogIntoGoal,
+            sourceLateral: lateralDrift(m.from),
             jumpLen: m.jumpPath?.length || 0,
           };
         })
@@ -477,9 +489,20 @@ export function findEndgameMove(state: GameState, player: PlayerIndex): Move | n
         // moving (-1,3) to (-1,4) lets (0,3) leapfrog into the empty goal cell
         // (-2,5), while moving (0,3) to the same spot does not.
         if (a.leapfrogIntoGoal !== b.leapfrogIntoGoal) return a.leapfrogIntoGoal ? -1 : 1;
-        // Otherwise, the bigger leapfrog gain wins — Flag 2: among same-
-        // destination steps, prefer the source whose neighbor can leapfrog
-        // farther forward next turn.
+        // Leapfrog tiebreak only when gains differ by MORE than 1 cell.
+        // Otherwise let the source-lateral tiebreak decide — a 1-cell leapfrog
+        // edge doesn't justify leaving an on-axis source cell vacant when a
+        // teammate is poised to back-fill it (Flag 13/14 waste pattern).
+        if (Math.abs(b.leapfrogGain - a.leapfrogGain) > 1) {
+          return b.leapfrogGain - a.leapfrogGain;
+        }
+        // Source-lateral tiebreak: prefer to vacate the more off-axis source
+        // cell. Leaving an on-axis cell empty draws a teammate to re-fill it
+        // next turn (sidestep waste); leaving an off-axis cell empty doesn't.
+        // Applies only when leapfrog gains are within 1 (handled above).
+        if (Math.abs(a.sourceLateral - b.sourceLateral) > 0.1) {
+          return b.sourceLateral - a.sourceLateral;
+        }
         if (a.leapfrogGain !== b.leapfrogGain) return b.leapfrogGain - a.leapfrogGain;
         if (Math.abs(b.improvement - a.improvement) > 0.5) return b.improvement - a.improvement;
         return b.jumpLen - a.jumpLen;

@@ -847,6 +847,42 @@ describe('findOptimalEndgameSequence', () => {
     expect(backScore).toBeGreaterThan(bandScore);
   });
 
+  // Flags 13 & 14 (game review export, Turns 36 & 37): with the late-endgame
+  // solver running, four back pieces sit at the same maxDist and two of them
+  // ((0,2) and (1,2)) can both step to (0,3). Picking the on-axis source
+  // (0,2) vacates a cell another back piece will re-fill the very next turn —
+  // a wasted sidestep. Picking the off-axis source (1,2) leaves an
+  // unattractive empty cell behind that no teammate wants to step into,
+  // saving the turn. The fix adds a source-lateral tiebreak that fires when
+  // leapfrog gains are within 1 cell.
+  it('prefers the off-axis source when two back pieces can reach the same destination (Flags 13/14)', () => {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // Four P0 pieces at maxDist, plus six in-goal pieces so isLateEndgame fires.
+    const p0Outside: Array<[number, number]> = [[0, 2], [1, 2], [-2, 2], [-3, 2]];
+    const p0InGoal: Array<[number, number]> = [
+      [-1, 5], [-2, 5], [-4, 5], [-4, 6], [-3, 6], [-3, 7],
+    ];
+    for (const [q, r] of [...p0Outside, ...p0InGoal]) {
+      ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    }
+    ts.currentPlayer = 0;
+
+    const endgame = findEndgameMove(ts, 0);
+    expect(endgame).not.toBeNull();
+    if (endgame) {
+      // The on-axis source (0,2) must NOT be picked. Either off-axis source
+      // ((1,2) or (-3,2)) is acceptable — both reduce the lateral-drift
+      // footprint of the cluster. (0,2) itself is at lateral ~0.89 and
+      // shouldn't be the one moved.
+      const onAxisSource = endgame.from.q === 0 && endgame.from.r === 2;
+      expect(onAxisSource).toBe(false);
+    }
+  });
+
   // Flag 8 (game review export, Turn 28): P0 stepped (2,-2)→(1,-1), letting
   // P2 chain (0,0)→(2,-2)→(4,-4) for a 3-cell gain. The single-hop penalty
   // alone would under-count this; the chain extension is what makes the gift
