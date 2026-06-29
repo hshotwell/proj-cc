@@ -8,7 +8,7 @@ import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, backPriorityPersonalityFactor, proactiveJumpFactor, scoreLandingLateralDrift, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, backPriorityPersonalityFactor, proactiveJumpFactor, scoreLandingLateralDrift, scoreFutureJumpAdvantage, computeMaxImmediateJumpGain, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
@@ -799,6 +799,7 @@ function getTopMoves(
   const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
   const currentFwdJumpsLocal = computeCurrentForwardJumps(state, player, goalCenterForBonus);
   const bestFwdGainBySrcLocal = computeBestForwardGainBySource(state, player, goalCenterForBonus);
+  const bestImmediateJumpGain = state.isCustomLayout ? 0 : computeMaxImmediateJumpGain(state, player, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
@@ -938,6 +939,9 @@ function getTopMoves(
       // Personality-scaled: generalist/aggressive favor setup steps that unlock
       // bigger follow-up jumps (proactiveJumpFactor: 1.0 / 1.3 / 1.6).
       score += bestStepChainGain(next, move.to, goalCenterForBonus) * 8 * proactiveJumpFactor(personality);
+      // Setup-advantage bonus: extra credit when the step unlocks a follow-up
+      // jump BIGGER than the best immediate jump currently available.
+      score += scoreFutureJumpAdvantage(state, move, next, player, personality, goalCenterForBonus, bestImmediateJumpGain);
     }
 
     return { move, score };
@@ -1472,6 +1476,7 @@ interface StrategicMoveContext {
   threats: ReturnType<typeof findOpponentJumpThreats> | undefined;
   currentForwardJumps: Array<{ sourceDist: number; gain: number }>;
   bestForwardGainBySource: Map<string, number>;
+  bestImmediateJumpGain: number;
 }
 
 /**
@@ -1559,6 +1564,7 @@ function computeStrategicMoveBonus(
 
   if (!move.isJump && !state.isCustomLayout) {
     bonus += bestStepChainGain(next, move.to, ctx.goalCenter) * 8 * proactiveJumpFactor(personality);
+    bonus += scoreFutureJumpAdvantage(state, move, next, player, personality, ctx.goalCenter, ctx.bestImmediateJumpGain);
   }
 
   return bonus;
@@ -1786,6 +1792,7 @@ export function findBestMove(
       threats: threatsRoot,
       currentForwardJumps: computeCurrentForwardJumps(state, player, goalCenterRoot),
       bestForwardGainBySource: computeBestForwardGainBySource(state, player, goalCenterRoot),
+      bestImmediateJumpGain: state.isCustomLayout ? 0 : computeMaxImmediateJumpGain(state, player, goalCenterRoot),
     };
     for (const move of moves) {
       const next = applyMove(state, move);
@@ -1876,6 +1883,7 @@ function getTopMovesFromList(
   const hasBigOpportunity = !state.isCustomLayout && checkBigJumpOpportunity(moves, goalCenterForBonus);
   const currentFwdJumpsLocal = computeCurrentForwardJumps(state, player, goalCenterForBonus);
   const bestFwdGainBySrcLocal = computeBestForwardGainBySource(state, player, goalCenterForBonus);
+  const bestImmediateJumpGain = state.isCustomLayout ? 0 : computeMaxImmediateJumpGain(state, player, goalCenterForBonus);
 
   // Score each move with a greedy 1-ply eval, penalizing regressions and repetitions
   const scored = moves.map((move) => {
@@ -1971,6 +1979,9 @@ function getTopMovesFromList(
       // Personality-scaled: generalist/aggressive favor setup steps that unlock
       // bigger follow-up jumps (proactiveJumpFactor: 1.0 / 1.3 / 1.6).
       score += bestStepChainGain(next, move.to, goalCenterForBonus) * 8 * proactiveJumpFactor(personality);
+      // Setup-advantage bonus: extra credit when the step unlocks a follow-up
+      // jump BIGGER than the best immediate jump currently available.
+      score += scoreFutureJumpAdvantage(state, move, next, player, personality, goalCenterForBonus, bestImmediateJumpGain);
     }
 
     return { move, score };

@@ -1007,8 +1007,12 @@ export function backPriorityPersonalityFactor(
 ): number {
   if (personality === 'defensive') return 1.0;
   const endgameRatio = Math.max(0, Math.min(1, (inGoal - 3) / 5));
-  if (personality === 'generalist') return 0.5 + endgameRatio * 0.4;
-  return 0.3 + endgameRatio * 0.5;
+  // Sharper midgame damping so big chain jumps and setup steps can compete
+  // with small-gain back-piece jumps when the latter offer only +1/+2 cells.
+  //   generalist: 0.3 at inGoal ≤ 3 → 0.95 at inGoal ≥ 8
+  //   aggressive: 0.2 at inGoal ≤ 3 → 0.9  at inGoal ≥ 8
+  if (personality === 'generalist') return 0.3 + endgameRatio * 0.65;
+  return 0.2 + endgameRatio * 0.7;
 }
 
 /**
@@ -1057,6 +1061,77 @@ export function scoreLandingLateralDrift(
   if (distMultiplier <= 0) return 0;
 
   return -drift * 28 * distMultiplier;
+}
+
+/**
+ * Setup-step advantage bonus: when a STEP lands at a position from which the
+ * piece can jump farther next turn than ANY currently-available immediate
+ * jump, the step is strategically better than rushing to take a smaller jump
+ * now. User principle (2026-06-29): "set ups are very important, especially
+ * when the jump gain would be minimal, or it's end game and there is no fear
+ * of opponents pieces interfering with the plan".
+ *
+ * Magnitude tuned to compete with back-piece-priority's residual influence:
+ * a step that unlocks a +2-cell-better jump pays ~140 (per cell × 70), enough
+ * to lift a setup step into top-8 candidates so minimax actually sees it.
+ *
+ * Activates only in midgame (3 ≤ inGoal ≤ 7) where formation matters; the
+ * dedicated endgame solver handles inGoal ≥ 8, and early-opening (< 3 in goal)
+ * is handled by the opening book + chain reach signal. Defensive personality
+ * exempt — its convoy-cohesion priorities trump opportunistic setups.
+ */
+export function scoreFutureJumpAdvantage(
+  state: GameState,
+  move: Move,
+  next: GameState,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  goalCenter: CubeCoord,
+  bestImmediateJumpGain: number,
+): number {
+  if (move.isJump) return 0;
+  if (personality === 'defensive') return 0;
+  if (state.isCustomLayout) return 0;
+
+  const inGoal = countPiecesInGoal(state, player);
+  if (inGoal > 7) return 0;
+
+  const fromDist = cubeDistance(move.to, goalCenter);
+  let bestSetupGain = 0;
+  for (const m2 of getValidMoves(next, move.to)) {
+    if (!m2.isJump) continue;
+    const g = fromDist - cubeDistance(m2.to, goalCenter);
+    if (g > bestSetupGain) bestSetupGain = g;
+  }
+  if (bestSetupGain < 3) return 0;
+
+  const advantage = bestSetupGain - bestImmediateJumpGain;
+  if (advantage <= 0) return 0;
+
+  // Aggressive personalities prize setup more. The bonus scales linearly so
+  // a +1 advantage gives a modest tilt while a +3 advantage gives a decisive
+  // preference, without over-firing on speculative setups.
+  const perCell = personality === 'aggressive' ? 175 : 140;
+  return Math.min(advantage, 4) * perCell;
+}
+
+/**
+ * Compute the maximum forward-jump gain available NOW across all of player's
+ * pieces. Used as the comparison baseline for `scoreFutureJumpAdvantage` so
+ * setup steps are only rewarded when they BEAT current options.
+ */
+export function computeMaxImmediateJumpGain(
+  state: GameState,
+  player: PlayerIndex,
+  goalCenter: CubeCoord,
+): number {
+  let best = 0;
+  for (const m of getAllValidMoves(state, player)) {
+    if (!m.isJump) continue;
+    const gain = cubeDistance(m.from, goalCenter) - cubeDistance(m.to, goalCenter);
+    if (gain > best) best = gain;
+  }
+  return best;
 }
 
 /**

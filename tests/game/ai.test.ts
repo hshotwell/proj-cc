@@ -1169,6 +1169,65 @@ describe('personality-scaled proactive bias', () => {
     }
   });
 
+  // Round-3 (user follow-up, 2026-06-29): "set ups are very important,
+  // especially when the jump gain would be minimal, or its end game and
+  // there is no fear of opponents pieces interfering with the plan". Tests
+  // `scoreFutureJumpAdvantage` — a setup step that unlocks a follow-up jump
+  // bigger than the best current immediate jump should pay out per cell of
+  // advantage (140/cell for generalist, 175/cell for aggressive, capped at
+  // 4 cells of advantage). Defensive personality is exempt.
+  it('scoreFutureJumpAdvantage rewards steps that unlock better-than-immediate jumps', async () => {
+    const { scoreFutureJumpAdvantage } = await import('@/game/ai/strategy');
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    // Setup so (0,-2) → (-1,-1) lands at a spot enabling a 6-cell forward
+    // jump next turn, with the best CURRENT immediate jump at 4 cells.
+    const p0: Array<[number, number]> = [
+      [0, -1], [0, -2], [0, -3], [3, -5], [2, -3],
+      [-2, -2], [3, -4], [-1, -3], [-3, 6], [-3, 7],
+    ];
+    const p2: Array<[number, number]> = [
+      [1, 0], [0, 1], [0, 2], [-2, 2], [1, -3],
+      [-2, 3], [-1, 4], [-3, 4], [1, -5], [3, -7],
+    ];
+    for (const [q, r] of p0) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    for (const [q, r] of p2) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    ts.currentPlayer = 0;
+
+    const goalCenter = centroid(getGoalPositionsForState(ts, 0));
+    const setupMove: Move = { from: cubeCoord(0, -2), to: cubeCoord(-1, -1), isJump: false };
+    const { applyMove: apply } = await import('@/game/state');
+    const next = apply(ts, setupMove);
+
+    const bestImmediate = 4; // (3,-4) → (-1,0) [J2] gains 4 cells in this position
+    const genBonus = scoreFutureJumpAdvantage(ts, setupMove, next, 0, 'generalist', goalCenter, bestImmediate);
+    const aggBonus = scoreFutureJumpAdvantage(ts, setupMove, next, 0, 'aggressive', goalCenter, bestImmediate);
+    const defBonus = scoreFutureJumpAdvantage(ts, setupMove, next, 0, 'defensive', goalCenter, bestImmediate);
+
+    // bestSetupGain=6, advantage=2, so generalist = 2×140 = 280, aggressive = 2×175 = 350.
+    expect(genBonus).toBeGreaterThan(0);
+    expect(aggBonus).toBeGreaterThan(genBonus);
+    expect(defBonus).toBe(0);
+
+    // A step with NO future-jump improvement over current options should return 0
+    const noOpMove: Move = { from: cubeCoord(2, -3), to: cubeCoord(2, -2), isJump: false };
+    const noOpNext = apply(ts, noOpMove);
+    const noOpBonus = scoreFutureJumpAdvantage(ts, noOpMove, noOpNext, 0, 'generalist', goalCenter, bestImmediate);
+    expect(noOpBonus).toBe(0);
+
+    // A JUMP move should not get this bonus — it has already cashed in
+    const jumpMove: Move = {
+      from: cubeCoord(3, -4), to: cubeCoord(-1, 0),
+      isJump: true, jumpPath: [cubeCoord(1, -2)],
+    };
+    const jumpNext = apply(ts, jumpMove);
+    const jumpBonus = scoreFutureJumpAdvantage(ts, jumpMove, jumpNext, 0, 'generalist', goalCenter, bestImmediate);
+    expect(jumpBonus).toBe(0);
+  });
+
   // Round-2 Flag 1 (game review export, Turn 6, 2026-06-29T15:29Z): the AI
   // chose a J2 chain stopping at (0,-3) over a strategically-better J3 stop
   // at (2,-3). Both landings sit at the same goal-centroid distance (9), but
