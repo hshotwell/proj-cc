@@ -1012,6 +1012,54 @@ export function backPriorityPersonalityFactor(
 }
 
 /**
+ * Lateral-drift penalty for jump landings that are still far from goal.
+ *
+ * User flag 1 (2026-06-29T15:29Z, Turn 6): the AI picked a chain stopping
+ * at (0,-3) over a chain stopping at (2,-3) — same gain to goal centroid,
+ * but the (0,-3) landing drifted 3× further off the goal axis than the
+ * source. The drift was a real cost (wasted lateral motion in mid-board)
+ * but only registered as +0.36 eval points via `computeDirectionalAlignment`,
+ * while the (0,-3) landing's stepping-stone benefit added +15 strategic.
+ *
+ * Penalty model: a jump that LANDS more off-axis than its SOURCE pays
+ * 28 points per cell of drift, scaled down as the piece approaches goal.
+ *   - distFromGoal ≤ 6: no penalty (near-goal drift is needed for fan-out)
+ *   - distFromGoal = 8: half penalty
+ *   - distFromGoal ≥ 10: full penalty
+ * Defensive personality is exempt — it has its own positional priorities.
+ */
+export function scoreLandingLateralDrift(
+  state: GameState,
+  move: Move,
+  player: PlayerIndex,
+  personality: AIPersonality,
+): number {
+  if (!move.isJump) return 0;
+  if (personality === 'defensive') return 0;
+  if (state.isCustomLayout) return 0;
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  if (goalPositions.length === 0) return 0;
+  const goalCenter = centroid(goalPositions);
+
+  const gLen = Math.sqrt(goalCenter.q * goalCenter.q + goalCenter.r * goalCenter.r);
+  if (gLen < 0.01) return 0;
+  const px = -goalCenter.r / gLen;
+  const py =  goalCenter.q / gLen;
+
+  const sourceLat = Math.abs(move.from.q * px + move.from.r * py);
+  const landingLat = Math.abs(move.to.q * px + move.to.r * py);
+  const drift = landingLat - sourceLat;
+  if (drift <= 0.1) return 0;
+
+  const distFromGoal = cubeDistance(move.to, goalCenter);
+  const distMultiplier = Math.max(0, Math.min(1, (distFromGoal - 6) / 4));
+  if (distMultiplier <= 0) return 0;
+
+  return -drift * 28 * distMultiplier;
+}
+
+/**
  * Proactive-jump boost: rewards `chainExtension` and `bigJumpOpportunity`
  * more strongly for non-defensive personalities. Pairs with the back-priority
  * damper above so the AI doesn't substitute one bias (back-piece tunneling)

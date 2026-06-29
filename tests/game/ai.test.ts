@@ -1169,6 +1169,48 @@ describe('personality-scaled proactive bias', () => {
     }
   });
 
+  // Round-2 Flag 1 (game review export, Turn 6, 2026-06-29T15:29Z): the AI
+  // chose a J2 chain stopping at (0,-3) over a strategically-better J3 stop
+  // at (2,-3). Both landings sit at the same goal-centroid distance (9), but
+  // (0,-3) drifts 3× further off the goal axis than the source (4,-7) — a
+  // wasted lateral motion in mid-board. The (0,-3) landing happened to give
+  // a +3 `steppingStoneValue` to a friendly piece (worth +15 through the
+  // strategic-score multipliers), tipping the AI to the off-axis stop.
+  // Fix: `scoreLandingLateralDrift` penalises jump landings whose absolute
+  // lateral drift exceeds the source's, scaled by distance-from-goal so it
+  // fires in mid-board (dist > 6) but fades to 0 near goal (where fan-out
+  // drift is needed).
+  it('prefers the on-axis chain stop over the off-axis one when same goal-distance (Flag 1)', async () => {
+    const { findBestMove } = await import('@/game/ai/search');
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    const p0: Array<[number, number]> = [
+      [0, -1], [0, -2], [4, -7], [1, -3], [0, -4],
+      [1, -4], [3, -5], [4, -5], [2, -6], [3, -6],
+    ];
+    const p2: Array<[number, number]> = [
+      [0, 1], [0, 2], [-1, 3], [-4, 4], [-1, 4],
+      [-3, 5], [-4, 5], [-2, 6], [-3, 6], [-4, 7],
+    ];
+    for (const [q, r] of p0) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    for (const [q, r] of p2) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    ts.currentPlayer = 0;
+    ts.turnNumber = 6;
+
+    const picked = findBestMove(ts, 'hard', 'generalist');
+    expect(picked).not.toBeNull();
+    if (picked) {
+      // The AI must NOT pick the off-axis J2 landing at (0,-3).
+      const offAxisJump =
+        picked.from.q === 4 && picked.from.r === -7 &&
+        picked.to.q === 0 && picked.to.r === -3;
+      expect(offAxisJump).toBe(false);
+    }
+  });
+
   // Round-2 Flag 2 (game review export, Turn 8, 2026-06-29T15:29Z): the AI
   // chose a J4 chain stopping at (-1,1) — 4 hops deep into opponent territory
   // — over a strategically-better J3 stopping at (1,1) which also blocks the

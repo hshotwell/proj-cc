@@ -8,7 +8,7 @@ import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, backPriorityPersonalityFactor, proactiveJumpFactor, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, backPriorityPersonalityFactor, proactiveJumpFactor, scoreLandingLateralDrift, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
@@ -906,6 +906,10 @@ function getTopMoves(
     // a shallower cell are penalized — the deeper stop was better.
     score += scoreChainBackwardHop(state, move, player);
 
+    // Mid-board lateral-drift penalty for jump landings: penalises chain stops
+    // that drift off-axis when still far from goal (wasted lateral motion).
+    score += scoreLandingLateralDrift(state, move, player, personality);
+
     // Prioritize large chain jumps when available (transition timing heuristic).
     // Personality-scaled (defensive 1.0, generalist 1.3, aggressive 1.6).
     score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity)
@@ -1536,6 +1540,7 @@ function computeStrategicMoveBonus(
   bonus += scoreInGoalRegression(state, move, player);
   bonus += scoreChainEndpointSetup(state, move, player);
   bonus += scoreChainBackwardHop(state, move, player);
+  bonus += scoreLandingLateralDrift(state, move, player, personality);
   bonus += computeBigJumpOpportunityBonus(move, ctx.goalCenter, ctx.hasBigOpportunity)
     * proactiveJumpFactor(personality);
 
@@ -1937,6 +1942,7 @@ function getTopMovesFromList(
     score += scoreInGoalRegression(state, move, player);
     score += scoreChainEndpointSetup(state, move, player);
     score += scoreChainBackwardHop(state, move, player);
+    score += scoreLandingLateralDrift(state, move, player, personality);
 
     // Prioritize large chain jumps when available (transition timing heuristic).
     // Personality-scaled (defensive 1.0, generalist 1.3, aggressive 1.6).
