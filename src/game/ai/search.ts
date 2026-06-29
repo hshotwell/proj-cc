@@ -8,7 +8,7 @@ import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
 import { evaluatePosition } from './evaluate';
 import { computePlayerProgress } from '../progress';
-import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
+import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, backPriorityPersonalityFactor, proactiveJumpFactor, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
@@ -874,7 +874,10 @@ function getTopMoves(
     // STRICT back-piece priority: a forward move on the back-most outside
     // piece(s) is unconditionally preferred. Catches "tied back pieces" and
     // "1-cell gap" cases that hasSignificantStraggler (gap≥2) misses.
-    score += scoreBackPiecePriority(state, move, player);
+    // Personality-scaled: generalist/aggressive damp this so proactive jumps
+    // can compete with single back-piece steps in midgame.
+    score += scoreBackPiecePriority(state, move, player)
+      * backPriorityPersonalityFactor(personality, countPiecesInGoal(state, player));
 
     // Lateral cohesion: reward outside-piece moves whose destination closes
     // the gap to the centroid of other outside pieces. Counter-pressure on
@@ -882,8 +885,10 @@ function getTopMoves(
     score += scoreLateralCohesion(state, move, player);
 
     // Chain extension: quadratic in jump improvement so longer chain stops
-    // beat shorter stops in the same BFS tree.
-    score += scoreChainExtension(state, move, player);
+    // beat shorter stops in the same BFS tree. Personality-scaled: generalist
+    // and aggressive amplify this so big chain jumps reliably outscore single
+    // back-piece steps in midgame.
+    score += scoreChainExtension(state, move, player) * proactiveJumpFactor(personality);
 
     // Make-room: in-goal piece relocation that vacates a cell adjacent to a
     // back piece's chain approach. Rewards strategic stepping-stone setup
@@ -901,8 +906,10 @@ function getTopMoves(
     // a shallower cell are penalized — the deeper stop was better.
     score += scoreChainBackwardHop(state, move, player);
 
-    // Prioritize large chain jumps when available (transition timing heuristic)
-    score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
+    // Prioritize large chain jumps when available (transition timing heuristic).
+    // Personality-scaled (defensive 1.0, generalist 1.3, aggressive 1.6).
+    score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity)
+      * proactiveJumpFactor(personality);
 
     // Landing hop quality: for jump endpoints, reward positions from which
     // the moved piece can make another good forward hop next turn.
@@ -924,7 +931,9 @@ function getTopMoves(
     // best follow-up jump? Considers full chain stops so a "lateral that
     // unlocks a double jump" (Flag 5/7) beats a "forward step that dead-ends".
     if (!move.isJump && !state.isCustomLayout) {
-      score += bestStepChainGain(next, move.to, goalCenterForBonus) * 8;
+      // Personality-scaled: generalist/aggressive favor setup steps that unlock
+      // bigger follow-up jumps (proactiveJumpFactor: 1.0 / 1.3 / 1.6).
+      score += bestStepChainGain(next, move.to, goalCenterForBonus) * 8 * proactiveJumpFactor(personality);
     }
 
     return { move, score };
@@ -1369,7 +1378,8 @@ function captureMoveBreakdown(
     sourceDominance: scoreSourceDominance(state, move, player),
     createsOpponentJump: scoreCreatesOpponentJump(state, move, player),
     backPieceChainSetup: scoreBackPieceChainSetup(state, move, player),
-    backPiecePriority: scoreBackPiecePriority(state, move, player),
+    backPiecePriority: scoreBackPiecePriority(state, move, player)
+      * backPriorityPersonalityFactor(personality, countPiecesInGoal(state, player)),
     chainEnablingStep: chainEnabling,
     frontPieceSidestep,
     inGoalLateral,
@@ -1377,7 +1387,7 @@ function captureMoveBreakdown(
     lateralReachableByForward,
     shallowGoalEntry,
     lateralCohesion: scoreLateralCohesion(state, move, player),
-    chainExtension: scoreChainExtension(state, move, player),
+    chainExtension: scoreChainExtension(state, move, player) * proactiveJumpFactor(personality),
     makeRoomSetup: scoreMakeRoomSetup(state, move, player),
     inGoalRegression: scoreInGoalRegression(state, move, player),
     chainEndpointSetup: scoreChainEndpointSetup(state, move, player),
@@ -1386,7 +1396,8 @@ function captureMoveBreakdown(
     endgameLateral: endgameLatScore,
     endgameMove: endgameMoveScore,
     landingHopQuality: landingHop,
-    bigJumpOpportunity: computeBigJumpOpportunityBonus(move, goalCenter, hasBigOpportunity),
+    bigJumpOpportunity: computeBigJumpOpportunityBonus(move, goalCenter, hasBigOpportunity)
+      * proactiveJumpFactor(personality),
     minimaxScore,
   };
 }
@@ -1517,14 +1528,16 @@ function computeStrategicMoveBonus(
   bonus += scoreLateralReachableByForwardPenalty(state, move, player, ctx.goalCenter);
   bonus += scoreShallowGoalEntryPenalty(state, move, player);
   bonus += scoreBackPieceChainSetup(state, move, player);
-  bonus += scoreBackPiecePriority(state, move, player);
+  bonus += scoreBackPiecePriority(state, move, player)
+    * backPriorityPersonalityFactor(personality, countPiecesInGoal(state, player));
   bonus += scoreLateralCohesion(state, move, player);
-  bonus += scoreChainExtension(state, move, player);
+  bonus += scoreChainExtension(state, move, player) * proactiveJumpFactor(personality);
   bonus += scoreMakeRoomSetup(state, move, player);
   bonus += scoreInGoalRegression(state, move, player);
   bonus += scoreChainEndpointSetup(state, move, player);
   bonus += scoreChainBackwardHop(state, move, player);
-  bonus += computeBigJumpOpportunityBonus(move, ctx.goalCenter, ctx.hasBigOpportunity);
+  bonus += computeBigJumpOpportunityBonus(move, ctx.goalCenter, ctx.hasBigOpportunity)
+    * proactiveJumpFactor(personality);
 
   if (move.isJump) {
     let bestNextHopGain = 0;
@@ -1540,7 +1553,7 @@ function computeStrategicMoveBonus(
   }
 
   if (!move.isJump && !state.isCustomLayout) {
-    bonus += bestStepChainGain(next, move.to, ctx.goalCenter) * 8;
+    bonus += bestStepChainGain(next, move.to, ctx.goalCenter) * 8 * proactiveJumpFactor(personality);
   }
 
   return bonus;
@@ -1916,16 +1929,19 @@ function getTopMovesFromList(
     score += scoreSourceDominance(state, move, player);
     score += scoreCreatesOpponentJump(state, move, player);
     score += scoreBackPieceChainSetup(state, move, player);
-    score += scoreBackPiecePriority(state, move, player);
+    score += scoreBackPiecePriority(state, move, player)
+      * backPriorityPersonalityFactor(personality, countPiecesInGoal(state, player));
     score += scoreLateralCohesion(state, move, player);
-    score += scoreChainExtension(state, move, player);
+    score += scoreChainExtension(state, move, player) * proactiveJumpFactor(personality);
     score += scoreMakeRoomSetup(state, move, player);
     score += scoreInGoalRegression(state, move, player);
     score += scoreChainEndpointSetup(state, move, player);
     score += scoreChainBackwardHop(state, move, player);
 
-    // Prioritize large chain jumps when available (transition timing heuristic)
-    score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity);
+    // Prioritize large chain jumps when available (transition timing heuristic).
+    // Personality-scaled (defensive 1.0, generalist 1.3, aggressive 1.6).
+    score += computeBigJumpOpportunityBonus(move, goalCenterForBonus, hasBigOpportunity)
+      * proactiveJumpFactor(personality);
 
     // Landing hop quality: for jump endpoints, reward positions from which
     // the moved piece can make another good forward hop next turn.
@@ -1946,7 +1962,9 @@ function getTopMovesFromList(
     // best follow-up jump? Considers full chain stops so a "lateral that
     // unlocks a double jump" (Flag 5/7) beats a "forward step that dead-ends".
     if (!move.isJump && !state.isCustomLayout) {
-      score += bestStepChainGain(next, move.to, goalCenterForBonus) * 8;
+      // Personality-scaled: generalist/aggressive favor setup steps that unlock
+      // bigger follow-up jumps (proactiveJumpFactor: 1.0 / 1.3 / 1.6).
+      score += bestStepChainGain(next, move.to, goalCenterForBonus) * 8 * proactiveJumpFactor(personality);
     }
 
     return { move, score };

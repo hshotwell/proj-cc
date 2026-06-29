@@ -986,6 +986,49 @@ export function scoreBackPiecePriority(
 }
 
 /**
+ * Personality scaling for `scoreBackPiecePriority`.
+ *
+ * The raw back-priority bonus can reach +1500 — large enough to overwhelm
+ * proactive signals like chainExtension (+125) and bigJumpOpportunity (+48).
+ * For defensive play that's the desired bias, but generalist/aggressive
+ * personalities should let big chain jumps and goal entries compete on merit.
+ *
+ * Returns a multiplier:
+ *   - defensive:  always 1.0 (full back-piece bias)
+ *   - generalist: 0.5 → 0.9 as endgame approaches (less bias when far from goal)
+ *   - aggressive: 0.3 → 0.8 as endgame approaches (least bias)
+ *
+ * The endgame ramp matches the eval's endgameRatio (inGoal 3 → 8 maps to 0 → 1)
+ * so back-piece priority recovers as the game shifts from "develop" to "finish".
+ */
+export function backPriorityPersonalityFactor(
+  personality: AIPersonality,
+  inGoal: number,
+): number {
+  if (personality === 'defensive') return 1.0;
+  const endgameRatio = Math.max(0, Math.min(1, (inGoal - 3) / 5));
+  if (personality === 'generalist') return 0.5 + endgameRatio * 0.4;
+  return 0.3 + endgameRatio * 0.5;
+}
+
+/**
+ * Proactive-jump boost: rewards `chainExtension` and `bigJumpOpportunity`
+ * more strongly for non-defensive personalities. Pairs with the back-priority
+ * damper above so the AI doesn't substitute one bias (back-piece tunneling)
+ * for another — it actively prefers big chain jumps in midgame.
+ *
+ * Returns a multiplier:
+ *   - defensive:  1.0  (no change — keeps it cautious)
+ *   - generalist: 1.3  (modest preference for proactive jumps)
+ *   - aggressive: 1.6  (strong preference for proactive jumps)
+ */
+export function proactiveJumpFactor(personality: AIPersonality): number {
+  if (personality === 'defensive') return 1.0;
+  if (personality === 'generalist') return 1.3;
+  return 1.6;
+}
+
+/**
  * Backward-hop chain penalty: for jumps, reconstructs the chain's intermediate
  * landings and penalizes any move whose path visited a DEEPER cell than the
  * final landing. Catches the "chain ends with backward hop" pattern where the
@@ -1390,10 +1433,19 @@ export function scoreChainEnablingStep(
   if (improvement < improvementThreshold) return 0;
 
   // User principle: "this piece should ALWAYS move forward first so that the
-  // back piece can double jump next turn." Magnitude raised from 30→200 per
-  // cell (cap 1000) so the setup can out-score a routine back-piece forward
-  // jump — the prior 150-cap had this signal losing to default eval bonuses.
-  return Math.min(improvement, 5) * 200;
+  // back piece can double jump next turn." Magnitude 200 per cell (cap 1000)
+  // for STEPS — the user's flagged pattern, where a small forward step unlocks
+  // a big follow-up jump for a back piece.
+  //
+  // JUMPS that incidentally enable a back-piece jump get a much smaller credit
+  // (60 per cell): the jump has already cashed in most of its value via
+  // centroid gain and `scoreChainExtension`, so adding a large "vacates a
+  // useful cell" bonus on top double-counts strategic value. Over-rewarding
+  // this case pushed the AI to over-extend (the user-flagged "stopping sooner
+  // would be much better" pattern, where a J4 wins over a strategically-better
+  // J3 because the deeper landing happens to vacate a useful cell).
+  const perCell = move.isJump ? 60 : 200;
+  return Math.min(improvement, 5) * perCell;
 }
 
 /**

@@ -1099,3 +1099,112 @@ describe('scoreLeapfrogPotential', () => {
     expect(aggressive).toBeGreaterThan(defensive);
   });
 });
+
+// Proactive personality bias: generalist/aggressive should prefer big chain
+// jumps over single back-piece steps in midgame, while defensive should keep
+// the conservative back-piece-first behavior. Reproduces the user-flagged
+// Turn-8 position (Flag 2, game review export, 2026-06-29).
+describe('personality-scaled proactive bias', () => {
+  function buildFlag2State(): GameState {
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    const p0: Array<[number, number]> = [
+      [1, -1], [1, 0], [2, -2], [1, -3], [2, -3],
+      [0, -4], [3, -4], [1, -5], [2, -5], [4, -6],
+    ];
+    const p2: Array<[number, number]> = [
+      [-1, 1], [-2, 2], [-2, 3], [0, 4], [-1, 4],
+      [-3, 4], [-1, 5], [-2, 5], [-4, 6], [-3, 6],
+    ];
+    for (const [q, r] of p0) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    for (const [q, r] of p2) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    ts.currentPlayer = 0;
+    ts.turnNumber = 8;
+    return ts;
+  }
+
+  it('generalist prefers a forward chain jump over the single back-piece step', async () => {
+    const { findBestMove } = await import('@/game/ai/search');
+    const picked = findBestMove(buildFlag2State(), 'hard', 'generalist');
+    expect(picked).not.toBeNull();
+    if (picked) {
+      // Back-piece step was (4,-6)→(3,-5). The fix must NOT pick that.
+      const backStep =
+        picked.from.q === 4 && picked.from.r === -6 &&
+        picked.to.q === 3 && picked.to.r === -5;
+      expect(backStep).toBe(false);
+      // Pick must be a meaningful jump.
+      expect(picked.isJump).toBe(true);
+    }
+  });
+
+  it('aggressive also prefers a forward chain jump over the back-piece step', async () => {
+    const { findBestMove } = await import('@/game/ai/search');
+    const picked = findBestMove(buildFlag2State(), 'hard', 'aggressive');
+    expect(picked).not.toBeNull();
+    if (picked) {
+      const backStep =
+        picked.from.q === 4 && picked.from.r === -6 &&
+        picked.to.q === 3 && picked.to.r === -5;
+      expect(backStep).toBe(false);
+      expect(picked.isJump).toBe(true);
+    }
+  });
+
+  it('defensive keeps the conservative back-piece-first behavior', async () => {
+    const { findBestMove } = await import('@/game/ai/search');
+    const picked = findBestMove(buildFlag2State(), 'hard', 'defensive');
+    expect(picked).not.toBeNull();
+    // Defensive should NOT be flipped by the proactive scaling — back-piece
+    // step is its expected choice in this position. Failing this means the
+    // defensive bias was unintentionally reduced.
+    if (picked) {
+      const backStep =
+        picked.from.q === 4 && picked.from.r === -6 &&
+        picked.to.q === 3 && picked.to.r === -5;
+      expect(backStep).toBe(true);
+    }
+  });
+
+  // Round-2 Flag 2 (game review export, Turn 8, 2026-06-29T15:29Z): the AI
+  // chose a J4 chain stopping at (-1,1) — 4 hops deep into opponent territory
+  // — over a strategically-better J3 stopping at (1,1) which also blocks the
+  // opponent. The deeper landing happened to vacate a cell that incidentally
+  // enabled a back-piece chain, awarding +300 from `scoreChainEnablingStep`
+  // and pushing the AI to over-extend. Capping chainEnabling at 60 per cell
+  // for JUMPS (down from 200, kept at 200 for STEPS where it captures the
+  // user's intended setup pattern) restores the strategic stop preference.
+  it('prefers the shallower chain stop that blocks over the deep over-extension', async () => {
+    const { findBestMove } = await import('@/game/ai/search');
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    const p0: Array<[number, number]> = [
+      [0, -1], [1, -3], [0, -2], [0, -3], [0, -4],
+      [1, -4], [3, -4], [3, -5], [4, -5], [2, -6],
+    ];
+    const p2: Array<[number, number]> = [
+      [1, 0], [0, 1], [0, 2], [-1, 3], [-2, 3],
+      [-4, 4], [-1, 4], [-3, 5], [-4, 5], [-2, 6],
+    ];
+    for (const [q, r] of p0) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    for (const [q, r] of p2) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    ts.currentPlayer = 0;
+    ts.turnNumber = 8;
+
+    const picked = findBestMove(ts, 'hard', 'generalist');
+    expect(picked).not.toBeNull();
+    if (picked) {
+      // The AI must NOT pick the J4 over-extension landing at (-1,1).
+      const overExtension =
+        picked.from.q === 1 && picked.from.r === -3 &&
+        picked.to.q === -1 && picked.to.r === 1;
+      expect(overExtension).toBe(false);
+    }
+  });
+});
