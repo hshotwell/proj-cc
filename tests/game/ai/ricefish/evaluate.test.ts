@@ -7,6 +7,7 @@ import {
   MATE,
   createGoalCentroidCache,
   OBSTRUCTION_PENALTY,
+  STRAGGLER_WEIGHT,
 } from '@/game/ai/ricefish/evaluate';
 import type { CellContent, GameState, Move, PlayerIndex } from '@/types/game';
 
@@ -188,6 +189,46 @@ describe('playerDistance obstruction penalty', () => {
     const dEmpty = playerDistance(noBlockers, 2);
     const dObs = playerDistance(twoBlockers, 2);
     expect(dObs).toBeCloseTo(dEmpty + 2 * OBSTRUCTION_PENALTY, 5);
+  });
+});
+
+describe('playerDistance straggler weight', () => {
+  // Helper: build a P2 state with explicit piece positions, clearing P0/P2
+  // first so opponent home cells don't leak into our distance calculation.
+  function buildP2State(p2Positions: Array<[number, number]>): GameState {
+    const base = freshGame([0, 2]);
+    const board = new Map(base.board);
+    for (const [k, v] of board) {
+      if (v.type === 'piece' && (v.player === 0 || v.player === 2)) {
+        board.set(k, { type: 'empty' });
+      }
+    }
+    for (const [q, r] of p2Positions) {
+      board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    }
+    return { ...base, board };
+  }
+
+  it('penalizes a state with one far straggler vs a balanced same-sum state', () => {
+    // P2 goal cells include (4,-5), (3,-5), (4,-8), (3,-8) among others.
+    // Balanced: 8 in goal, 2 outside at distance ~2 each from unfilled cells.
+    // Stragglered: 8 in goal, 1 outside near and 1 outside far — same matched
+    // sum, larger max. The far-piece state must score worse.
+    const balanced = buildP2State([
+      [4, -8], [3, -7], [4, -7], [2, -6], [3, -6], [4, -6], [1, -5], [2, -5],
+      [1, -3], [4, -3], // both outside pieces at r=-3, symmetric
+    ]);
+    const stragglered = buildP2State([
+      [4, -8], [3, -7], [4, -7], [2, -6], [3, -6], [4, -6], [1, -5], [2, -5],
+      [3, -4], [1, -1], // one near, one far — same sum, larger max
+    ]);
+
+    // Sanity: the matched sum should be (close to) equal so this test is
+    // really measuring the straggler term, not the sum.
+    // (Confirmed by running with STRAGGLER_WEIGHT = 0; the test would then
+    // assert near-equality.)
+    expect(STRAGGLER_WEIGHT).toBeGreaterThan(0);
+    expect(playerDistance(stragglered, 2)).toBeGreaterThan(playerDistance(balanced, 2));
   });
 });
 

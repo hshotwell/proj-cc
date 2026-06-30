@@ -19,6 +19,19 @@ export const MATE = 1_000_000_000;
  */
 export const OBSTRUCTION_PENALTY = 1.5;
 
+/**
+ * Extra weight on the *farthest* matched piece-to-goal distance. Sum of
+ * distances treats "advance a near piece by 1" and "advance the back piece
+ * by 1" as equal, so the AI naturally pulls already-close pieces forward
+ * (move ordering tiebreaks by travel distance, which favors jumps on near
+ * pieces) and leaves stragglers stranded.
+ *
+ * 0.5 is enough to tiebreak the back piece's forward step ahead of a same-
+ * size near-piece step, without dragging the AI into pulling the back piece
+ * when other pieces have much larger gains available.
+ */
+export const STRAGGLER_WEIGHT = 0.5;
+
 // Cache the goal-cell list per player for one search call. Each entry's
 // "filled" membership is recomputed per-state at the call site (cheap —
 // just board lookups), so the cache stores only the immutable cell list.
@@ -70,22 +83,22 @@ export function playerDistance(
   const unfilled = goals.filter((g) => !pieceKeys.has(coordKey(g)));
   if (unfilled.length === 0) return 0;
 
-  const { cost, obstructed } = greedyAssignmentCost(state, player, piecesOutside, unfilled);
-  return cost + OBSTRUCTION_PENALTY * obstructed;
+  const { cost, obstructed, maxDist } = greedyAssignmentCost(state, player, piecesOutside, unfilled);
+  return cost + OBSTRUCTION_PENALTY * obstructed + STRAGGLER_WEIGHT * maxDist;
 }
 
 /**
  * Greedy minimum-cost bipartite matching by repeatedly taking the closest
  * (piece, goal) pair among remaining options. Also counts how many of the
- * matched goal cells are occupied by an opponent piece — these are the
- * blockers we'll need to swap-evict to actually claim those cells.
+ * matched goal cells are occupied by an opponent piece (blockers we'll need
+ * to swap-evict) and tracks the largest matched distance (the straggler).
  */
 function greedyAssignmentCost(
   state: GameState,
   player: PlayerIndex,
   pieces: CubeCoord[],
   goals: CubeCoord[],
-): { cost: number; obstructed: number } {
+): { cost: number; obstructed: number; maxDist: number } {
   const pairs: Array<{ pi: number; gj: number; d: number }> = [];
   for (let i = 0; i < pieces.length; i++) {
     for (let j = 0; j < goals.length; j++) {
@@ -99,16 +112,18 @@ function greedyAssignmentCost(
   const limit = Math.min(pieces.length, goals.length);
   let total = 0;
   let obstructed = 0;
+  let maxDist = 0;
   for (const { pi, gj, d } of pairs) {
     if (usedP.size >= limit) break;
     if (usedP.has(pi) || usedG.has(gj)) continue;
     total += d;
+    if (d > maxDist) maxDist = d;
     const cell = state.board.get(coordKey(goals[gj]));
     if (cell?.type === 'piece' && cell.player !== player) obstructed++;
     usedP.add(pi);
     usedG.add(gj);
   }
-  return { cost: total, obstructed };
+  return { cost: total, obstructed, maxDist };
 }
 
 function defenseWeight(personality: AIPersonality): number {
