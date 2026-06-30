@@ -143,6 +143,7 @@ export function useAITurn(enabled: boolean = true) {
         state: serialized,
         difficulty: currentAI.difficulty,
         personality: currentAI.personality,
+        engine: currentAI.engine ?? 'default',
         openingMoves,
       });
     }, AI_THINK_DELAY);

@@ -2,11 +2,36 @@ import type { PlayerIndex } from './game';
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard';
 export type AIPersonality = 'generalist' | 'defensive' | 'aggressive';
+export type AIEngine = 'default' | 'ricefish';
 
 export interface AIConfig {
   difficulty: AIDifficulty;
   personality: AIPersonality;
+  // Optional engine selector. When missing, treat as 'default' for
+  // backward compatibility with games saved before the field existed.
+  engine?: AIEngine;
 }
+
+/** Time budget for the Ricefish engine's iterative deepening (milliseconds). */
+export const RICEFISH_TIME_BUDGET_MS: Record<AIDifficulty, number> = {
+  easy:   500,
+  medium: 1500,
+  hard:   4000,
+};
+
+/** Search depth for the Ricefish engine in 2-player games. */
+export const RICEFISH_DEPTH_2P: Record<AIDifficulty, number> = {
+  easy:   2,
+  medium: 3,
+  hard:   4,
+};
+
+/** Search depth for the Ricefish engine in 3+ player games (branching is wider). */
+export const RICEFISH_DEPTH_MP: Record<AIDifficulty, number> = {
+  easy:   1,
+  medium: 2,
+  hard:   3,
+};
 
 export type AIPlayerMap = Partial<Record<PlayerIndex, AIConfig>>;
 

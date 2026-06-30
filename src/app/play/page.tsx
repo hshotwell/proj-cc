@@ -308,13 +308,22 @@ export default function PlayPage() {
         {isAI && (
           <div className="flex items-center gap-2 pl-13">
             <select
-              value={aiConfig[playerIndex]!.difficulty}
-              onChange={(e) => setAiConfig(prev => ({ ...prev, [playerIndex]: { ...prev[playerIndex]!, difficulty: e.target.value as AIDifficulty } }))}
+              value={aiConfig[playerIndex]!.engine === 'ricefish' ? 'ricefish' : aiConfig[playerIndex]!.difficulty}
+              onChange={(e) => {
+                const v = e.target.value;
+                setAiConfig(prev => ({
+                  ...prev,
+                  [playerIndex]: v === 'ricefish'
+                    ? { ...prev[playerIndex]!, engine: 'ricefish', difficulty: 'hard' }
+                    : { ...prev[playerIndex]!, engine: 'default', difficulty: v as AIDifficulty },
+                }));
+              }}
               className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
             >
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
+              <option value="ricefish">Ricefish</option>
             </select>
             <select
               value={aiConfig[playerIndex]!.personality}

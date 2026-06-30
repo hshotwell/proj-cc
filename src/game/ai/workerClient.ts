@@ -1,5 +1,5 @@
 import type { GameState, CellContent } from '@/types/game';
-import type { AIDifficulty, AIPersonality } from '@/types/ai';
+import type { AIDifficulty, AIPersonality, AIEngine } from '@/types/ai';
 import type { Move } from '@/types/game';
 
 // Serialized version of GameState where the board Map is converted to an array
@@ -28,6 +28,7 @@ export interface WorkerRequest {
   state: SerializedGameState;
   difficulty: AIDifficulty;
   personality: AIPersonality;
+  engine?: AIEngine;
   openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null;
 }
 
