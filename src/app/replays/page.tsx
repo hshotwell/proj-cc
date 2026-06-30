@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { SavedGameSummary } from '@/types/replay';
+import type { SavedGameSummary, SavedGameData } from '@/types/replay';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { getSavedGamesList, deleteSavedGame } from '@/game/persistence';
+import { getSavedGamesList, deleteSavedGame, importSavedGame } from '@/game/persistence';
 
 export default function ReplaysPage() {
   const router = useRouter();
   const [games, setGames] = useState<SavedGameSummary[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setGames(getSavedGamesList());
@@ -21,18 +23,59 @@ export default function ReplaysPage() {
     setGames(getSavedGamesList());
   };
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImportError(null);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (files.length === 0) return;
+    const errors: string[] = [];
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text) as SavedGameData;
+        importSavedGame(data);
+      } catch (err) {
+        errors.push(`${file.name}: ${err instanceof Error ? err.message : 'parse error'}`);
+      }
+    }
+    setGames(getSavedGamesList());
+    if (errors.length > 0) setImportError(errors.join('; '));
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Past Games</h1>
-          <Link
-            href="/home"
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            Back to Home
-          </Link>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              title="Load a replay JSON exported by the bake-off harness"
+            >
+              Import JSON
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              multiple
+              className="hidden"
+              onChange={handleImportFile}
+            />
+            <Link
+              href="/home"
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Back to Home
+            </Link>
+          </div>
         </div>
+        {importError && (
+          <div className="mb-4 px-4 py-2 bg-red-50 text-red-700 text-sm rounded border border-red-200">
+            Import failed: {importError}
+          </div>
+        )}
 
         {games.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center">
