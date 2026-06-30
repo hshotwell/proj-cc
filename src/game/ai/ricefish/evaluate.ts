@@ -39,6 +39,12 @@ function endgameBlockerMultiplier(inGoalFraction: number): number {
   return 1.0;
 }
 
+// Bonus for each of my pieces adjacent to a blocker — they're "primed" for
+// a swap on the next ply. Encourages the search to walk pieces toward
+// blockers as setup moves even before a direct swap is available, which
+// is the key to multi-swap chain plans deeper than the search horizon.
+const SWAP_SETUP_BONUS = 2;
+
 // Cache per player for one search call. Stores both the goal-cell list and
 // the depth map (depth = BFS distance from entry cells, where entry cells
 // are goal cells with at least one on-board non-goal neighbor).
@@ -152,18 +158,39 @@ export function playerDistance(
   }
 
   // Walk all goal cells: count opponents sitting in them (blockers), sum
-  // their depths, and tally how many cells are filled by anyone (used for
-  // the endgame multiplier — see below).
+  // their depths, tally how many cells are filled (for the endgame
+  // multiplier), and remember each blocker's coord so we can compute the
+  // "setup" bonus below.
   let blockerCount = 0;
   let blockerDepthSum = 0;
   let filledGoalCells = 0;
+  const blockerKeys = new Set<string>();
   for (const g of goals) {
-    const c = state.board.get(coordKey(g));
+    const k = coordKey(g);
+    const c = state.board.get(k);
     if (c?.type === 'piece') {
       filledGoalCells++;
       if (c.player !== player) {
         blockerCount++;
-        blockerDepthSum += depths.get(coordKey(g)) ?? 0;
+        blockerDepthSum += depths.get(k) ?? 0;
+        blockerKeys.add(k);
+      }
+    }
+  }
+
+  // Setup bonus: each of my pieces that is adjacent to a blocker counts
+  // as "primed" — it can swap next turn. Encourages the search to walk
+  // pieces toward blockers as preparation, not just when a direct swap
+  // is one ply away.
+  let setupCount = 0;
+  if (blockerKeys.size > 0) {
+    for (const piece of pieces) {
+      for (const dir of DIRECTIONS) {
+        const n = cubeAdd(piece, dir);
+        if (blockerKeys.has(coordKey(n))) {
+          setupCount++;
+          break;
+        }
       }
     }
   }
@@ -176,14 +203,15 @@ export function playerDistance(
   const mult = endgameBlockerMultiplier(filledGoalCells / goals.length);
   const blockerTerm = mult * (BLOCKER_PENALTY * blockerCount + BLOCKER_DEPTH_WEIGHT * blockerDepthSum);
   const ownDepthTerm = OWN_DEPTH_WEIGHT * ownDepthBonus;
+  const setupTerm = SWAP_SETUP_BONUS * setupCount;
 
-  if (piecesOutside.length === 0) return blockerTerm - ownDepthTerm;
+  if (piecesOutside.length === 0) return blockerTerm - ownDepthTerm - setupTerm;
 
   const pieceKeys = new Set(pieces.map(coordKey));
   const unfilled = goals.filter((g) => !pieceKeys.has(coordKey(g)));
-  if (unfilled.length === 0) return blockerTerm - ownDepthTerm;
+  if (unfilled.length === 0) return blockerTerm - ownDepthTerm - setupTerm;
 
-  return greedyAssignmentCost(piecesOutside, unfilled) + blockerTerm - ownDepthTerm;
+  return greedyAssignmentCost(piecesOutside, unfilled) + blockerTerm - ownDepthTerm - setupTerm;
 }
 
 /**

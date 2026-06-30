@@ -6,14 +6,34 @@ import {
   RICEFISH_TIME_BUDGET_MS,
 } from '@/types/ai';
 import { getAllValidMoves } from '@/game/moves';
-import { applyMove, hasPlayerWon } from '@/game/state';
-import { cubeEquals } from '@/game/coordinates';
+import { applyMove, hasPlayerWon, getGoalPositionsForState } from '@/game/state';
+import { cubeEquals, coordKey } from '@/game/coordinates';
 import {
   ricefishScore,
   createGoalCentroidCache,
   MATE,
 } from './evaluate';
 import { orderMoves } from './ordering';
+
+/**
+ * Add depth when the goal triangle is heavily filled — branching factor
+ * is small in that regime and we need extra plies to see a multi-step
+ * swap chain. Bonus saturates at +3 so total max-depth stays bounded.
+ */
+function computeEndgameDepthBonus(state: GameState, player: PlayerIndex): number {
+  const goals = getGoalPositionsForState(state, player);
+  if (goals.length === 0) return 0;
+  let filled = 0;
+  for (const g of goals) {
+    const c = state.board.get(coordKey(g));
+    if (c?.type === 'piece') filled++;
+  }
+  const fraction = filled / goals.length;
+  if (fraction >= 0.8) return 3;
+  if (fraction >= 0.6) return 2;
+  if (fraction >= 0.4) return 1;
+  return 0;
+}
 
 const TT_MAX_ENTRIES = 100_000;
 // At the root, knock this much off any candidate that reverses one of the
@@ -262,7 +282,12 @@ function findBestMove2P(
   difficulty: AIDifficulty,
   personality: AIPersonality,
 ): Move | null {
-  const maxDepth = RICEFISH_DEPTH_2P[difficulty];
+  // Endgame depth bonus: when the goal triangle is mostly filled the
+  // branching factor collapses (most pieces are wedged in goal cells with
+  // few legal options), so iterative deepening can safely chase deeper
+  // plies — enough to see a 4-step swap-chain that frees a tip blocker.
+  const endgameBonus = computeEndgameDepthBonus(state, state.currentPlayer);
+  const maxDepth = RICEFISH_DEPTH_2P[difficulty] + endgameBonus;
   const budget = new TimeBudget(RICEFISH_TIME_BUDGET_MS[difficulty]);
   const ctx: ABContext = {
     root: state.currentPlayer,
