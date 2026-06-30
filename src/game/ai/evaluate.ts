@@ -392,6 +392,7 @@ export function evaluatePosition(
   // Late endgame targeting: when 9+ pieces in goal, focus on nearest empty goal
   const goalKeySet = new Set(goalPositions.map((g) => coordKey(g)));
   const lateEndgame = inGoal >= 9;
+  let obstructionPenaltyPoints = 0;
   if (lateEndgame) {
     const emptyGoals = goalPositions.filter((g) => {
       const content = state.board.get(coordKey(g));
@@ -411,6 +412,16 @@ export function evaluatePosition(
           );
           stragglerScore = -(worstDist * worstDist) / 3;
         }
+        // Obstruction surcharge: cells in emptyGoals that actually hold an
+        // opponent piece are blockers we'll need to swap through. Cap at the
+        // matching cardinality so we never over-penalize when piecesOutside
+        // is the smaller set.
+        const obstructed = emptyGoals.filter((g) => {
+          const c = state.board.get(coordKey(g));
+          return c?.type === 'piece' && c.player !== player;
+        }).length;
+        const obstructedInMatching = Math.min(obstructed, piecesOutside.length);
+        obstructionPenaltyPoints = obstructedInMatching * 2.0;
       }
     }
   }
@@ -635,7 +646,7 @@ export function evaluatePosition(
 
   let score =
     wProgress          * progressScore +
-    wDistProgress      * distanceProgressScore +
+    wDistProgress      * (distanceProgressScore - obstructionPenaltyPoints) +
     wStraggler         * stragglerScore +
     extremeStragPenalty                        +
     wAlignment         * alignmentScore +
