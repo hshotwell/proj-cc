@@ -17,6 +17,12 @@ import { orderMoves } from './ordering';
 
 const TT_MAX_ENTRIES = 100_000;
 
+// Maximum quiescence extension past the alpha-beta horizon. Quiescence only
+// considers jumps (which include chain jumps as single moves), so each ply
+// here is a tactical hop sequence. 3 is enough to resolve typical 1-2 jump
+// exchange tactics without exploding the branching factor.
+const RICEFISH_Q_DEPTH = 3;
+
 // ─── transposition table ──────────────────────────────────────────────────────
 
 type TTFlag = 'exact' | 'lower' | 'upper';
@@ -144,6 +150,56 @@ function orderInnerMoves(
 }
 
 /**
+ * Quiescence extension: at the alpha-beta horizon, instead of returning the
+ * static eval directly, look at "noisy" moves (jumps — chain jumps included
+ * as a single move) and recurse. Stand-pat baseline is the static eval; if a
+ * jump improves it, take that score instead.
+ *
+ * Returns score from side-to-move's POV (negamax convention).
+ *
+ * Capped at `qDepth` plies to bound the work. Steps are excluded — they're
+ * positional and would explode the branching factor.
+ */
+function quiesce(
+  state: GameState,
+  alpha: number,
+  beta: number,
+  ply: number,
+  ctx: ABContext,
+  qDepth: number,
+): number {
+  if (ctx.budget.expired()) throw new SearchAborted();
+
+  const sideToMove = state.currentPlayer;
+  const raw = ricefishScore(state, ctx.root, ctx.personality, ctx.cache);
+  const standPat = sideToMove === ctx.root ? raw : -raw;
+
+  // If the static eval already beats beta, the opponent won't let us reach
+  // this node — short-circuit.
+  if (standPat >= beta) return beta;
+  if (standPat > alpha) alpha = standPat;
+
+  if (qDepth === 0 || state.winner !== null) return alpha;
+
+  const all = getAllValidMoves(state, sideToMove);
+  // Noisy moves only. Jumps (incl. chain jumps as single moves) capture
+  // tactical sequences; steps don't.
+  const jumps = all.filter((m) => m.isJump);
+  if (jumps.length === 0) return alpha;
+
+  for (const move of orderMoves(jumps, ctx.personality)) {
+    const next = applyMove(state, move);
+    const sideChanged = next.currentPlayer !== state.currentPlayer;
+    const value = sideChanged
+      ? -quiesce(next, -beta, -alpha, ply + 1, ctx, qDepth - 1)
+      : quiesce(next, alpha, beta, ply + 1, ctx, qDepth - 1);
+    if (value >= beta) return beta;
+    if (value > alpha) alpha = value;
+  }
+  return alpha;
+}
+
+/**
  * Negamax with alpha-beta from `root`'s perspective. Returns score.
  *
  * Even-depth nodes evaluate from root's POV; odd-depth nodes evaluate from
@@ -160,14 +216,12 @@ function alphaBeta(
 ): number {
   if (ctx.budget.expired()) throw new SearchAborted();
 
-  // Terminal or depth cap → leaf eval.
+  // Terminal or depth cap → quiescence extension.
   // We always evaluate from `ctx.root`'s POV and let negamax flip the sign
   // implicitly via the side-to-move alternation in alpha/beta windows.
   const sideToMove = state.currentPlayer;
   if (depth === 0 || state.winner !== null) {
-    const raw = ricefishScore(state, ctx.root, ctx.personality, ctx.cache);
-    // Convert to side-to-move POV for negamax.
-    return sideToMove === ctx.root ? raw : -raw;
+    return quiesce(state, alpha, beta, ply, ctx, RICEFISH_Q_DEPTH);
   }
 
   const ttKey = hashState(state);
