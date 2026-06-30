@@ -94,6 +94,50 @@ describe('findRicefishMove endgame regression', () => {
   });
 });
 
+describe('findRicefishMove post-loss progress', () => {
+  it('still advances its last outside piece after the opponent has won', () => {
+    // Reproduces a real export (Turn 50, 2026-06-30): P0 has all 10 in goal,
+    // P2 has 9 in goal + 1 stranded at (-3,2). Ricefish picked a sideways
+    // shuffle within its goal triangle (1,-5 -> 3,-5) instead of stepping the
+    // (-3,2) piece closer to home. After the eval fix (no -MATE shortcut on
+    // opponent win), the picked move must come from the outside piece.
+    const base = createGame(2, [0, 2]);
+    const board = new Map(base.board);
+    for (const [k, v] of board) {
+      if (v.type === 'piece' && (v.player === 0 || v.player === 2)) {
+        board.set(k, { type: 'empty' });
+      }
+    }
+    // P0 winning configuration: all 10 in P0's goal (= P2's home).
+    const p0Final: Array<[number, number]> = [
+      [-1, 5], [-2, 5], [-3, 5], [-4, 5], [-4, 6],
+      [-2, 6], [-3, 6], [-3, 7], [-4, 7], [-4, 8],
+    ];
+    for (const [q, r] of p0Final) board.set(`${q},${r}`, { type: 'piece', player: 0 });
+    // P2 with 9 in goal (P0's home minus (3,-5)) and 1 outside at (-3,2).
+    // This is the BEFORE state — in the original export Ricefish jumped
+    // (1,-5) over (2,-5) to (3,-5), a useless within-goal shuffle.
+    const p2InGoal: Array<[number, number]> = [
+      [1, -5], [2, -5], [4, -5], [4, -6], [2, -6],
+      [3, -6], [3, -7], [4, -7], [4, -8],
+    ];
+    for (const [q, r] of p2InGoal) board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    board.set('-3,2', { type: 'piece', player: 2 });
+    const state: GameState = {
+      ...base,
+      board,
+      currentPlayer: 2,
+      finishedPlayers: [{ player: 0, moveCount: 50 }],
+      winner: 0,
+    };
+
+    const move = findRicefishMove(state, 'medium', 'generalist');
+    expect(move).not.toBeNull();
+    expect(move!.from.q).toBe(-3);
+    expect(move!.from.r).toBe(2);
+  });
+});
+
 describe('findRicefishMove endgame swap-awareness', () => {
   it('picks a swap when the only unfilled goal cell is occupied by an opponent', () => {
     const base = createGame(2, [0, 2]);

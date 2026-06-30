@@ -123,7 +123,11 @@ function defenseWeight(personality: AIPersonality): number {
 /**
  * Score the position from `player`'s perspective. Higher is better for `player`.
  *
- * Terminal: returns ±MATE if any player has won the game.
+ * Terminal: returns +MATE if `player` has won. Does NOT short-circuit when an
+ * opponent has won — the game continues until all players finish, and a flat
+ * -MATE would make every move look equivalent and the AI would shuffle
+ * sideways. Falling through to the normal eval lets our own distance keep
+ * driving the search so the loser still advances its remaining pieces.
  * Otherwise: (weighted sum of all opponents' distances) − (player's distance).
  *
  * Ricefish's original `score_by_side` did `their_dist - our_dist` for the 2-player
@@ -137,13 +141,7 @@ export function ricefishScore(
   personality: AIPersonality,
   cache?: GoalCellsCache,
 ): number {
-  // Terminal shortcut. If `player` is finished they're winning from their
-  // POV regardless of search depth left.
   if (hasPlayerWon(state, player)) return MATE;
-  for (const other of state.activePlayers) {
-    if (other === player) continue;
-    if (hasPlayerWon(state, other)) return -MATE;
-  }
 
   const w = defenseWeight(personality);
   let oppTotal = 0;

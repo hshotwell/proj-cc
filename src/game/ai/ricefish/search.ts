@@ -193,7 +193,14 @@ function alphaBeta(
 
   for (const move of ordered) {
     const next = applyMove(state, move);
-    const value = -alphaBeta(next, depth - 1, -beta, -alpha, ply + 1, ctx);
+    // When applyMove skips a finished opponent, the side-to-move does NOT
+    // flip. Negamax assumes alternation, so the standard `-alphaBeta(..., -beta,
+    // -alpha)` over-negates in that case. Detect side change and use the
+    // appropriate window / sign.
+    const sideChanged = next.currentPlayer !== state.currentPlayer;
+    const value = sideChanged
+      ? -alphaBeta(next, depth - 1, -beta, -alpha, ply + 1, ctx)
+      : alphaBeta(next, depth - 1, alpha, beta, ply + 1, ctx);
     if (value > bestValue) {
       bestValue = value;
       bestMove = move;
@@ -245,7 +252,11 @@ function findBestMove2P(
       const beta = Infinity;
       for (const move of ordered) {
         const next = applyMove(state, move);
-        const score = -alphaBeta(next, depth - 1, -beta, -alpha, 1, ctx);
+        // See alphaBeta — if a finished opponent is skipped, side doesn't flip.
+        const sideChanged = next.currentPlayer !== state.currentPlayer;
+        const score = sideChanged
+          ? -alphaBeta(next, depth - 1, -beta, -alpha, 1, ctx)
+          : alphaBeta(next, depth - 1, alpha, beta, 1, ctx);
         if (score > bestScore) {
           bestScore = score;
           bestThisIter = move;

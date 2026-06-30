@@ -216,7 +216,32 @@ describe('ricefishScore', () => {
     const state = freshGame();
     const winning = forceWin(state, 0);
     expect(ricefishScore(winning, 0, 'generalist')).toBe(MATE);
-    expect(ricefishScore(winning, 2, 'generalist')).toBe(-MATE);
+  });
+
+  it('returns a finite negative score for the loser after opponent wins', () => {
+    // After the opponent has won, the loser keeps playing — but the score
+    // must still rank moves by the loser's own remaining distance so the
+    // search can pick progress moves instead of shuffling.
+    const base = freshGame([0, 2]);
+    const board = new Map(base.board);
+    for (const [k, v] of board) {
+      if (v.type === 'piece' && (v.player === 0 || v.player === 2)) {
+        board.set(k, { type: 'empty' });
+      }
+    }
+    // P0 with all 10 pieces in goal (= P2's home cells).
+    const p0Final: Array<[number, number]> = [
+      [-4, 8], [-3, 7], [-4, 7], [-2, 6], [-3, 6], [-4, 6],
+      [-1, 5], [-2, 5], [-3, 5], [-4, 5],
+    ];
+    for (const [q, r] of p0Final) board.set(`${q},${r}`, { type: 'piece', player: 0 });
+    // P2 with 1 piece outside its goal at (-3,2) — still progressing.
+    board.set('-3,2', { type: 'piece', player: 2 });
+    const oppWon: GameState = { ...base, board };
+
+    const score = ricefishScore(oppWon, 2, 'generalist');
+    expect(score).toBeLessThan(0);
+    expect(score).toBeGreaterThan(-MATE);
   });
 
   it('respects the centroid cache (no observable behavior change)', () => {
