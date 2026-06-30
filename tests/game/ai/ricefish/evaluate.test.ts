@@ -130,7 +130,8 @@ describe('endgame regression — no oscillation when nearly home', () => {
     board.set('4,-8', { type: 'piece', player: 0 });
     board.set('4,-5', { type: 'piece', player: 0 });
     const state: GameState = { ...base, board };
-    // blockerTerm = BLOCKER_PENALTY*2 + BLOCKER_DEPTH_WEIGHT*(3+0) = 6 + 6 = 12
+    // filledFraction = 3 / 10 (1 own + 2 blockers in 10-cell goal) = 0.3 → mult 1.0
+    // blockerTerm = 1.0 × (BLOCKER_PENALTY*2 + BLOCKER_DEPTH_WEIGHT*(3+0)) = 12
     // ownDepthTerm = OWN_DEPTH_WEIGHT * 1 = 1
     // total = 12 - 1 = 11
     expect(playerDistance(state, 2)).toBe(11);

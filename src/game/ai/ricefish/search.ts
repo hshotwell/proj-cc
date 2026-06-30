@@ -115,22 +115,36 @@ function sameMove(a: Move, b: Move): boolean {
   return cubeEquals(a.from, b.from) && cubeEquals(a.to, b.to);
 }
 
-/**
- * Build the set of "do-not-reverse" move keys from the recent move history.
- * A move `from → to` here means: my own most-recent move was `to → from`,
- * so playing this one would undo it.
- */
-function buildReverseSet(state: GameState): Set<string> {
-  const out = new Set<string>();
+interface RepetitionTraps {
+  // Exact-reverse moves: my prior move was X→Y, playing Y→X this turn
+  // closes a 2-cycle. Heavily penalized.
+  reverses: Set<string>;
+  // Cells I vacated in the last few turns. A move landing here is
+  // "revisiting recently-left territory" — catches 4-step shuffles like
+  // A→B then later …→A that don't show up as direct reversals.
+  vacatedCells: Set<string>;
+}
+
+function buildRepetitionTraps(state: GameState): RepetitionTraps {
+  const reverses = new Set<string>();
+  const vacatedCells = new Set<string>();
   const myMoves: Move[] = [];
   for (let i = state.moveHistory.length - 1; i >= 0 && myMoves.length < REPETITION_LOOKBACK; i--) {
     const m = state.moveHistory[i];
     if (m.player === state.currentPlayer) myMoves.push(m);
   }
   for (const m of myMoves) {
-    out.add(`${m.to.q},${m.to.r}->${m.from.q},${m.from.r}`);
+    reverses.add(`${m.to.q},${m.to.r}->${m.from.q},${m.from.r}`);
+    vacatedCells.add(`${m.from.q},${m.from.r}`);
   }
-  return out;
+  return { reverses, vacatedCells };
+}
+
+function repetitionPenaltyFor(move: Move, traps: RepetitionTraps): number {
+  let p = 0;
+  if (traps.reverses.has(moveKey(move))) p += REPETITION_PENALTY;
+  if (traps.vacatedCells.has(`${move.to.q},${move.to.r}`)) p += REPETITION_PENALTY / 2;
+  return p;
 }
 
 function moveKey(m: Move): string {
@@ -263,7 +277,7 @@ function findBestMove2P(
   const rootMoves = getAllValidMoves(state, state.currentPlayer);
   if (rootMoves.length === 0) return null;
 
-  const reverseSet = buildReverseSet(state);
+  const traps = buildRepetitionTraps(state);
 
   let bestOverall: Move | null = rootMoves[0];
   // Iterative deepening: complete each depth in full before advancing to the
@@ -278,7 +292,7 @@ function findBestMove2P(
       for (const move of ordered) {
         const next = applyMove(state, move);
         let score = -alphaBeta(next, depth - 1, -beta, -alpha, 1, ctx);
-        if (reverseSet.has(moveKey(move))) score -= REPETITION_PENALTY;
+        score -= repetitionPenaltyFor(move, traps);
         if (score > bestScore) {
           bestScore = score;
           bestThisIter = move;
@@ -364,7 +378,7 @@ function findBestMoveMP(
   if (rootMoves.length === 0) return null;
   const sideIndex = state.activePlayers.indexOf(state.currentPlayer);
 
-  const reverseSet = buildReverseSet(state);
+  const traps = buildRepetitionTraps(state);
 
   let bestOverall: Move | null = rootMoves[0];
 
@@ -377,7 +391,7 @@ function findBestMoveMP(
         const next = applyMove(state, move);
         const vec = maxN(next, depth - 1, ctx);
         let component = vec[sideIndex];
-        if (reverseSet.has(moveKey(move))) component -= REPETITION_PENALTY;
+        component -= repetitionPenaltyFor(move, traps);
         if (component > bestComponent) {
           bestComponent = component;
           bestThisIter = move;

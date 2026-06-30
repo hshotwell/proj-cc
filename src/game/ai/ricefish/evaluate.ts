@@ -28,6 +28,17 @@ const BLOCKER_DEPTH_WEIGHT = 2;
 // register as positive progress).
 const OWN_DEPTH_WEIGHT = 1;
 
+// Endgame multiplier on the blocker-related terms. When most of my pieces
+// are already home, removing the remaining blockers is essentially the
+// whole game — small improvements elsewhere shouldn't outweigh a swap.
+// Triggers at the fractions below; values chosen so a swap that displaces
+// a blocker beats almost any non-swap forward step.
+function endgameBlockerMultiplier(inGoalFraction: number): number {
+  if (inGoalFraction >= 0.8) return 3.0;
+  if (inGoalFraction >= 0.6) return 1.75;
+  return 1.0;
+}
+
 // Cache per player for one search call. Stores both the goal-cell list and
 // the depth map (depth = BFS distance from entry cells, where entry cells
 // are goal cells with at least one on-board non-goal neighbor).
@@ -140,20 +151,30 @@ export function playerDistance(
     }
   }
 
-  // Walk all goal cells: count opponents sitting in them (blockers) and
-  // sum their depths. Deep blockers (near the tip) are far harder to evict
-  // than shallow ones, so they should weigh more.
+  // Walk all goal cells: count opponents sitting in them (blockers), sum
+  // their depths, and tally how many cells are filled by anyone (used for
+  // the endgame multiplier — see below).
   let blockerCount = 0;
   let blockerDepthSum = 0;
+  let filledGoalCells = 0;
   for (const g of goals) {
     const c = state.board.get(coordKey(g));
-    if (c?.type === 'piece' && c.player !== player) {
-      blockerCount++;
-      blockerDepthSum += depths.get(coordKey(g)) ?? 0;
+    if (c?.type === 'piece') {
+      filledGoalCells++;
+      if (c.player !== player) {
+        blockerCount++;
+        blockerDepthSum += depths.get(coordKey(g)) ?? 0;
+      }
     }
   }
 
-  const blockerTerm = BLOCKER_PENALTY * blockerCount + BLOCKER_DEPTH_WEIGHT * blockerDepthSum;
+  // Endgame multiplier is tied to *goal occupancy* (filled cells / total
+  // goal cells), not to my in-goal count. If I step a piece OUT of goal,
+  // filled drops by 1 — but blockers still sit there, so the multiplier
+  // stays high. Without this, the AI discovers it can dodge the blocker
+  // penalty by abandoning its own goal cells.
+  const mult = endgameBlockerMultiplier(filledGoalCells / goals.length);
+  const blockerTerm = mult * (BLOCKER_PENALTY * blockerCount + BLOCKER_DEPTH_WEIGHT * blockerDepthSum);
   const ownDepthTerm = OWN_DEPTH_WEIGHT * ownDepthBonus;
 
   if (piecesOutside.length === 0) return blockerTerm - ownDepthTerm;
