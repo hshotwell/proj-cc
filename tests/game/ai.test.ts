@@ -1228,6 +1228,50 @@ describe('personality-scaled proactive bias', () => {
     expect(jumpBonus).toBe(0);
   });
 
+  // Round-4 Flag 1 (game review export, Turn 34, 2026-06-30): two friendly
+  // pieces (2,0) and (3,0) could both step to (2,1). The AI picked the
+  // wrong source (3,0). Stepping (2,0) instead leaves (3,0) in chain-jump
+  // position relative to (2,1): (3,0) → over (2,1) → (1,2) is a +2-cell
+  // forward chain on the goal-axis line. Moving (3,0) gives up that setup
+  // entirely (the only teammate-jump (2,0)→(2,2) drifts off-axis and is
+  // filtered out). User principle: "knowing when to step which piece
+  // further so it is in alignment with the end zones".
+  //
+  // Fix extends `scoreChainEndpointSetup` to fire for STEPS (previously
+  // jumps-only), with a 30/cell teammate-setup multiplier (vs jumps' 8) and
+  // a bug fix that excludes move.from from the friendly-neighbor scan.
+  it('source-choice: steps the piece that leaves the other on the chain-jump axis', async () => {
+    const { findBestMove } = await import('@/game/ai/search');
+    const state = createGame(2);
+    const ts = cloneGameState(state);
+    for (const [key, content] of ts.board) {
+      if (content.type === 'piece') ts.board.set(key, { type: 'empty' });
+    }
+    const p0: Array<[number, number]> = [
+      [-1, 0], [-2, 0], [2, 0], [-2, 2], [-2, 1],
+      [-3, 3], [3, 0], [-1, 5], [-5, 3], [-3, 5],
+    ];
+    const p2: Array<[number, number]> = [
+      [0, -3], [3, -3], [-2, -1], [3, -2], [-3, 2],
+      [1, -4], [2, -4], [2, -5], [3, -5], [3, -6],
+    ];
+    for (const [q, r] of p0) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 0 });
+    for (const [q, r] of p2) ts.board.set(coordKey(cubeCoord(q, r)), { type: 'piece', player: 2 });
+    ts.currentPlayer = 0;
+    ts.turnNumber = 34;
+
+    const picked = findBestMove(ts, 'hard', 'generalist');
+    expect(picked).not.toBeNull();
+    if (picked) {
+      // The AI must NOT pick (3,0)→(2,1) — that's the wrong source choice
+      // that sacrifices the chain-jump-axis alignment.
+      const wrongSource =
+        picked.from.q === 3 && picked.from.r === 0 &&
+        picked.to.q === 2 && picked.to.r === 1;
+      expect(wrongSource).toBe(false);
+    }
+  });
+
   // Round-2 Flag 1 (game review export, Turn 6, 2026-06-29T15:29Z): the AI
   // chose a J2 chain stopping at (0,-3) over a strategically-better J3 stop
   // at (2,-3). Both landings sit at the same goal-centroid distance (9), but

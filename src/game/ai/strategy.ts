@@ -1191,27 +1191,36 @@ export function scoreChainBackwardHop(
 }
 
 /**
- * Chain-endpoint setup bonus: for jumps, evaluates the QUALITY of the landing
- * position beyond raw progress. Differentiates between chain stops that have
- * similar distance gain but differ in:
+ * Chain-endpoint setup bonus: evaluates the QUALITY of the landing position
+ * beyond raw progress. Differentiates moves that:
  *   1. Teammate-setup: friendly pieces that can now jump OVER our new position
  *      forward, using us as a stepping stone next turn.
  *   2. Opponent-blocking: opponent jumps that our landing now prevents because
  *      we occupy the would-be destination cell.
  *
- * Only fires for jumps. Magnitude tuned to differentiate similar-progress
- * landings (~20-40 points per benefit) without overriding bigger strategic
- * signals like back-piece priority or chain extension.
+ * Fires for both STEPS and JUMPS. Steps get a higher multiplier (×30 vs ×8)
+ * because for steps the "chain endpoint" IS a deliberate source-choice
+ * decision: when two pieces could step to the same destination, the one that
+ * leaves another piece in chain-jump position is strategically better — the
+ * user-flagged 2026-06-30 pattern "knowing when to step which piece further
+ * so it is in alignment with the end zones".
+ *
+ * Bug fix: when looking for friendly neighbors of move.to, skip move.from.
+ * For STEPS, move.from is exactly one cell from move.to in one direction; the
+ * pre-move board still shows it as friendly, but post-move that cell is empty
+ * and the "phantom teammate" can't actually make the jump.
  */
 export function scoreChainEndpointSetup(
   state: GameState,
   move: Move,
   player: PlayerIndex
 ): number {
-  if (!move.isJump) return 0;
   const goalPositions = getGoalPositionsForState(state, player);
   if (goalPositions.length === 0) return 0;
   const goalCenter = centroid(goalPositions);
+
+  // Steps get a meaningfully larger teammate-setup multiplier (see header).
+  const teammateMul = move.isJump ? 8 : 36;
 
   // Perpendicular-to-goal unit vector for lateral-drift comparisons.
   // A teammate that gains centroid distance but drifts further off the
@@ -1240,29 +1249,28 @@ export function scoreChainEndpointSetup(
       r: move.to.r - dir.r,
       s: move.to.s - dir.s,
     };
-    const neighborContent = state.board.get(coordKey(neighbor));
-    const destContent = state.board.get(coordKey(dest));
-    if (
-      neighborContent?.type === 'piece' &&
-      neighborContent.player === player &&
-      destContent?.type === 'empty'
-    ) {
-      // Reward only if the jump would be FORWARD for the teammate AND not
-      // push them further off the axis-to-goal. A "forward" hop that swings
-      // a teammate from on-axis to off-axis pays the user back later — Flag
-      // 1/2 pattern: chain endpoint (3,-3) used to score +16 here because
-      // (3,-4) → (3,-2) registers as forward, but (3,-2) sits much further
-      // off the goal-axis than (3,-4). The off-axis stop (1,-3) doesn't
-      // unlock any teammate hop, so it lost the comparison.
-      const teammateGain = cubeDistance(neighbor, goalCenter) - cubeDistance(dest, goalCenter);
-      if (teammateGain >= 1) {
-        const teammateLateralBefore = lateralDrift(neighbor);
-        const teammateLateralAfter = lateralDrift(dest);
-        // Small tolerance: a tiny lateral wobble is fine, but a clear push
-        // off-axis voids the setup credit.
-        if (teammateLateralAfter <= teammateLateralBefore + 0.25) {
-          // Capped to avoid double-counting very long teammate chains.
-          score += Math.min(teammateGain, 4) * 8;
+    // Bug fix (matters for STEPS): if the "friendly neighbor" is actually our
+    // own source piece, the pre-move board incorrectly shows it as friendly
+    // but post-move that cell is empty — no phantom teammate can jump.
+    if (neighbor.q === move.from.q && neighbor.r === move.from.r) {
+      // fall through to the opponent-blocking check (which uses different cells)
+    } else {
+      const neighborContent = state.board.get(coordKey(neighbor));
+      const destContent = state.board.get(coordKey(dest));
+      if (
+        neighborContent?.type === 'piece' &&
+        neighborContent.player === player &&
+        destContent?.type === 'empty'
+      ) {
+        // Reward only if the jump would be FORWARD for the teammate AND not
+        // push them further off the axis-to-goal.
+        const teammateGain = cubeDistance(neighbor, goalCenter) - cubeDistance(dest, goalCenter);
+        if (teammateGain >= 1) {
+          const teammateLateralBefore = lateralDrift(neighbor);
+          const teammateLateralAfter = lateralDrift(dest);
+          if (teammateLateralAfter <= teammateLateralBefore + 0.25) {
+            score += Math.min(teammateGain, 4) * teammateMul;
+          }
         }
       }
     }
