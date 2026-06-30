@@ -13,10 +13,6 @@ import { cubeDistance } from '@/game/coordinates';
 export function ricefishOrderingScore(move: Move, personality: AIPersonality): number {
   const traveled = cubeDistance(move.from, move.to);
   let score = traveled + (move.isJump ? 1 : 0);
-  // Swaps look unimpressive by distance alone (always 1) but are often the
-  // only way to displace a blocker. Boost them so alpha-beta examines them
-  // early enough to actually keep the line.
-  if (move.isSwap) score += 5;
   if (personality === 'aggressive') {
     score += 0.5 * traveled;
   }

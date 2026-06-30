@@ -6,8 +6,8 @@ import {
   RICEFISH_TIME_BUDGET_MS,
 } from '@/types/ai';
 import { getAllValidMoves } from '@/game/moves';
-import { applyMove, hasPlayerWon, getGoalPositionsForState } from '@/game/state';
-import { cubeEquals, coordKey } from '@/game/coordinates';
+import { applyMove, hasPlayerWon } from '@/game/state';
+import { cubeEquals } from '@/game/coordinates';
 import {
   ricefishScore,
   createGoalCentroidCache,
@@ -15,35 +15,7 @@ import {
 } from './evaluate';
 import { orderMoves } from './ordering';
 
-/**
- * Add depth when the goal triangle is heavily filled — branching factor
- * is small in that regime and we need extra plies to see a multi-step
- * swap chain. Bonus saturates at +3 so total max-depth stays bounded.
- */
-function computeEndgameDepthBonus(state: GameState, player: PlayerIndex): number {
-  const goals = getGoalPositionsForState(state, player);
-  if (goals.length === 0) return 0;
-  let filled = 0;
-  for (const g of goals) {
-    const c = state.board.get(coordKey(g));
-    if (c?.type === 'piece') filled++;
-  }
-  const fraction = filled / goals.length;
-  if (fraction >= 0.8) return 3;
-  if (fraction >= 0.6) return 2;
-  if (fraction >= 0.4) return 1;
-  return 0;
-}
-
 const TT_MAX_ENTRIES = 100_000;
-// At the root, knock this much off any candidate that reverses one of the
-// current player's recent moves. Eval ties (the cause of oscillation) lose
-// to a fresh move; clear wins still survive.
-const REPETITION_PENALTY = 5;
-// How many of the current player's most recent moves to treat as "do not
-// reverse." 3 catches the typical A↔B 2-cycle as well as small 3-step
-// shuffles that drift back to a recent square.
-const REPETITION_LOOKBACK = 3;
 
 // ─── transposition table ──────────────────────────────────────────────────────
 
@@ -133,42 +105,6 @@ function recordKiller(ctx: ABContext, ply: number, move: Move): void {
 
 function sameMove(a: Move, b: Move): boolean {
   return cubeEquals(a.from, b.from) && cubeEquals(a.to, b.to);
-}
-
-interface RepetitionTraps {
-  // Exact-reverse moves: my prior move was X→Y, playing Y→X this turn
-  // closes a 2-cycle. Heavily penalized.
-  reverses: Set<string>;
-  // Cells I vacated in the last few turns. A move landing here is
-  // "revisiting recently-left territory" — catches 4-step shuffles like
-  // A→B then later …→A that don't show up as direct reversals.
-  vacatedCells: Set<string>;
-}
-
-function buildRepetitionTraps(state: GameState): RepetitionTraps {
-  const reverses = new Set<string>();
-  const vacatedCells = new Set<string>();
-  const myMoves: Move[] = [];
-  for (let i = state.moveHistory.length - 1; i >= 0 && myMoves.length < REPETITION_LOOKBACK; i--) {
-    const m = state.moveHistory[i];
-    if (m.player === state.currentPlayer) myMoves.push(m);
-  }
-  for (const m of myMoves) {
-    reverses.add(`${m.to.q},${m.to.r}->${m.from.q},${m.from.r}`);
-    vacatedCells.add(`${m.from.q},${m.from.r}`);
-  }
-  return { reverses, vacatedCells };
-}
-
-function repetitionPenaltyFor(move: Move, traps: RepetitionTraps): number {
-  let p = 0;
-  if (traps.reverses.has(moveKey(move))) p += REPETITION_PENALTY;
-  if (traps.vacatedCells.has(`${move.to.q},${move.to.r}`)) p += REPETITION_PENALTY / 2;
-  return p;
-}
-
-function moveKey(m: Move): string {
-  return `${m.from.q},${m.from.r}->${m.to.q},${m.to.r}`;
 }
 
 function orderRootMoves(
@@ -282,12 +218,7 @@ function findBestMove2P(
   difficulty: AIDifficulty,
   personality: AIPersonality,
 ): Move | null {
-  // Endgame depth bonus: when the goal triangle is mostly filled the
-  // branching factor collapses (most pieces are wedged in goal cells with
-  // few legal options), so iterative deepening can safely chase deeper
-  // plies — enough to see a 4-step swap-chain that frees a tip blocker.
-  const endgameBonus = computeEndgameDepthBonus(state, state.currentPlayer);
-  const maxDepth = RICEFISH_DEPTH_2P[difficulty] + endgameBonus;
+  const maxDepth = RICEFISH_DEPTH_2P[difficulty];
   const budget = new TimeBudget(RICEFISH_TIME_BUDGET_MS[difficulty]);
   const ctx: ABContext = {
     root: state.currentPlayer,
@@ -302,8 +233,6 @@ function findBestMove2P(
   const rootMoves = getAllValidMoves(state, state.currentPlayer);
   if (rootMoves.length === 0) return null;
 
-  const traps = buildRepetitionTraps(state);
-
   let bestOverall: Move | null = rootMoves[0];
   // Iterative deepening: complete each depth in full before advancing to the
   // next so that on time-out we always have a usable best move.
@@ -316,8 +245,7 @@ function findBestMove2P(
       const beta = Infinity;
       for (const move of ordered) {
         const next = applyMove(state, move);
-        let score = -alphaBeta(next, depth - 1, -beta, -alpha, 1, ctx);
-        score -= repetitionPenaltyFor(move, traps);
+        const score = -alphaBeta(next, depth - 1, -beta, -alpha, 1, ctx);
         if (score > bestScore) {
           bestScore = score;
           bestThisIter = move;
@@ -403,8 +331,6 @@ function findBestMoveMP(
   if (rootMoves.length === 0) return null;
   const sideIndex = state.activePlayers.indexOf(state.currentPlayer);
 
-  const traps = buildRepetitionTraps(state);
-
   let bestOverall: Move | null = rootMoves[0];
 
   for (let depth = 1; depth <= maxDepth; depth++) {
@@ -415,10 +341,8 @@ function findBestMoveMP(
       for (const move of ordered) {
         const next = applyMove(state, move);
         const vec = maxN(next, depth - 1, ctx);
-        let component = vec[sideIndex];
-        component -= repetitionPenaltyFor(move, traps);
-        if (component > bestComponent) {
-          bestComponent = component;
+        if (vec[sideIndex] > bestComponent) {
+          bestComponent = vec[sideIndex];
           bestThisIter = move;
         }
       }

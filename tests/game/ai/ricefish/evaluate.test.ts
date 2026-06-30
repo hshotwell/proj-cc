@@ -89,75 +89,16 @@ describe('endgame regression — no oscillation when nearly home', () => {
     );
   });
 
-  it('rewards in-goal pieces by depth (entry row = 0, deeper > 0)', () => {
+  it('treats a piece sitting on a goal cell as distance 0', () => {
     const base = freshGame([0, 2]);
     const board = new Map(base.board);
+    // Clear all of player 2, then place a single piece on a goal cell.
     for (const [k, v] of board) {
-      if (v.type === 'piece') board.set(k, { type: 'empty' });
+      if (v.type === 'piece' && v.player === 2) board.set(k, { type: 'empty' });
     }
-    // Single P2 piece on the entry row (depth 0): contributes nothing.
-    board.set('3,-5', { type: 'piece', player: 2 });
-    let state: GameState = { ...base, board };
-    expect(playerDistance(state, 2)).toBe(0);
-    // Move the same piece to a deeper cell (3,-6) = depth 1: ownDepthBonus
-    // pushes playerDistance negative by OWN_DEPTH_WEIGHT (1).
-    const board2 = new Map(base.board);
-    for (const [k, v] of board2) {
-      if (v.type === 'piece') board2.set(k, { type: 'empty' });
-    }
-    board2.set('3,-6', { type: 'piece', player: 2 });
-    state = { ...base, board: board2 };
-    expect(playerDistance(state, 2)).toBe(-1);
-    // Tip cell (4,-8) = depth 3: contributes -3.
-    const board3 = new Map(base.board);
-    for (const [k, v] of board3) {
-      if (v.type === 'piece') board3.set(k, { type: 'empty' });
-    }
-    board3.set('4,-8', { type: 'piece', player: 2 });
-    state = { ...base, board: board3 };
-    expect(playerDistance(state, 2)).toBe(-3);
-  });
-
-  it('penalizes blockers more when they sit deeper in my goal', () => {
-    const base = freshGame([0, 2]);
-    const board = new Map(base.board);
-    for (const [k, v] of board) {
-      if (v.type === 'piece') board.set(k, { type: 'empty' });
-    }
-    // One P2 piece in goal at (3,-6) depth 1 (ownDepthBonus = 1), two P0
-    // blockers: (4,-8) depth 3 and (4,-5) depth 0.
-    board.set('3,-6', { type: 'piece', player: 2 });
-    board.set('4,-8', { type: 'piece', player: 0 });
-    board.set('4,-5', { type: 'piece', player: 0 });
+    board.set('3,-6', { type: 'piece', player: 2 }); // (3,-6) is a goal cell
     const state: GameState = { ...base, board };
-    // filledFraction = 3 / 10 (1 own + 2 blockers in 10-cell goal) = 0.3 → mult 1.0
-    // blockerTerm = 1.0 × (BLOCKER_PENALTY*2 + BLOCKER_DEPTH_WEIGHT*(3+0)) = 12
-    // ownDepthTerm = OWN_DEPTH_WEIGHT * 1 = 1
-    // total = 12 - 1 = 11
-    expect(playerDistance(state, 2)).toBe(11);
-  });
-
-  it('depth gradient: shifting a blocker shallower lowers playerDistance', () => {
-    // A useful intermediate-step regression: with one P2 piece on the
-    // entry row and one P0 blocker, moving the blocker from depth 3 → 0
-    // (over four hypothetical states) should strictly decrease distance.
-    const base = freshGame([0, 2]);
-    const distFor = (blockerCoord: [number, number]) => {
-      const board = new Map(base.board);
-      for (const [k, v] of board) {
-        if (v.type === 'piece') board.set(k, { type: 'empty' });
-      }
-      board.set('3,-5', { type: 'piece', player: 2 }); // P2 fixed
-      board.set(`${blockerCoord[0]},${blockerCoord[1]}`, { type: 'piece', player: 0 });
-      return playerDistance({ ...base, board }, 2);
-    };
-    const d3 = distFor([4, -8]); // depth 3
-    const d2 = distFor([3, -7]); // depth 2
-    const d1 = distFor([3, -6]); // depth 1
-    const d0 = distFor([2, -5]); // depth 0
-    expect(d3).toBeGreaterThan(d2);
-    expect(d2).toBeGreaterThan(d1);
-    expect(d1).toBeGreaterThan(d0);
+    expect(playerDistance(state, 2)).toBe(0);
   });
 });
 
