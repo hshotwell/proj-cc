@@ -6,6 +6,19 @@ import { getPlayerPieces } from '@/game/setup';
 
 export const MATE = 1_000_000_000;
 
+/**
+ * Surcharge added to playerDistance per matched (outside-piece → goal-cell)
+ * pair where the goal cell currently holds an opponent piece. Without this,
+ * a swap-eviction is roughly net-zero in eval (our piece −1 distance, the
+ * displaced opponent advances toward their own goal), so the search saw no
+ * gradient toward the swap and would oscillate in endgame stalemates.
+ *
+ * Surgical: applied only inside the greedy matching, so blockers on goal
+ * cells that the matching doesn't pick (because closer empty goals exist)
+ * cost nothing.
+ */
+export const OBSTRUCTION_PENALTY = 1.5;
+
 // Cache the goal-cell list per player for one search call. Each entry's
 // "filled" membership is recomputed per-state at the call site (cheap —
 // just board lookups), so the cache stores only the immutable cell list.
@@ -57,14 +70,22 @@ export function playerDistance(
   const unfilled = goals.filter((g) => !pieceKeys.has(coordKey(g)));
   if (unfilled.length === 0) return 0;
 
-  return greedyAssignmentCost(piecesOutside, unfilled);
+  const { cost, obstructed } = greedyAssignmentCost(state, player, piecesOutside, unfilled);
+  return cost + OBSTRUCTION_PENALTY * obstructed;
 }
 
 /**
  * Greedy minimum-cost bipartite matching by repeatedly taking the closest
- * (piece, goal) pair among remaining options.
+ * (piece, goal) pair among remaining options. Also counts how many of the
+ * matched goal cells are occupied by an opponent piece — these are the
+ * blockers we'll need to swap-evict to actually claim those cells.
  */
-function greedyAssignmentCost(pieces: CubeCoord[], goals: CubeCoord[]): number {
+function greedyAssignmentCost(
+  state: GameState,
+  player: PlayerIndex,
+  pieces: CubeCoord[],
+  goals: CubeCoord[],
+): { cost: number; obstructed: number } {
   const pairs: Array<{ pi: number; gj: number; d: number }> = [];
   for (let i = 0; i < pieces.length; i++) {
     for (let j = 0; j < goals.length; j++) {
@@ -77,14 +98,17 @@ function greedyAssignmentCost(pieces: CubeCoord[], goals: CubeCoord[]): number {
   const usedG = new Set<number>();
   const limit = Math.min(pieces.length, goals.length);
   let total = 0;
+  let obstructed = 0;
   for (const { pi, gj, d } of pairs) {
     if (usedP.size >= limit) break;
     if (usedP.has(pi) || usedG.has(gj)) continue;
     total += d;
+    const cell = state.board.get(coordKey(goals[gj]));
+    if (cell?.type === 'piece' && cell.player !== player) obstructed++;
     usedP.add(pi);
     usedG.add(gj);
   }
-  return total;
+  return { cost: total, obstructed };
 }
 
 function defenseWeight(personality: AIPersonality): number {

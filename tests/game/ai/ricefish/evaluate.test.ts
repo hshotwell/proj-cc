@@ -6,8 +6,9 @@ import {
   playerDistance,
   MATE,
   createGoalCentroidCache,
+  OBSTRUCTION_PENALTY,
 } from '@/game/ai/ricefish/evaluate';
-import type { GameState, Move, PlayerIndex } from '@/types/game';
+import type { CellContent, GameState, Move, PlayerIndex } from '@/types/game';
 
 function freshGame(activePlayers: PlayerIndex[] = [0, 2]): GameState {
   return createGame(2, activePlayers);
@@ -99,6 +100,94 @@ describe('endgame regression — no oscillation when nearly home', () => {
     board.set('3,-6', { type: 'piece', player: 2 }); // (3,-6) is a goal cell
     const state: GameState = { ...base, board };
     expect(playerDistance(state, 2)).toBe(0);
+  });
+});
+
+describe('playerDistance obstruction penalty', () => {
+  // P0's home cells (= P2's goal cells). createGame seeds these with P0 pieces,
+  // so test fixtures must explicitly empty any cell they want as "unfilled."
+  const P0_HOME: Array<[number, number]> = [
+    [4, -8], [3, -7], [4, -7], [2, -6], [3, -6], [4, -6],
+    [1, -5], [2, -5], [3, -5], [4, -5],
+  ];
+
+  function clearAllP0AndP2(board: Map<string, CellContent>) {
+    for (const [k, v] of board) {
+      if (v.type === 'piece' && (v.player === 0 || v.player === 2)) {
+        board.set(k, { type: 'empty' });
+      }
+    }
+  }
+
+  it('adds OBSTRUCTION_PENALTY when a matched goal cell holds an opponent', () => {
+    const base = freshGame([0, 2]);
+    const board = new Map(base.board);
+    clearAllP0AndP2(board);
+    // 9 of 10 goal cells filled with P2 (skip (4,-5)); 1 outside P2 at (4,-4).
+    for (const [q, r] of P0_HOME) {
+      if (q === 4 && r === -5) continue;
+      board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    }
+    board.set('4,-4', { type: 'piece', player: 2 });
+    const empty: GameState = { ...base, board: new Map(board) };
+    const distEmpty = playerDistance(empty, 2);
+
+    const boardObs = new Map(board);
+    boardObs.set('4,-5', { type: 'piece', player: 0 });
+    const obstructed: GameState = { ...base, board: boardObs };
+    const distObstructed = playerDistance(obstructed, 2);
+
+    expect(distObstructed).toBeCloseTo(distEmpty + OBSTRUCTION_PENALTY, 5);
+  });
+
+  it('does NOT penalize an opponent piece outside the matching', () => {
+    // 1 outside P2 piece, 2 unfilled goals (close + far). Cardinality limit
+    // min(1, 2) = 1, so greedy picks ONLY the closer pair. A blocker on the
+    // far cell is not in the matching and must NOT be counted.
+    const base = freshGame([0, 2]);
+    const board = new Map(base.board);
+    clearAllP0AndP2(board);
+    // Fill 8 of the 10 goal cells (skip (4,-5) close and (4,-8) far).
+    for (const [q, r] of P0_HOME) {
+      if (q === 4 && (r === -5 || r === -8)) continue;
+      board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    }
+    // 1 outside P2 adjacent to (4,-5).
+    board.set('4,-4', { type: 'piece', player: 2 });
+    // Blocker on the FAR unfilled goal (4,-8); (4,-5) stays empty.
+    board.set('4,-8', { type: 'piece', player: 0 });
+    const withFarBlocker: GameState = { ...base, board: new Map(board) };
+
+    const noBlockerBoard = new Map(board);
+    noBlockerBoard.set('4,-8', { type: 'empty' });
+    const noBlocker: GameState = { ...base, board: noBlockerBoard };
+
+    expect(playerDistance(withFarBlocker, 2)).toBeCloseTo(
+      playerDistance(noBlocker, 2), 5,
+    );
+  });
+
+  it('stacks penalty for multiple obstructed pairs', () => {
+    const base = freshGame([0, 2]);
+    const board = new Map(base.board);
+    clearAllP0AndP2(board);
+    // 8 P2 in goal cells (skip (4,-5) and (4,-8)); 2 outside P2 pieces.
+    for (const [q, r] of P0_HOME) {
+      if (q === 4 && (r === -5 || r === -8)) continue;
+      board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    }
+    board.set('4,-4', { type: 'piece', player: 2 });
+    board.set('5,-4', { type: 'piece', player: 2 });
+    const noBlockers: GameState = { ...base, board: new Map(board) };
+
+    const obsBoard = new Map(board);
+    obsBoard.set('4,-5', { type: 'piece', player: 0 });
+    obsBoard.set('4,-8', { type: 'piece', player: 0 });
+    const twoBlockers: GameState = { ...base, board: obsBoard };
+
+    const dEmpty = playerDistance(noBlockers, 2);
+    const dObs = playerDistance(twoBlockers, 2);
+    expect(dObs).toBeCloseTo(dEmpty + 2 * OBSTRUCTION_PENALTY, 5);
   });
 });
 

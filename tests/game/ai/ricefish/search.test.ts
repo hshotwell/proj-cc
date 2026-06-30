@@ -94,6 +94,36 @@ describe('findRicefishMove endgame regression', () => {
   });
 });
 
+describe('findRicefishMove endgame swap-awareness', () => {
+  it('picks a swap when the only unfilled goal cell is occupied by an opponent', () => {
+    const base = createGame(2, [0, 2]);
+    const board = new Map(base.board);
+    // Clear all P0 and P2 pieces so we control exactly what's on the board.
+    for (const [k, v] of board) {
+      if (v.type === 'piece' && (v.player === 0 || v.player === 2)) {
+        board.set(k, { type: 'empty' });
+      }
+    }
+    // 9 P2 in goal cells (P0's home, except (4,-5)).
+    const goalCells: Array<[number, number]> = [
+      [4, -8], [3, -7], [4, -7], [2, -6], [3, -6], [4, -6],
+      [1, -5], [2, -5], [3, -5],
+    ];
+    for (const [q, r] of goalCells) board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    // 1 outside P2 piece adjacent to (4,-5), the lone unfilled goal cell.
+    board.set('4,-4', { type: 'piece', player: 2 });
+    // P0 blocker on (4,-5).
+    board.set('4,-5', { type: 'piece', player: 0 });
+    const state: GameState = { ...base, board, currentPlayer: 2 };
+
+    const move = findRicefishMove(state, 'medium', 'generalist');
+    expect(move).not.toBeNull();
+    expect(move!.isSwap).toBe(true);
+    expect(move!.to.q).toBe(4);
+    expect(move!.to.r).toBe(-5);
+  });
+});
+
 describe('findRicefishMove behavior', () => {
   it('returns null when the current player has already finished', () => {
     const state = createGame(2, [0, 2]);
