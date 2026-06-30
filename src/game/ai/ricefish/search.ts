@@ -16,6 +16,14 @@ import {
 import { orderMoves } from './ordering';
 
 const TT_MAX_ENTRIES = 100_000;
+// At the root, knock this much off any candidate that reverses one of the
+// current player's recent moves. Eval ties (the cause of oscillation) lose
+// to a fresh move; clear wins still survive.
+const REPETITION_PENALTY = 5;
+// How many of the current player's most recent moves to treat as "do not
+// reverse." 3 catches the typical A↔B 2-cycle as well as small 3-step
+// shuffles that drift back to a recent square.
+const REPETITION_LOOKBACK = 3;
 
 // ─── transposition table ──────────────────────────────────────────────────────
 
@@ -105,6 +113,28 @@ function recordKiller(ctx: ABContext, ply: number, move: Move): void {
 
 function sameMove(a: Move, b: Move): boolean {
   return cubeEquals(a.from, b.from) && cubeEquals(a.to, b.to);
+}
+
+/**
+ * Build the set of "do-not-reverse" move keys from the recent move history.
+ * A move `from → to` here means: my own most-recent move was `to → from`,
+ * so playing this one would undo it.
+ */
+function buildReverseSet(state: GameState): Set<string> {
+  const out = new Set<string>();
+  const myMoves: Move[] = [];
+  for (let i = state.moveHistory.length - 1; i >= 0 && myMoves.length < REPETITION_LOOKBACK; i--) {
+    const m = state.moveHistory[i];
+    if (m.player === state.currentPlayer) myMoves.push(m);
+  }
+  for (const m of myMoves) {
+    out.add(`${m.to.q},${m.to.r}->${m.from.q},${m.from.r}`);
+  }
+  return out;
+}
+
+function moveKey(m: Move): string {
+  return `${m.from.q},${m.from.r}->${m.to.q},${m.to.r}`;
 }
 
 function orderRootMoves(
@@ -233,6 +263,8 @@ function findBestMove2P(
   const rootMoves = getAllValidMoves(state, state.currentPlayer);
   if (rootMoves.length === 0) return null;
 
+  const reverseSet = buildReverseSet(state);
+
   let bestOverall: Move | null = rootMoves[0];
   // Iterative deepening: complete each depth in full before advancing to the
   // next so that on time-out we always have a usable best move.
@@ -245,7 +277,8 @@ function findBestMove2P(
       const beta = Infinity;
       for (const move of ordered) {
         const next = applyMove(state, move);
-        const score = -alphaBeta(next, depth - 1, -beta, -alpha, 1, ctx);
+        let score = -alphaBeta(next, depth - 1, -beta, -alpha, 1, ctx);
+        if (reverseSet.has(moveKey(move))) score -= REPETITION_PENALTY;
         if (score > bestScore) {
           bestScore = score;
           bestThisIter = move;
@@ -331,6 +364,8 @@ function findBestMoveMP(
   if (rootMoves.length === 0) return null;
   const sideIndex = state.activePlayers.indexOf(state.currentPlayer);
 
+  const reverseSet = buildReverseSet(state);
+
   let bestOverall: Move | null = rootMoves[0];
 
   for (let depth = 1; depth <= maxDepth; depth++) {
@@ -341,8 +376,10 @@ function findBestMoveMP(
       for (const move of ordered) {
         const next = applyMove(state, move);
         const vec = maxN(next, depth - 1, ctx);
-        if (vec[sideIndex] > bestComponent) {
-          bestComponent = vec[sideIndex];
+        let component = vec[sideIndex];
+        if (reverseSet.has(moveKey(move))) component -= REPETITION_PENALTY;
+        if (component > bestComponent) {
+          bestComponent = component;
           bestThisIter = move;
         }
       }

@@ -105,6 +105,48 @@ describe('findRicefishMove swap-aware endgame', () => {
   });
 });
 
+describe('findRicefishMove anti-repetition', () => {
+  // Stalemate scenario from a real game: both AIs cycled because the eval
+  // gave identical scores to multiple options. Ricefish should refuse to
+  // pick a move that exactly reverses one of its recent moves when an
+  // alternative with equal eval exists.
+  it('avoids reversing the previous move when alternatives tie', () => {
+    const base = createGame(2, [0, 2]);
+    // Pretend P2's last move was (-1,-3) → (0,-4). Now from this state,
+    // the search must not pick (0,-4) → (-1,-3).
+    const state: GameState = {
+      ...base,
+      currentPlayer: 2,
+      moveHistory: [
+        {
+          from: { q: -1, r: -3, s: 4 },
+          to: { q: 0, r: -4, s: 4 },
+          isJump: false,
+          player: 2,
+          turnNumber: base.turnNumber - 1,
+        },
+      ],
+    };
+
+    // For the test to be meaningful, P2's piece at (0,-4) must exist in the
+    // standard starting layout. We don't actually need (0,-4) to be there in
+    // the standard game (it isn't); the point is that IF the search were to
+    // ever consider (0,-4) → (-1,-3), the penalty must kick in. Construct a
+    // small fixture where the candidate exists.
+    const board = new Map(base.board);
+    // Drop a P2 piece at (0,-4).
+    board.set('0,-4', { type: 'piece', player: 2 });
+    const stateWithPiece: GameState = { ...state, board };
+
+    const move = findRicefishMove(stateWithPiece, 'easy', 'generalist');
+    expect(move).not.toBeNull();
+    const isReverseOfLast =
+      move!.from.q === 0 && move!.from.r === -4 &&
+      move!.to.q === -1 && move!.to.r === -3;
+    expect(isReverseOfLast).toBe(false);
+  });
+});
+
 describe('findRicefishMove deep-tip blockers (must shift to clear)', () => {
   // User-observed scenario: opponent's stuck pieces were at the deepest
   // goal cells (the tip and second-row), where every adjacent cell is also
