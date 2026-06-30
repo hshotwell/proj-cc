@@ -57,6 +57,54 @@ describe('findRicefishMove (Max^n path, 3+ players)', () => {
   }, 10_000);
 });
 
+describe('findRicefishMove swap-aware endgame', () => {
+  // From the observed bug: player A had 2 pieces stuck in their starting
+  // zone (i.e. Ricefish's goal triangle), Ricefish had outside pieces
+  // adjacent to the blockers, and the search never tried a swap. The new
+  // BLOCKER_PENALTY eval term + swap ordering boost should make swap the
+  // chosen move when it directly removes a blocker.
+  it('picks a swap that removes a blocker from the goal triangle', () => {
+    const base = createGame(2, [0, 2]);
+    const board = new Map(base.board);
+    for (const [k, v] of board) {
+      if (v.type === 'piece') board.set(k, { type: 'empty' });
+    }
+    // Player 2 (Cyan, bottom) has 8 pieces filling the top triangle except
+    // (1,-5) and (4,-5), and 2 outside pieces parked at (1,-4) and (4,-4)
+    // — both adjacent to a blocker.
+    const p2InGoal: Array<[number, number]> = [
+      [4, -8], [3, -7], [4, -7], [2, -6], [3, -6], [4, -6], [2, -5], [3, -5],
+    ];
+    for (const [q, r] of p2InGoal) board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    for (const [q, r] of [[1, -4], [4, -4]] as Array<[number, number]>) {
+      board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    }
+    // Player 0 has 2 stuck pieces blocking Ricefish's goal cells (1,-5)
+    // and (4,-5). The remaining 8 are parked harmlessly in their own
+    // starting area (positions don't matter much — they just need to
+    // exist as legal pieces, and they shouldn't be in P2's goal area).
+    board.set('1,-5', { type: 'piece', player: 0 });
+    board.set('4,-5', { type: 'piece', player: 0 });
+    // Place the rest of P0 in cells well away from the goal triangle.
+    const p0Rest: Array<[number, number]> = [
+      [-4, 8], [-3, 7], [-4, 7], [-2, 6], [-3, 6], [-4, 6], [-2, 5], [-3, 5],
+    ];
+    for (const [q, r] of p0Rest) board.set(`${q},${r}`, { type: 'piece', player: 0 });
+
+    const state: GameState = { ...base, board, currentPlayer: 2 };
+
+    const move = findRicefishMove(state, 'medium', 'generalist');
+    expect(move).not.toBeNull();
+    expect(move!.isSwap).toBe(true);
+    // The chosen swap should put a Ricefish piece directly into a goal cell
+    // (i.e. `to` is in the top triangle).
+    const toQ = move!.to.q, toR = move!.to.r;
+    const isGoalCell = p2InGoal.some(([q, r]) => q === toQ && r === toR)
+      || (toQ === 1 && toR === -5) || (toQ === 4 && toR === -5);
+    expect(isGoalCell).toBe(true);
+  });
+});
+
 describe('findRicefishMove endgame regression', () => {
   // From the same observed bug: 8/10 player-2 pieces in goal, two left over
   // at (1,-4) and (2,-4); empty goal cells are (4,-8) and (4,-5). Under the

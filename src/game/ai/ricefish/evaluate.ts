@@ -6,6 +6,15 @@ import { getPlayerPieces } from '@/game/setup';
 
 export const MATE = 1_000_000_000;
 
+// Each opponent piece sitting inside this player's goal triangle adds this
+// many distance units. Without it the matching eval thinks blocker-cells
+// are "reachable at cubeDistance" — which is mostly true, but the act of
+// swapping them out is a discrete win the eval should reward, otherwise
+// the search has no gradient pushing it to clear blockers. Empirically
+// chosen: large enough to dominate a one-hex step's worth of progress so
+// that a useful swap looks strictly better than a sideways shuffle.
+const BLOCKER_PENALTY = 3;
+
 // Cache the goal-cell list per player for one search call. Each entry's
 // "filled" membership is recomputed per-state at the call site (cheap —
 // just board lookups), so the cache stores only the immutable cell list.
@@ -51,13 +60,23 @@ export function playerDistance(
   for (const piece of pieces) {
     if (!goalKeys.has(coordKey(piece))) piecesOutside.push(piece);
   }
-  if (piecesOutside.length === 0) return 0;
+
+  // Count opponent pieces currently occupying my goal cells. These need to
+  // be displaced (via swap) before I can finish the game; every extra
+  // blocker raises my effective distance.
+  let blockers = 0;
+  for (const g of goals) {
+    const c = state.board.get(coordKey(g));
+    if (c?.type === 'piece' && c.player !== player) blockers++;
+  }
+
+  if (piecesOutside.length === 0) return BLOCKER_PENALTY * blockers;
 
   const pieceKeys = new Set(pieces.map(coordKey));
   const unfilled = goals.filter((g) => !pieceKeys.has(coordKey(g)));
-  if (unfilled.length === 0) return 0;
+  if (unfilled.length === 0) return BLOCKER_PENALTY * blockers;
 
-  return greedyAssignmentCost(piecesOutside, unfilled);
+  return greedyAssignmentCost(piecesOutside, unfilled) + BLOCKER_PENALTY * blockers;
 }
 
 /**

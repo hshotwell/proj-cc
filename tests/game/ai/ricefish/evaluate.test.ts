@@ -92,13 +92,31 @@ describe('endgame regression — no oscillation when nearly home', () => {
   it('treats a piece sitting on a goal cell as distance 0', () => {
     const base = freshGame([0, 2]);
     const board = new Map(base.board);
-    // Clear all of player 2, then place a single piece on a goal cell.
+    // Clear EVERY piece so we isolate the in-goal-counts-as-0 behavior from
+    // the blocker-penalty term (P0's home overlaps P2's goal triangle).
     for (const [k, v] of board) {
-      if (v.type === 'piece' && v.player === 2) board.set(k, { type: 'empty' });
+      if (v.type === 'piece') board.set(k, { type: 'empty' });
     }
-    board.set('3,-6', { type: 'piece', player: 2 }); // (3,-6) is a goal cell
+    board.set('3,-6', { type: 'piece', player: 2 }); // (3,-6) is a P2 goal cell
     const state: GameState = { ...base, board };
     expect(playerDistance(state, 2)).toBe(0);
+  });
+
+  it('penalizes opponent pieces blocking my goal cells', () => {
+    const base = freshGame([0, 2]);
+    const board = new Map(base.board);
+    for (const [k, v] of board) {
+      if (v.type === 'piece') board.set(k, { type: 'empty' });
+    }
+    // One P2 piece in goal (no outside pieces, no matching cost), two P0
+    // blockers occupying other P2 goal cells. Distance should reflect
+    // BLOCKER_PENALTY × 2.
+    board.set('3,-6', { type: 'piece', player: 2 });
+    board.set('4,-8', { type: 'piece', player: 0 });
+    board.set('4,-5', { type: 'piece', player: 0 });
+    const state: GameState = { ...base, board };
+    // BLOCKER_PENALTY (3) × 2 blockers = 6
+    expect(playerDistance(state, 2)).toBe(6);
   });
 });
 
