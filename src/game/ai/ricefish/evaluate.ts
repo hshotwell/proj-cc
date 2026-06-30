@@ -1,6 +1,7 @@
 import type { CubeCoord, GameState, PlayerIndex } from '@/types/game';
 import type { AIPersonality } from '@/types/ai';
-import { coordKey, cubeDistance } from '@/game/coordinates';
+import { coordKey, cubeAdd, cubeDistance } from '@/game/coordinates';
+import { DIRECTIONS } from '@/game/constants';
 import { getGoalPositionsForState, hasPlayerWon } from '@/game/state';
 import { getPlayerPieces } from '@/game/setup';
 
@@ -10,26 +11,98 @@ export const MATE = 1_000_000_000;
 // many distance units. Without it the matching eval thinks blocker-cells
 // are "reachable at cubeDistance" — which is mostly true, but the act of
 // swapping them out is a discrete win the eval should reward, otherwise
-// the search has no gradient pushing it to clear blockers. Empirically
-// chosen: large enough to dominate a one-hex step's worth of progress so
-// that a useful swap looks strictly better than a sideways shuffle.
+// the search has no gradient pushing it to clear blockers.
 const BLOCKER_PENALTY = 3;
 
-// Cache the goal-cell list per player for one search call. Each entry's
-// "filled" membership is recomputed per-state at the call site (cheap —
-// just board lookups), so the cache stores only the immutable cell list.
-type GoalCellsCache = Map<PlayerIndex, CubeCoord[]>;
+// Extra penalty per unit of "depth" a blocker sits at. Depth = BFS distance
+// from the entry edge of the goal area (entry cells = depth 0, the tip =
+// max). This creates a gradient where each swap that shifts a blocker
+// toward the entry shows up as a real eval improvement, so the search can
+// chain multi-step blocker-evictions even when no single move directly
+// fills a goal.
+const BLOCKER_DEPTH_WEIGHT = 2;
 
-function getOrComputeGoals(
+// Bonus per unit of depth for each of my own pieces sitting in the goal.
+// Encourages packing pieces toward the back of the triangle so the entry
+// row stays open for late arrivals (and so swaps that pull a piece deeper
+// register as positive progress).
+const OWN_DEPTH_WEIGHT = 1;
+
+// Cache per player for one search call. Stores both the goal-cell list and
+// the depth map (depth = BFS distance from entry cells, where entry cells
+// are goal cells with at least one on-board non-goal neighbor).
+interface GoalsAndDepths {
+  goals: CubeCoord[];
+  depths: Map<string, number>;
+}
+type GoalCellsCache = Map<PlayerIndex, GoalsAndDepths>;
+
+function getOrComputeGoalData(
   state: GameState,
   player: PlayerIndex,
   cache?: GoalCellsCache,
-): CubeCoord[] {
+): GoalsAndDepths {
   const cached = cache?.get(player);
   if (cached) return cached;
   const goals = getGoalPositionsForState(state, player);
-  cache?.set(player, goals);
-  return goals;
+  const depths = computeGoalDepths(goals, state);
+  const data: GoalsAndDepths = { goals, depths };
+  cache?.set(player, data);
+  return data;
+}
+
+/**
+ * BFS from entry cells to compute per-cell depth. "Entry cells" are goal
+ * cells with at least one on-board neighbor that is NOT a goal cell — i.e.
+ * the boundary between the goal area and the rest of the board. Cells
+ * surrounded entirely by other goal cells (or by off-board) sit deeper.
+ *
+ * For the standard top triangle: entry row {(1,-5)..(4,-5)} = depth 0,
+ * second row {(2,-6)..(4,-6)} = 1, third row {(3,-7),(4,-7)} = 2, tip
+ * (4,-8) = 3.
+ */
+function computeGoalDepths(
+  goals: CubeCoord[],
+  state: GameState,
+): Map<string, number> {
+  const goalSet = new Set(goals.map(coordKey));
+  const depths = new Map<string, number>();
+  const queue: Array<{ cell: CubeCoord; depth: number }> = [];
+
+  for (const g of goals) {
+    for (const dir of DIRECTIONS) {
+      const n = cubeAdd(g, dir);
+      const nKey = coordKey(n);
+      const onBoard = state.board.has(nKey);
+      if (onBoard && !goalSet.has(nKey)) {
+        queue.push({ cell: g, depth: 0 });
+        depths.set(coordKey(g), 0);
+        break;
+      }
+    }
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const { cell, depth } = queue[head++];
+    for (const dir of DIRECTIONS) {
+      const n = cubeAdd(cell, dir);
+      const nKey = coordKey(n);
+      if (goalSet.has(nKey) && !depths.has(nKey)) {
+        depths.set(nKey, depth + 1);
+        queue.push({ cell: n, depth: depth + 1 });
+      }
+    }
+  }
+
+  // Any goal cell not reached by BFS (fully isolated, no entry neighbor on
+  // board) gets depth 0. Shouldn't happen on the standard board but is a
+  // safety net for pathological custom layouts.
+  for (const g of goals) {
+    const k = coordKey(g);
+    if (!depths.has(k)) depths.set(k, 0);
+  }
+  return depths;
 }
 
 /**
@@ -51,32 +124,45 @@ export function playerDistance(
   player: PlayerIndex,
   cache?: GoalCellsCache,
 ): number {
-  const goals = getOrComputeGoals(state, player, cache);
+  const { goals, depths } = getOrComputeGoalData(state, player, cache);
   const pieces = getPlayerPieces(state, player);
   if (pieces.length === 0 || goals.length === 0) return 0;
 
   const goalKeys = new Set(goals.map(coordKey));
   const piecesOutside: CubeCoord[] = [];
+  let ownDepthBonus = 0;
   for (const piece of pieces) {
-    if (!goalKeys.has(coordKey(piece))) piecesOutside.push(piece);
+    const k = coordKey(piece);
+    if (goalKeys.has(k)) {
+      ownDepthBonus += depths.get(k) ?? 0;
+    } else {
+      piecesOutside.push(piece);
+    }
   }
 
-  // Count opponent pieces currently occupying my goal cells. These need to
-  // be displaced (via swap) before I can finish the game; every extra
-  // blocker raises my effective distance.
-  let blockers = 0;
+  // Walk all goal cells: count opponents sitting in them (blockers) and
+  // sum their depths. Deep blockers (near the tip) are far harder to evict
+  // than shallow ones, so they should weigh more.
+  let blockerCount = 0;
+  let blockerDepthSum = 0;
   for (const g of goals) {
     const c = state.board.get(coordKey(g));
-    if (c?.type === 'piece' && c.player !== player) blockers++;
+    if (c?.type === 'piece' && c.player !== player) {
+      blockerCount++;
+      blockerDepthSum += depths.get(coordKey(g)) ?? 0;
+    }
   }
 
-  if (piecesOutside.length === 0) return BLOCKER_PENALTY * blockers;
+  const blockerTerm = BLOCKER_PENALTY * blockerCount + BLOCKER_DEPTH_WEIGHT * blockerDepthSum;
+  const ownDepthTerm = OWN_DEPTH_WEIGHT * ownDepthBonus;
+
+  if (piecesOutside.length === 0) return blockerTerm - ownDepthTerm;
 
   const pieceKeys = new Set(pieces.map(coordKey));
   const unfilled = goals.filter((g) => !pieceKeys.has(coordKey(g)));
-  if (unfilled.length === 0) return BLOCKER_PENALTY * blockers;
+  if (unfilled.length === 0) return blockerTerm - ownDepthTerm;
 
-  return greedyAssignmentCost(piecesOutside, unfilled) + BLOCKER_PENALTY * blockers;
+  return greedyAssignmentCost(piecesOutside, unfilled) + blockerTerm - ownDepthTerm;
 }
 
 /**

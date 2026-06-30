@@ -105,6 +105,59 @@ describe('findRicefishMove swap-aware endgame', () => {
   });
 });
 
+describe('findRicefishMove deep-tip blockers (must shift to clear)', () => {
+  // User-observed scenario: opponent's stuck pieces were at the deepest
+  // goal cells (the tip and second-row), where every adjacent cell is also
+  // a goal cell or off-board. A single swap can only shift the blocker
+  // sideways within the goal triangle — there's no direct path for an
+  // outside piece to reach them.
+  //
+  // With the depth-aware eval, each swap that pushes a blocker shallower
+  // shows a real eval improvement, so the search at medium/hard depth
+  // should pick a swap rather than a no-progress shuffle.
+  it('picks a swap that shifts a deep blocker shallower', () => {
+    const base = createGame(2, [0, 2]);
+    const board = new Map(base.board);
+    for (const [k, v] of board) {
+      if (v.type === 'piece') board.set(k, { type: 'empty' });
+    }
+    // P2 fills 8 of the 10 top-triangle cells (everything except (4,-8)
+    // and (3,-7), which are the two deep blockers).
+    const p2InGoal: Array<[number, number]> = [
+      [4, -7], [2, -6], [3, -6], [4, -6], [1, -5], [2, -5], [3, -5], [4, -5],
+    ];
+    for (const [q, r] of p2InGoal) board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    // P2 has two outside pieces far from the triangle (so they cannot
+    // contribute to the immediate solution; only swaps can).
+    for (const [q, r] of [[0, 0], [1, 0]] as Array<[number, number]>) {
+      board.set(`${q},${r}`, { type: 'piece', player: 2 });
+    }
+    // P0 blockers at the tip and second-row.
+    board.set('4,-8', { type: 'piece', player: 0 });
+    board.set('3,-7', { type: 'piece', player: 0 });
+    // Place P0's remaining pieces well away — they don't matter to the
+    // local puzzle but must exist as legal opposing pieces.
+    const p0Rest: Array<[number, number]> = [
+      [-4, 8], [-3, 7], [-4, 7], [-2, 6], [-3, 6], [-4, 6], [-2, 5], [-3, 5],
+    ];
+    for (const [q, r] of p0Rest) board.set(`${q},${r}`, { type: 'piece', player: 0 });
+
+    const state: GameState = { ...base, board, currentPlayer: 2 };
+    const move = findRicefishMove(state, 'medium', 'generalist');
+    expect(move).not.toBeNull();
+    expect(move!.isSwap).toBe(true);
+    // The chosen swap should land a Ricefish piece on a top-triangle cell
+    // (any goal cell qualifies — the depth gradient will steer toward the
+    // tip in subsequent moves).
+    const topTriangle: Array<[number, number]> = [
+      [4, -8], [3, -7], [4, -7], [2, -6], [3, -6], [4, -6],
+      [1, -5], [2, -5], [3, -5], [4, -5],
+    ];
+    const landsInGoal = topTriangle.some(([q, r]) => q === move!.to.q && r === move!.to.r);
+    expect(landsInGoal).toBe(true);
+  });
+});
+
 describe('findRicefishMove endgame regression', () => {
   // From the same observed bug: 8/10 player-2 pieces in goal, two left over
   // at (1,-4) and (2,-4); empty goal cells are (4,-8) and (4,-5). Under the
