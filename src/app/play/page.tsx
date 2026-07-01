@@ -103,39 +103,64 @@ export default function PlayPage() {
 
   useEffect(() => { loadLayouts(); }, [loadLayouts]);
 
-  // Reset state on layout change; preserve colors when only player count changes
+  // On first mount, seed colors from favoriteColor
+  useEffect(() => {
+    const { favoriteColor } = useSettingsStore.getState();
+    const players = ACTIVE_PLAYERS[selectedCount];
+    if (!favoriteColor || players.length === 0) return;
+    const newColors: ColorMapping = { [players[0]]: favoriteColor };
+    const taken = [favoriteColor];
+    for (const p of players) {
+      if (p === players[0]) continue;
+      const def = PLAYER_COLORS[p];
+      if (taken.some(t => areTooSimilar(t, def))) {
+        const free = Object.values(PLAYER_COLORS).find(c => !taken.some(t => areTooSimilar(t, c)));
+        if (free) { newColors[p] = free; taken.push(free); }
+      } else {
+        taken.push(def);
+      }
+    }
+    setCustomColors(newColors);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Preserve player choices across board changes; only reconcile player count
+  // when the new board doesn't support the previously-selected count.
   useEffect(() => {
     const currentKey = selectedLayout?.id ?? 'standard';
-    const isLayoutChange = currentKey !== layoutKeyRef.current;
+    const previousKey = layoutKeyRef.current;
     layoutKeyRef.current = currentKey;
 
-    if (isLayoutChange) {
-      setCustomPlayerCount(null);
-      const { favoriteColor } = useSettingsStore.getState();
-      const players = selectedLayout ? layoutPlayers : ACTIVE_PLAYERS[selectedCount];
-      if (favoriteColor && players.length > 0) {
-        const newColors: ColorMapping = { [players[0]]: favoriteColor };
-        const taken = [favoriteColor];
-        for (const p of players) {
-          if (p === players[0]) continue;
-          const def = PLAYER_COLORS[p];
-          if (taken.some(t => areTooSimilar(t, def))) {
-            const free = Object.values(PLAYER_COLORS).find(c => !taken.some(t => areTooSimilar(t, c)));
-            if (free) { newColors[p] = free; taken.push(free); }
-          } else {
-            taken.push(def);
-          }
-        }
-        setCustomColors(newColors);
+    if (previousKey === '' || previousKey === currentKey) return;
+
+    const previousWasStandard = previousKey === 'standard';
+    const desiredCount: PlayerCount = previousWasStandard
+      ? selectedCount
+      : ((customPlayerCount ?? 2) as PlayerCount);
+
+    if (!selectedLayout) {
+      const standardCounts: PlayerCount[] = [2, 3, 4, 6];
+      const chosen = standardCounts.includes(desiredCount)
+        ? desiredCount
+        : standardCounts.reduce((best, c) =>
+            Math.abs(c - desiredCount) < Math.abs(best - desiredCount) ? c : best
+          );
+      setSelectedCount(chosen);
+    } else {
+      const supported = PLAYER_COUNT_OPTIONS
+        .map(o => o.count)
+        .filter(c => c <= layoutPlayers.length);
+      if (supported.length === 0) {
+        setCustomPlayerCount(null);
       } else {
-        setCustomColors({});
+        const chosen = supported.includes(desiredCount)
+          ? desiredCount
+          : supported[supported.length - 1];
+        setCustomPlayerCount(chosen);
       }
-      setTeamMode(false);
     }
-    setPlayerNames({});
-    setAiConfig({});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCount, selectedLayout?.id]);
+  }, [selectedLayout?.id]);
 
   const handleColorSelect = (player: PlayerIndex, color: string) => {
     setCustomColors(prev => ({ ...prev, [player]: color }));
@@ -155,10 +180,18 @@ export default function PlayPage() {
   };
 
   const handleStartGame = () => {
-    const hasCustomColors = Object.keys(customColors).length > 0;
-    const hasCustomNames = Object.keys(playerNames).length > 0;
-    const hasAI = Object.keys(aiConfig).length > 0;
     const players = selectedLayout ? effectiveLayoutPlayers : (ACTIVE_PLAYERS[selectedCount] as PlayerIndex[]);
+    const playerSet = new Set<PlayerIndex>(players);
+    const filterByPlayers = <T,>(obj: Partial<Record<PlayerIndex, T>>): Partial<Record<PlayerIndex, T>> =>
+      Object.fromEntries(
+        Object.entries(obj).filter(([k]) => playerSet.has(Number(k) as PlayerIndex))
+      ) as Partial<Record<PlayerIndex, T>>;
+    const filteredColors = filterByPlayers(customColors);
+    const filteredNames = filterByPlayers(playerNames);
+    const filteredAI = filterByPlayers(aiConfig);
+    const hasCustomColors = Object.keys(filteredColors).length > 0;
+    const hasCustomNames = Object.keys(filteredNames).length > 0;
+    const hasAI = Object.keys(filteredAI).length > 0;
     const effectivePlayerCount = players.length;
     const effectiveTeamMode = teamMode && (effectivePlayerCount === 4 || effectivePlayerCount === 6) ? true : undefined;
     const effectivePieceTypes = gameMode !== 'normal'
@@ -183,9 +216,9 @@ export default function PlayPage() {
       };
       gameId = startGameFromLayout(
         trimmedLayout,
-        hasCustomColors ? customColors : undefined,
-        hasAI ? aiConfig : undefined,
-        hasCustomNames ? playerNames : undefined,
+        hasCustomColors ? filteredColors : undefined,
+        hasAI ? filteredAI : undefined,
+        hasCustomNames ? filteredNames : undefined,
         effectiveTeamMode,
         effectivePieceTypes,
       );
@@ -193,9 +226,9 @@ export default function PlayPage() {
       gameId = startGame(
         selectedCount,
         undefined,
-        hasCustomColors ? customColors : undefined,
-        hasAI ? aiConfig : undefined,
-        hasCustomNames ? playerNames : undefined,
+        hasCustomColors ? filteredColors : undefined,
+        hasAI ? filteredAI : undefined,
+        hasCustomNames ? filteredNames : undefined,
         effectiveTeamMode,
         effectivePieceTypes,
       );
