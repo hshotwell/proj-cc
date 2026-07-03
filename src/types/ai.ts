@@ -2,7 +2,7 @@ import type { PlayerIndex } from './game';
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard';
 export type AIPersonality = 'generalist' | 'defensive' | 'aggressive';
-export type AIEngine = 'default' | 'ricefish';
+export type AIEngine = 'default' | 'ricefish' | 'ricefish-plus';
 
 export interface AIConfig {
   difficulty: AIDifficulty;
@@ -32,6 +32,15 @@ export const RICEFISH_DEPTH_MP: Record<AIDifficulty, number> = {
   medium: 2,
   hard:   3,
 };
+
+/**
+ * Ricefish+ (hybrid) reuses Ricefish's search shell, so it reuses the same
+ * search-shape constants. Aliased here so the engine dispatcher can look
+ * them up by name and any future divergence is a one-line change.
+ */
+export const RICEFISH_PLUS_TIME_BUDGET_MS = RICEFISH_TIME_BUDGET_MS;
+export const RICEFISH_PLUS_DEPTH_2P = RICEFISH_DEPTH_2P;
+export const RICEFISH_PLUS_DEPTH_MP = RICEFISH_DEPTH_MP;
 
 export type AIPlayerMap = Partial<Record<PlayerIndex, AIConfig>>;
 
