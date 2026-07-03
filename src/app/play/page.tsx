@@ -362,7 +362,6 @@ export default function PlayPage() {
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
               <option value="ricefish">Ricefish</option>
-              <option value="ricefish-plus">Ricefish+</option>
             </select>
             <select
               value={aiConfig[playerIndex]!.personality}
