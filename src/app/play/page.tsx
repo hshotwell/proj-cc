@@ -341,14 +341,19 @@ export default function PlayPage() {
         {isAI && (
           <div className="flex items-center gap-2 pl-13">
             <select
-              value={aiConfig[playerIndex]!.engine === 'ricefish' ? 'ricefish' : aiConfig[playerIndex]!.difficulty}
+              value={
+                aiConfig[playerIndex]!.engine === 'ricefish-plus' ? 'ricefish-plus' :
+                aiConfig[playerIndex]!.engine === 'ricefish'      ? 'ricefish' :
+                aiConfig[playerIndex]!.difficulty
+              }
               onChange={(e) => {
                 const v = e.target.value;
                 setAiConfig(prev => ({
                   ...prev,
-                  [playerIndex]: v === 'ricefish'
-                    ? { ...prev[playerIndex]!, engine: 'ricefish', difficulty: 'hard' }
-                    : { ...prev[playerIndex]!, engine: 'default', difficulty: v as AIDifficulty },
+                  [playerIndex]:
+                    v === 'ricefish-plus' ? { ...prev[playerIndex]!, engine: 'ricefish-plus', difficulty: 'hard' } :
+                    v === 'ricefish'      ? { ...prev[playerIndex]!, engine: 'ricefish',      difficulty: 'hard' } :
+                                           { ...prev[playerIndex]!, engine: 'default',        difficulty: v as AIDifficulty },
                 }));
               }}
               className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
@@ -357,6 +362,7 @@ export default function PlayPage() {
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
               <option value="ricefish">Ricefish</option>
+              <option value="ricefish-plus">Ricefish+</option>
             </select>
             <select
               value={aiConfig[playerIndex]!.personality}
