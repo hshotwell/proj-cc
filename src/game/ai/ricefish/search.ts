@@ -12,6 +12,7 @@ import {
   ricefishScore,
   createGoalCentroidCache,
   MATE,
+  type RicefishScoreFn,
 } from './evaluate';
 import { orderMoves } from './ordering';
 
@@ -91,6 +92,7 @@ interface ABContext {
   // Best move found at the previous iterative-deepening iteration. Reordered
   // to the front of root move list.
   pvHint: Move | null;
+  scoreFn: RicefishScoreFn;
 }
 
 function killersFor(ctx: ABContext, ply: number): Move[] {
@@ -171,7 +173,7 @@ function quiesce(
   if (ctx.budget.expired()) throw new SearchAborted();
 
   const sideToMove = state.currentPlayer;
-  const raw = ricefishScore(state, ctx.root, ctx.personality, ctx.cache);
+  const raw = ctx.scoreFn(state, ctx.root, ctx.personality, ctx.cache);
   const standPat = sideToMove === ctx.root ? raw : -raw;
 
   // If the static eval already beats beta, the opponent won't let us reach
@@ -278,6 +280,7 @@ function findBestMove2P(
   state: GameState,
   difficulty: AIDifficulty,
   personality: AIPersonality,
+  scoreFn: RicefishScoreFn,
 ): Move | null {
   const maxDepth = RICEFISH_DEPTH_2P[difficulty];
   const budget = new TimeBudget(RICEFISH_TIME_BUDGET_MS[difficulty]);
@@ -289,6 +292,7 @@ function findBestMove2P(
     killers: new Map(),
     budget,
     pvHint: null,
+    scoreFn,
   };
 
   const rootMoves = getAllValidMoves(state, state.currentPlayer);
@@ -339,11 +343,12 @@ interface MaxNContext {
   personality: AIPersonality;
   cache: ReturnType<typeof createGoalCentroidCache>;
   budget: TimeBudget;
+  scoreFn: RicefishScoreFn;
 }
 
 function maxNLeaf(state: GameState, ctx: MaxNContext): number[] {
   return state.activePlayers.map((p) =>
-    ricefishScore(state, p, ctx.personality, ctx.cache)
+    ctx.scoreFn(state, p, ctx.personality, ctx.cache)
   );
 }
 
@@ -383,6 +388,7 @@ function findBestMoveMP(
   state: GameState,
   difficulty: AIDifficulty,
   personality: AIPersonality,
+  scoreFn: RicefishScoreFn,
 ): Move | null {
   const maxDepth = RICEFISH_DEPTH_MP[difficulty];
   const budget = new TimeBudget(RICEFISH_TIME_BUDGET_MS[difficulty]);
@@ -390,6 +396,7 @@ function findBestMoveMP(
     personality,
     cache: createGoalCentroidCache(),
     budget,
+    scoreFn,
   };
 
   const rootMoves = getAllValidMoves(state, state.currentPlayer);
@@ -438,6 +445,7 @@ export function findRicefishMove(
   state: GameState,
   difficulty: AIDifficulty,
   personality: AIPersonality,
+  scoreFn: RicefishScoreFn = ricefishScore,
 ): Move | null {
   // Sanity: confirm the current player is not already finished.
   if (state.finishedPlayers.some((fp) => fp.player === state.currentPlayer)) {
@@ -447,7 +455,7 @@ export function findRicefishMove(
   if (hasPlayerWon(state, state.currentPlayer)) return null;
 
   if (state.activePlayers.length <= 2) {
-    return findBestMove2P(state, difficulty, personality);
+    return findBestMove2P(state, difficulty, personality, scoreFn);
   }
-  return findBestMoveMP(state, difficulty, personality);
+  return findBestMoveMP(state, difficulty, personality, scoreFn);
 }

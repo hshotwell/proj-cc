@@ -35,7 +35,7 @@ export const STRAGGLER_WEIGHT = 0.5;
 // Cache the goal-cell list per player for one search call. Each entry's
 // "filled" membership is recomputed per-state at the call site (cheap —
 // just board lookups), so the cache stores only the immutable cell list.
-type GoalCellsCache = Map<PlayerIndex, CubeCoord[]>;
+export type GoalCellsCache = Map<PlayerIndex, CubeCoord[]>;
 
 function getOrComputeGoals(
   state: GameState,
@@ -176,3 +176,10 @@ export function ricefishScore(
 export function createGoalCentroidCache(): GoalCellsCache {
   return new Map();
 }
+
+export type RicefishScoreFn = (
+  state: GameState,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  cache?: GoalCellsCache,
+) => number;
