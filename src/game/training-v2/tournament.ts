@@ -54,14 +54,14 @@ export function runTournamentGame(
 ): { winner: 'candidate' | 'opponent' | null; totalMoves: number } {
   let state = createGame(2);
   const players = state.activePlayers;
-  const firstIdx = candidateGoesFirst ? players[0] : players[1];
-  const secondIdx = candidateGoesFirst ? players[1] : players[0];
+  const candidateIdx = candidateGoesFirst ? players[0] : players[1];
+  const opponentIdx = candidateGoesFirst ? players[1] : players[0];
 
   let totalMoves = 0;
 
   while (!isGameFullyOver(state) && totalMoves < maxMoves) {
     const currentPlayer = state.currentPlayer;
-    const isCandidate = currentPlayer === (candidateGoesFirst ? firstIdx : secondIdx);
+    const isCandidate = currentPlayer === candidateIdx;
     const eg = isCandidate ? candidate : opponent;
     const personality = isCandidate ? candidatePersonality : opponentPersonality;
 
@@ -75,8 +75,7 @@ export function runTournamentGame(
   let winner: 'candidate' | 'opponent' | null = null;
   if (state.finishedPlayers.length > 0) {
     const winnerPlayer = state.finishedPlayers[0].player;
-    const candidateSide = candidateGoesFirst ? firstIdx : secondIdx;
-    winner = winnerPlayer === candidateSide ? 'candidate' : 'opponent';
+    winner = winnerPlayer === candidateIdx ? 'candidate' : 'opponent';
   }
 
   return { winner, totalMoves };
