@@ -63,13 +63,13 @@ export const saveChampion = internalMutation({
     personality: personalityValidator,
     genome: v.any(),
     fitness: v.number(),
-    challengeEntry: v.object({
+    challengeEntry: v.optional(v.object({
       candidateGenome: v.any(),
       wins: v.number(),
       played: v.number(),
       date: v.number(),
       promoted: v.boolean(),
-    }),
+    })),
     replaceGenome: v.boolean(),
   },
   handler: async (ctx, { engine, personality, genome, fitness, challengeEntry, replaceGenome }) => {
@@ -81,7 +81,7 @@ export const saveChampion = internalMutation({
       .first();
     const now = Date.now();
     if (existing) {
-      const history = [...(existing.challengeHistory ?? []), challengeEntry];
+      const history = challengeEntry ? [...(existing.challengeHistory ?? []), challengeEntry] : (existing.challengeHistory ?? []);
       await ctx.db.patch(existing._id, {
         genome: replaceGenome ? genome : existing.genome,
         fitness: replaceGenome ? fitness : existing.fitness,
@@ -95,7 +95,7 @@ export const saveChampion = internalMutation({
         genome,
         fitness,
         promotedAt: now,
-        challengeHistory: [challengeEntry],
+        challengeHistory: challengeEntry ? [challengeEntry] : [],
       });
     }
   },
