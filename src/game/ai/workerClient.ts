@@ -30,6 +30,7 @@ export interface WorkerRequest {
   personality: AIPersonality;
   engine?: AIEngine;
   openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null;
+  championGenomes?: import('@/types/ai').ChampionGenomeSet;
 }
 
 export interface WorkerResponse {
