@@ -44,6 +44,8 @@ function pickMoveFor(
   }
 }
 
+export const DEFAULT_GAME_WALL_MS = 15_000;
+
 export function runTournamentGame(
   candidate: EngineGenome,
   opponent: EngineGenome,
@@ -51,6 +53,7 @@ export function runTournamentGame(
   opponentPersonality: AIPersonality,
   candidateGoesFirst: boolean,
   maxMoves: number,
+  maxWallMs: number = DEFAULT_GAME_WALL_MS,
 ): { winner: 'candidate' | 'opponent' | null; totalMoves: number } {
   let state = createGame(2);
   const players = state.activePlayers;
@@ -58,8 +61,9 @@ export function runTournamentGame(
   const opponentIdx = candidateGoesFirst ? players[1] : players[0];
 
   let totalMoves = 0;
+  const wallDeadline = Date.now() + maxWallMs;
 
-  while (!isGameFullyOver(state) && totalMoves < maxMoves) {
+  while (!isGameFullyOver(state) && totalMoves < maxMoves && Date.now() < wallDeadline) {
     const currentPlayer = state.currentPlayer;
     const isCandidate = currentPlayer === candidateIdx;
     const eg = isCandidate ? candidate : opponent;

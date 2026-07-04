@@ -3,20 +3,28 @@ import { deserializeGameState } from './workerClient';
 import { findBestMove } from './search';
 import { findRicefishMove } from './ricefish/search';
 import { findRicefishPlusMove } from './ricefish-plus/search';
-
-// Received per-request; stored for the follow-up plan that threads
-// genomes through the search entry points. No behavioral use yet.
-let receivedGenomes: WorkerRequest['championGenomes'] = undefined;
+import { ricefishScore } from './ricefish/evaluate';
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
   const { state: serialized, difficulty, personality, engine, openingMoves, championGenomes } = e.data;
-  receivedGenomes = championGenomes;
-  void receivedGenomes; // silence unused warning; consumed in follow-up plan
   const state = deserializeGameState(serialized);
-  const move =
-    engine === 'ricefish-plus' ? findRicefishPlusMove(state, difficulty, personality) :
-    engine === 'ricefish'      ? findRicefishMove(state, difficulty, personality) :
-                                 findBestMove(state, difficulty, personality, openingMoves);
+
+  let move;
+  if (engine === 'ricefish-plus') {
+    // Search entry doesn't accept genomes yet — follow-up plan wires it in.
+    move = findRicefishPlusMove(state, difficulty, personality);
+  } else if (engine === 'ricefish') {
+    const g = championGenomes?.ricefish?.[personality];
+    const scoreFn = g
+      ? (s: Parameters<typeof ricefishScore>[0], player: Parameters<typeof ricefishScore>[1], p: Parameters<typeof ricefishScore>[2], cache?: Parameters<typeof ricefishScore>[3]) =>
+          ricefishScore(s, player, p, cache, g)
+      : undefined;
+    move = findRicefishMove(state, difficulty, personality, scoreFn);
+  } else {
+    const g = championGenomes?.default?.[personality];
+    move = findBestMove(state, difficulty, personality, openingMoves, g);
+  }
+
   const response: WorkerResponse = { move };
   self.postMessage(response);
 };
