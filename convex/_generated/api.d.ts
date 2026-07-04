@@ -27,6 +27,8 @@ import type * as onlineGames from "../onlineGames.js";
 import type * as presence from "../presence.js";
 import type * as training from "../training.js";
 import type * as trainingActions from "../trainingActions.js";
+import type * as trainingV2 from "../trainingV2.js";
+import type * as trainingV2Actions from "../trainingV2Actions.js";
 import type * as users from "../users.js";
 
 import type {
@@ -55,6 +57,8 @@ declare const fullApi: ApiFromModules<{
   presence: typeof presence;
   training: typeof training;
   trainingActions: typeof trainingActions;
+  trainingV2: typeof trainingV2;
+  trainingV2Actions: typeof trainingV2Actions;
   users: typeof users;
 }>;
 
