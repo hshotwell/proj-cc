@@ -126,7 +126,8 @@ function greedyAssignmentCost(
   return { cost: total, obstructed, maxDist };
 }
 
-function defenseWeight(personality: AIPersonality): number {
+function defenseWeight(personality: AIPersonality, genome?: import('@/game/training-v2/genomes').RicefishGenome): number {
+  if (genome) return genome.defenseWeightByPersonality[personality];
   switch (personality) {
     case 'defensive': return 2.0;
     case 'aggressive': return 0.75;
@@ -155,10 +156,11 @@ export function ricefishScore(
   player: PlayerIndex,
   personality: AIPersonality,
   cache?: GoalCellsCache,
+  genome?: import('@/game/training-v2/genomes').RicefishGenome,
 ): number {
   if (hasPlayerWon(state, player)) return MATE;
 
-  const w = defenseWeight(personality);
+  const w = defenseWeight(personality, genome);
   let oppTotal = 0;
   for (const other of state.activePlayers) {
     if (other === player) continue;

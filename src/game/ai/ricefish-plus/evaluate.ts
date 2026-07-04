@@ -59,7 +59,17 @@ export function computePhaseAlpha(state: GameState): number {
  * signature compatible with the score function type Ricefish's search
  * shell expects.
  */
-export function createHybridScore(difficulty: AIDifficulty): RicefishScoreFn {
+export function createHybridScore(
+  difficulty: AIDifficulty,
+  genomes?: {
+    default?: import('@/game/training-v2/genomes').DefaultGenome;
+    ricefish?: import('@/game/training-v2/genomes').RicefishGenome;
+    ricefishPlus?: import('@/game/training-v2/genomes').RicefishPlusGenome;
+  },
+): RicefishScoreFn {
+  const rp = genomes?.ricefishPlus;
+  const defaultNorm  = rp?.defaultNorm  ?? DEFAULT_NORM;
+  const ricefishNorm = rp?.ricefishNorm ?? RICEFISH_NORM;
   return (
     state: GameState,
     player: PlayerIndex,
@@ -67,10 +77,12 @@ export function createHybridScore(difficulty: AIDifficulty): RicefishScoreFn {
     cache?: GoalCellsCache,
   ): number => {
     if (hasPlayerWon(state, player)) return MATE;
-
+    // Note: alpha threshold override intentionally not wired in Task 3 —
+    // computePhaseAlpha uses the module constant; the genome carries it
+    // for a follow-up plan once V2 is proven end-to-end.
     const alpha = computePhaseAlpha(state);
-    const defaultTerm = evaluatePosition(state, player, personality, difficulty) / DEFAULT_NORM;
-    const ricefishTerm = ricefishScore(state, player, personality, cache) / RICEFISH_NORM;
+    const defaultTerm = evaluatePosition(state, player, personality, difficulty, genomes?.default) / defaultNorm;
+    const ricefishTerm = ricefishScore(state, player, personality, cache, genomes?.ricefish) / ricefishNorm;
     return (1 - alpha) * defaultTerm + alpha * ricefishTerm;
   };
 }

@@ -10,7 +10,22 @@ import { getWorstAssignmentCost } from '../pathfinding';
 import { getCachedLearnedWeights, getCachedEndgameInsights } from '../learning';
 import { getApproachLaneMap } from './corridors';
 
-const PERSONALITY_WEIGHTS: Record<AIPersonality, {
+// Genome injection: findBestMove (in search.ts) sets this at entry so that
+// every evaluatePosition call inside the search sees the genome without a
+// signature refactor. Reset to undefined in a finally block after the search
+// returns. Safe under single-threaded JS (one Web Worker per AI session).
+let injectedDefaultGenome: import('@/game/training-v2/genomes').DefaultGenome | undefined = undefined;
+
+export function setInjectedDefaultGenome(g?: import('@/game/training-v2/genomes').DefaultGenome): void {
+  injectedDefaultGenome = g;
+}
+
+export function getInjectedDefaultGenome():
+  | import('@/game/training-v2/genomes').DefaultGenome | undefined {
+  return injectedDefaultGenome;
+}
+
+export const PERSONALITY_WEIGHTS: Record<AIPersonality, {
   progress: number;
   distanceProgress: number;
   alignment: number;
@@ -346,7 +361,8 @@ export function evaluatePosition(
   state: GameState,
   player: PlayerIndex,
   personality: AIPersonality,
-  difficulty: AIDifficulty = 'hard'
+  difficulty: AIDifficulty = 'hard',
+  genome?: import('@/game/training-v2/genomes').DefaultGenome,
 ): number {
   const inGoal = countPiecesInGoal(state, player);
 
@@ -356,7 +372,8 @@ export function evaluatePosition(
 
   // Early out for custom layouts with no goal positions
   if (goalPositions.length === 0) return 0;
-  const weights = PERSONALITY_WEIGHTS[personality];
+  const activeGenome = genome ?? injectedDefaultGenome;
+  const weights = activeGenome?.personalityWeights[personality] ?? PERSONALITY_WEIGHTS[personality];
 
   // 1. Progress score: pieces already in goal (0-100)
   const progressScore = inGoal * 10;

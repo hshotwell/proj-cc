@@ -1,4 +1,5 @@
 import type { PlayerIndex } from './game';
+import type { DefaultGenome, RicefishGenome, RicefishPlusGenome } from '@/game/training-v2/genomes';
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard';
 export type AIPersonality = 'generalist' | 'defensive' | 'aggressive';
@@ -71,6 +72,19 @@ export const AI_MOVE_LIMIT: Record<AIDifficulty, number> = {
 };
 
 export const AI_THINK_DELAY = 400;
+
+export type ChampionGenomeSet = {
+  default:         Record<AIPersonality, DefaultGenome>;
+  ricefish:        Record<AIPersonality, RicefishGenome>;
+  'ricefish-plus': Record<AIPersonality, RicefishPlusGenome>;
+};
+
+/**
+ * Master switch: when true, the client attempts to fetch trained champion
+ * genomes from Convex and passes them to the worker. When false, engines
+ * always use their hard-coded defaults.
+ */
+export const USE_TRAINED_GENOMES = true;
 
 /** Time budget for iterative deepening search (milliseconds). */
 export const AI_TIME_BUDGET_MS: Record<AIDifficulty, number> = {

@@ -6,7 +6,7 @@ import { applyMove, getGoalPositionsForState, countPiecesInGoal } from '../state
 import { getPlayerPieces } from '../setup';
 import { cubeDistance, coordKey, centroid } from '../coordinates';
 import { DIRECTIONS } from '../constants';
-import { evaluatePosition } from './evaluate';
+import { evaluatePosition, setInjectedDefaultGenome } from './evaluate';
 import { computePlayerProgress } from '../progress';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, backPriorityPersonalityFactor, proactiveJumpFactor, scoreLandingLateralDrift, scoreFutureJumpAdvantage, computeMaxImmediateJumpGain, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
@@ -1574,8 +1574,11 @@ export function findBestMove(
   state: GameState,
   difficulty: AIDifficulty,
   personality: AIPersonality,
-  openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null
+  openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null,
+  genome?: import('@/game/training-v2/genomes').DefaultGenome,
 ): Move | null {
+  setInjectedDefaultGenome(genome);
+  try {
   const player = state.currentPlayer;
 
   // Set timer immediately so time-guards in minimax/maxn are valid for this call
@@ -1857,6 +1860,9 @@ export function findBestMove(
   const pickedMove = selectMoveWithVariance(bestScoredMoves, difficulty);
   pickedMove.debug = buildDebugInfo(state, player, bestScoredMoves, pickedMove, difficulty, personality, depthReached);
   return pickedMove;
+  } finally {
+    setInjectedDefaultGenome(undefined);
+  }
 }
 
 /**
