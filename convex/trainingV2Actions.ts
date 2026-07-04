@@ -1,7 +1,7 @@
 'use node';
 
 import { internalAction } from './_generated/server';
-import { internal } from './_generated/api';
+import { internal, api } from './_generated/api';
 import {
   DEFAULT_DEFAULT_GENOME,
   DEFAULT_RICEFISH_GENOME,
@@ -124,25 +124,25 @@ export const runTrainingV2Step = internalAction({
       const engine: Engine = cursor?.nextEngine ?? 'default';
 
       // ── 2. Seed champions if empty ───────────────────────────────────────
-      for (const e of ENGINES) {
-        for (const p of PERSONALITIES) {
-          const existing = await ctx.runQuery(internal.trainingV2.getChampion, { engine: e, personality: p });
-          if (!existing) {
-            await ctx.runMutation(internal.trainingV2.saveChampion, {
-              engine: e,
-              personality: p,
-              genome: defaultGenomeFor(e),
-              fitness: 0,
-              challengeEntry: {
-                candidateGenome: defaultGenomeFor(e),
-                wins: 0,
-                played: 0,
-                date: Date.now(),
-                promoted: true,
-              },
-              replaceGenome: true,
-            });
-            console.log(`[TrainingV2] Seeded champion ${e}/${p} from default`);
+      // Fast path: single bulk read via the public query. If all 9 rows exist
+      // this returns non-null and we skip the per-slot seeding pass.
+      const allChampionsSummary = await ctx.runQuery(api.trainingV2.getAllChampions);
+      if (!allChampionsSummary) {
+        for (const e of ENGINES) {
+          for (const p of PERSONALITIES) {
+            const existing = await ctx.runQuery(internal.trainingV2.getChampion, { engine: e, personality: p });
+            if (!existing) {
+              await ctx.runMutation(internal.trainingV2.saveChampion, {
+                engine: e,
+                personality: p,
+                genome: defaultGenomeFor(e),
+                fitness: 0,
+                replaceGenome: true,
+                // No challengeEntry — Task 5 fix made it optional; seeding shouldn't
+                // pollute the audit trail with a fake 0/0 challenge.
+              });
+              console.log(`[TrainingV2] Seeded champion ${e}/${p} from default`);
+            }
           }
         }
       }
@@ -239,7 +239,7 @@ export const runTrainingV2Step = internalAction({
             challengeEntry: {
               candidateGenome: champion.genome,
               wins: challenge.candidateWins,
-              played: CHALLENGE_GAMES,
+              played: challenge.gamesPlayed,
               date: Date.now(),
               promoted,
             },
