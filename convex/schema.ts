@@ -198,4 +198,34 @@ export default defineSchema({
     generation: v.number(),
     scoredAt: v.number(),
   }),
+
+  trainingStateV2: defineTable({
+    engine: v.union(v.literal('default'), v.literal('ricefish'), v.literal('ricefish-plus')),
+    currentGeneration: v.number(),
+    population: v.any(),
+    matchupSchedule: v.any(),
+    matchupIndex: v.number(),
+    gamesCompletedInGeneration: v.number(),
+    lastUpdated: v.number(),
+  }).index('by_engine', ['engine']),
+
+  championsV2: defineTable({
+    engine: v.union(v.literal('default'), v.literal('ricefish'), v.literal('ricefish-plus')),
+    personality: v.union(v.literal('generalist'), v.literal('defensive'), v.literal('aggressive')),
+    genome: v.any(),
+    fitness: v.number(),
+    promotedAt: v.number(),
+    challengeHistory: v.array(v.object({
+      candidateGenome: v.any(),
+      wins: v.number(),
+      played: v.number(),
+      date: v.number(),
+      promoted: v.boolean(),
+    })),
+  }).index('by_engine_personality', ['engine', 'personality']),
+
+  cronCursorV2: defineTable({
+    nextEngine: v.union(v.literal('default'), v.literal('ricefish'), v.literal('ricefish-plus')),
+    lastTick: v.number(),
+  }),
 });
