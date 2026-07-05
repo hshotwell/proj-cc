@@ -36,6 +36,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     hopEffect,
     usePlayerOpening,
     hexCells,
+    preMoves,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -50,6 +51,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleHopEffect,
     toggleUsePlayerOpening,
     toggleHexCells,
+    togglePreMoves,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
@@ -170,6 +172,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 description={autoConfirm ? 'Moves confirmed instantly' : 'Confirm each move manually'}
                 checked={autoConfirm}
                 onChange={toggleAutoConfirm}
+              />
+              <ToggleOption
+                label="Pre-moves"
+                description={preMoves ? 'Queue up to 6 moves while opponents take their turns' : 'Play only when it\'s your turn'}
+                checked={preMoves}
+                onChange={togglePreMoves}
               />
               <ToggleOption
                 label="Show player progress"

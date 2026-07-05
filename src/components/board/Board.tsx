@@ -57,9 +57,13 @@ interface BoardProps {
   onCellClick?: (coord: CubeCoord) => void;
   /** When provided, render this cell with the selected-piece highlight style. */
   highlightCoord?: CubeCoord;
+  /** When true, cell clicks are routed to the pre-move flow instead of the normal move flow. */
+  preMovesAllowed?: boolean;
+  /** The local user's player index — determines which pieces they may pre-move. */
+  localPlayer?: PlayerIndex;
 }
 
-export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, highlightCoord }: BoardProps = {}) {
+export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, highlightCoord, preMovesAllowed, localPlayer }: BoardProps = {}) {
   // Replay store
   const {
     isReplayActive,
@@ -86,6 +90,13 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       clearSelection,
       confirmMove,
       undoLastMove,
+      preMoves,
+      preMoveSelectedFrom,
+      selectPreMovePiece,
+      queuePreMove,
+      cancelPreMoveSelection,
+      cancelPreMoveAt,
+      getVirtualBoard,
     } = useGameStore();
   const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard, glassPieces, hopEffect, hexCells } = useSettingsStore();
 
@@ -520,6 +531,24 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     return validMovesForSelected.map((m) => m.to);
   }, [validMovesForSelected, isReplayActive]);
 
+  // Pre-move visual helpers.
+  // queuedDestinations: all `to` coords of queued pre-moves. Rendered as valid-move-style rings.
+  // queuedOriginCoords: real-board piece coords whose piece is queued for at least one pre-move.
+  //   Rendered with the same "last moved" ring so the player can see which pieces they've planned.
+  const queuedDestinationSet = useMemo(() => {
+    return new Set(preMoves.map((pm) => coordKey(pm.to)));
+  }, [preMoves]);
+  const queuedOriginSet = useMemo(() => {
+    if (!gameState || !preMovesAllowed) return new Set<string>();
+    const s = new Set<string>();
+    for (const pm of preMoves) {
+      const fromKey = coordKey(pm.from);
+      const cell = gameState.board.get(fromKey);
+      if (cell?.type === 'piece') s.add(fromKey);
+    }
+    return s;
+  }, [preMoves, gameState, preMovesAllowed]);
+
   const isAITurn = !isReplayActive && gameState?.aiPlayers?.[gameState.currentPlayer] != null;
 
   // Replay: compute last move indicator data
@@ -627,10 +656,47 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     return simplifiedPath.map(c => cubeToPixel(c, HEX_SIZE));
   }, [showLastMoves, lastMoveInfo, gameState, isReplayActive, replayStep, replayMoves]);
 
+  // Pre-move click routing: activated when the queueing UI is on and it isn't
+  // the local user's turn. Evaluates against the virtual board so a piece that has
+  // already been queued to move appears at its virtual position.
+  const handlePreMoveClick = (coord: CubeCoord) => {
+    if (localPlayer === undefined || !gameState) return;
+    moveHandledRef.current = true;
+    const vb = getVirtualBoard();
+    const content = vb.get(coordKey(coord));
+
+    // Own piece on virtual board → select/replace/toggle
+    if (content?.type === 'piece' && content.player === localPlayer) {
+      selectPreMovePiece(coord);
+      return;
+    }
+
+    // Wall → ignore
+    if (content?.type === 'wall') return;
+
+    // Empty or opponent piece → if a piece is selected, queue this as its destination
+    if (preMoveSelectedFrom) {
+      queuePreMove(coord);
+      return;
+    }
+    // Otherwise no-op
+  };
+
+  const handlePreMoveRightClick = (coord: CubeCoord) => {
+    // Cancel any queued pre-move whose destination is this coord (and everything after it).
+    const idx = preMoves.findIndex((pm) => cubeEquals(pm.to, coord));
+    if (idx >= 0) {
+      cancelPreMoveAt(idx);
+      moveHandledRef.current = true;
+    }
+  };
+
   const handleCellClick = (coord: CubeCoord) => {
     if (onCellClick) { onCellClick(coord); return; }
     if (isReplayActive) return;
     if (!gameState) return;
+    // Pre-move mode: divert clicks away from the normal move flow
+    if (preMovesAllowed) { handlePreMoveClick(coord); return; }
     // Allow confirming a pending move even if the game just ended (winning move)
     if (isGameFullyOver(gameState) && !pendingConfirmation) return;
     // Block interaction during animation or AI turn
@@ -692,6 +758,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     if (onCellClick) { onCellClick(coord); return; }
     if (isReplayActive) return;
     if (!gameState) return;
+    // Pre-move mode: divert
+    if (preMovesAllowed) { handlePreMoveClick(coord); return; }
     if (isGameFullyOver(gameState) && !pendingConfirmation) return;
     // Block interaction during animation or AI turn
     if (animatingPiece || isAITurn) return;
@@ -764,6 +832,14 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     // If a child handler already called makeMove, skip and reset the flag.
     if (moveHandledRef.current) {
       moveHandledRef.current = false;
+      return;
+    }
+    // Pre-move mode: clicking off any cell cancels the in-progress selection but
+    // leaves the queued pre-moves intact.
+    if (preMovesAllowed) {
+      if (preMoveSelectedFrom) {
+        cancelPreMoveSelection();
+      }
       return;
     }
     if (isReplayActive || animatingPiece || isAITurn || !gameState) return;
@@ -843,6 +919,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       style={{ aspectRatio: aspectRatio }}
       preserveAspectRatio="xMidYMid meet"
       onClick={handleSVGClick}
+      onContextMenu={(e) => {
+        // Only intercept right-click when pre-move mode is active
+        if (!preMovesAllowed) return;
+        e.preventDefault();
+      }}
     >
       <g
         style={{
@@ -1075,6 +1156,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
           <g
             key={coordKey(coord)}
             onClick={() => handleCellClick(coord)}
+            onContextMenu={preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined}
             onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
             onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
             style={{ cursor: isReplayActive ? 'default' : 'pointer' }}
@@ -1108,6 +1190,24 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
               playerColor={displayCurrentPlayer !== undefined ? getPlayerColorFromState(displayCurrentPlayer, gameState) : undefined}
               isJump={isJump}
               isSwap={isSwap}
+              hexCells={hexCells}
+              darkMode={darkMode}
+            />
+          ))}
+        </g>
+      )}
+
+      {/* Layer 2c: Queued pre-move destinations */}
+      {preMovesAllowed && preMoves.length > 0 && localPlayer !== undefined && gameState && (
+        <g>
+          {preMoves.map((pm, i) => (
+            <MoveIndicator
+              key={`premove-${i}-${coordKey(pm.to)}`}
+              coord={pm.to}
+              onClick={() => handleCellClick(pm.to)}
+              size={HEX_SIZE}
+              playerColor={getPlayerColorFromState(localPlayer, gameState)}
+              isJump
               hexCells={hexCells}
               darkMode={darkMode}
             />
@@ -1345,13 +1445,16 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
           })();
 
           const pieceKey = coordKey(coord);
-          const isLastMoved = showLastMoves && lastMoveInfo?.destination && cubeEquals(lastMoveInfo.destination, coord);
+          const isLastMoved =
+            (showLastMoves && lastMoveInfo?.destination && cubeEquals(lastMoveInfo.destination, coord)) ||
+            queuedOriginSet.has(pieceKey);
 
           return (
             <g
               key={`piece-${pieceKey}`}
               onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
               onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
+              onContextMenu={preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined}
             >
               <Piece
                 coord={coord}
@@ -1359,7 +1462,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 isCurrentPlayer={!isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer && (isLocalPlayerTurn === undefined || player === fixedRotationPlayer)}
                 isSelected={
                   (!isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)) ||
-                  (highlightCoord != null && cubeEquals(highlightCoord, coord))
+                  (highlightCoord != null && cubeEquals(highlightCoord, coord)) ||
+                  (!!preMovesAllowed && preMoveSelectedFrom != null && cubeEquals(preMoveSelectedFrom, coord))
                 }
                 onClick={() => handlePieceClick(coord)}
                 size={HEX_SIZE}

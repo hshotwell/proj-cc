@@ -28,6 +28,7 @@ interface SettingsStore {
   favoriteColor: string | null;
   usePlayerOpening: boolean;
   hexCells: boolean;
+  preMoves: boolean;
 
   // Sync state
   isSyncing: boolean;
@@ -55,6 +56,7 @@ interface SettingsStore {
   setFavoriteColor: (color: string | null) => void;
   toggleUsePlayerOpening: () => void;
   toggleHexCells: () => void;
+  togglePreMoves: () => void;
 
   // Sync actions
   syncFromCloud: () => Promise<void>;
@@ -102,6 +104,7 @@ export const useSettingsStore = create<SettingsStore>()(
       favoriteColor: null,
       usePlayerOpening: false,
       hexCells: false,
+      preMoves: true,
 
       // Sync state
       isSyncing: false,
@@ -182,6 +185,9 @@ export const useSettingsStore = create<SettingsStore>()(
       toggleHexCells: () => {
         set((state) => ({ hexCells: !state.hexCells }));
       },
+      togglePreMoves: () => {
+        set((state) => ({ preMoves: !state.preMoves }));
+      },
 
       // Sync from cloud (called on sign-in)
       syncFromCloud: async () => {
@@ -248,6 +254,7 @@ export const useSettingsStore = create<SettingsStore>()(
         favoriteColor: state.favoriteColor,
         usePlayerOpening: state.usePlayerOpening,
         hexCells: state.hexCells,
+        preMoves: state.preMoves,
       }),
     }
   )

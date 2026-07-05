@@ -9,21 +9,24 @@ import { getMovesForOpening, getOpeningMove } from '@/game/ai/openingBook';
 
 const OPENING_PLAY_DELAY = 500; // ms before auto-playing (player can see it happening)
 
-export function usePlayerOpening() {
+export function usePlayerOpening(active: boolean = true) {
   const { gameState, pendingConfirmation, animatingPiece } = useGameStore();
   const enabled = useSettingsStore((s) => s.usePlayerOpening);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Only fire on human turns (no AI entry in aiPlayers for currentPlayer)
+  // Only fire on human turns (no AI entry in aiPlayers for currentPlayer).
+  // `active` gates online games to the local player's turn only.
   const isHumanTurn =
+    active &&
     enabled &&
     gameState != null &&
     !isGameFullyOver(gameState) &&
     !pendingConfirmation &&
     !animatingPiece &&
     !gameState.isCustomLayout &&
+    gameState.activePlayers.length === 2 &&
     !gameState.aiPlayers?.[gameState.currentPlayer];
 
   // Phase 1: It's the human's turn — look up and play the next opening move
@@ -74,11 +77,17 @@ export function usePlayerOpening() {
     };
   }, [isHumanTurn, gameState?.currentPlayer, gameState?.turnNumber]);
 
-  // Phase 2: Move is pending — auto-confirm while still within the opening sequence
+  // Phase 2: Move is pending — auto-confirm while still within the opening sequence.
+  // Respects the autoConfirm setting: if off, the player must confirm each opening move
+  // manually before the turn ends (same as any other move).
   useEffect(() => {
-    if (!enabled || !pendingConfirmation || animatingPiece) return;
+    if (!active || !enabled || !pendingConfirmation || animatingPiece) return;
     if (!gameState || isGameFullyOver(gameState)) return;
+    if (gameState.activePlayers.length !== 2) return;
     if (gameState.aiPlayers?.[gameState.currentPlayer]) return; // AI's pending move
+
+    const autoConfirm = useSettingsStore.getState().autoConfirm;
+    if (!autoConfirm) return;
 
     const store = useOpeningStore.getState();
     const openingId = store.playerOpeningId;

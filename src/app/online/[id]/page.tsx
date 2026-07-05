@@ -12,11 +12,16 @@ import { useOnlineGameLearning } from '@/hooks/useOnlineGameLearning';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { useAITurn } from '@/hooks/useAITurn';
+import { usePlayerOpening } from '@/hooks/usePlayerOpening';
+import { usePreMoveFiring } from '@/hooks/usePreMoveFiring';
+import { useSettingsStore } from '@/store/settingsStore';
 import { Board } from '@/components/board';
 import { TurnIndicator } from '@/components/game/TurnIndicator';
 import { MoveConfirmation } from '@/components/game/MoveConfirmation';
+import { ClearPreMovesButton } from '@/components/game/ClearPreMovesButton';
 import { SettingsPopup } from '@/components/SettingsPopup';
 import { SettingsButton } from '@/components/SettingsButton';
+import { isGameFullyOver } from '@/game/state';
 import { getPlayerColorFromState, getPlayerDisplayNameFromState } from '@/game/colors';
 import { getCSSColor } from '@/game/constants';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
@@ -202,6 +207,20 @@ function OnlineGameContent() {
   // AI turns run only on host's client
   useAITurn(isHost && isAITurn);
 
+  // Auto-play favored opening on the local player's turn
+  usePlayerOpening(isMyTurn);
+
+  // Pre-move firing (queue-planning UI is handled by Board; firing happens here on turn transition)
+  const preMovesSetting = useSettingsStore((s) => s.preMoves);
+  const clearAllPreMoves = useGameStore((s) => s.clearAllPreMoves);
+  const localPlayerIndex = (myPlayerIndex >= 0 && gameState
+    ? gameState.activePlayers[myPlayerIndex]
+    : undefined) as PlayerIndex | undefined;
+  usePreMoveFiring(localPlayerIndex, preMovesSetting);
+  useEffect(() => {
+    if (!preMovesSetting) clearAllPreMoves();
+  }, [preMovesSetting, clearAllPreMoves]);
+
   // Learn from finished games
   useOnlineGameLearning(gameId, onlineGame);
 
@@ -262,15 +281,28 @@ function OnlineGameContent() {
           )}
         </div>
 
-        {/* Board - disable interaction when not your turn */}
+        {/* Board - disable interaction when not your turn (but allow pre-move planning) */}
         <div className="relative w-full bg-white rounded-lg shadow-lg p-2 sm:p-4">
           <SettingsButton />
-          <div style={!canInteract && !isFinished ? { pointerEvents: 'none' } : undefined}>
-            <Board
-              fixedRotationPlayer={localPlayerColor as PlayerIndex | undefined}
-              isLocalPlayerTurn={isMyTurn}
-            />
-          </div>
+          {(() => {
+            const preMovesAllowed =
+              preMovesSetting &&
+              !!gameState &&
+              !isGameFullyOver(gameState) &&
+              !isMyTurn &&
+              localPlayerIndex !== undefined;
+            const suppressPointerEvents = !canInteract && !isFinished && !preMovesAllowed;
+            return (
+              <div style={suppressPointerEvents ? { pointerEvents: 'none' } : undefined}>
+                <Board
+                  fixedRotationPlayer={localPlayerColor as PlayerIndex | undefined}
+                  isLocalPlayerTurn={isMyTurn}
+                  preMovesAllowed={preMovesAllowed}
+                  localPlayer={localPlayerIndex}
+                />
+              </div>
+            );
+          })()}
         </div>
 
         {/* Turn status banner - below board */}
@@ -295,6 +327,7 @@ function OnlineGameContent() {
 
         {/* Move Confirmation - only show when it's your turn */}
         {isMyTurn && <MoveConfirmation />}
+        {!isMyTurn && !isFinished && preMovesSetting && <ClearPreMovesButton localPlayer={localPlayerIndex} />}
       </div>
 
       {/* Online Game Over Dialog - gated on server status, not local state */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping, PieceVariant } from '@/types/game';
+import type { CellContent, CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping, PieceVariant } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
 import { createGame, createGameFromLayout } from '@/game/setup';
 import { getValidMoves } from '@/game/moves';
@@ -12,6 +12,13 @@ import { recordBoardState, clearStateHistory } from '@/game/ai/search';
 import { clearPathfindingCache } from '@/game/pathfinding';
 import { extractGamePatterns, createGameSummary, learnFromGame, clearWeightsCache } from '@/game/learning';
 import { useSettingsStore } from './settingsStore';
+
+export interface QueuedPreMove {
+  from: CubeCoord;
+  to: CubeCoord;
+}
+
+export const MAX_PRE_MOVES = 6;
 
 interface GameStore {
   // State
@@ -36,6 +43,9 @@ interface GameStore {
   pendingAnimationSubmission: boolean;
   // Whether the current animation is a swap (both pieces arc simultaneously)
   isSwapAnimation: boolean;
+  // Pre-moves: queued planned moves for the local user while it isn't their turn
+  preMoves: QueuedPreMove[];
+  preMoveSelectedFrom: CubeCoord | null;
   // Actions
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
   startGameFromLayout: (layout: BoardLayout, playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => string;
@@ -50,6 +60,13 @@ interface GameStore {
   loadGame: (gameId: string, state: GameState) => void;
   advanceAnimation: () => void;
   clearAnimation: () => void;
+  // Pre-move actions
+  selectPreMovePiece: (coord: CubeCoord) => void;
+  queuePreMove: (to: CubeCoord) => void;
+  cancelPreMoveSelection: () => void;
+  cancelPreMoveAt: (index: number) => void;
+  clearAllPreMoves: () => void;
+  getVirtualBoard: () => Map<string, CellContent>;
 }
 
 // Generate a simple game ID
@@ -74,6 +91,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   pendingServerSubmission: false,
   pendingAnimationSubmission: false,
   isSwapAnimation: false,
+  preMoves: [],
+  preMoveSelectedFrom: null,
 
   // Start a new game with the specified number of players
   startGame: (playerCount: PlayerCount, selectedPlayers?: PlayerIndex[], playerColors?: ColorMapping, aiPlayers?: AIPlayerMap, playerNames?: PlayerNameMapping, teamMode?: boolean, playerPieceTypes?: Partial<Record<PlayerIndex, PieceVariant>>) => {
@@ -94,6 +113,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateBeforeMove: null,
       lastMoveInfo: null,
       originalPiecePosition: null,
+      preMoves: [],
+      preMoveSelectedFrom: null,
     });
     return gameId;
   },
@@ -117,6 +138,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stateBeforeMove: null,
       lastMoveInfo: null,
       originalPiecePosition: null,
+      preMoves: [],
+      preMoveSelectedFrom: null,
     });
     return gameId;
   },
@@ -319,6 +342,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     // Restore the state before the move
+    // Also clear any queued pre-moves — an undo implies the plan is no longer valid.
     set({
       gameState: stateBeforeMove,
       selectedPiece: null,
@@ -330,6 +354,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animatingPiece: null,
       animationPath: null,
       animationStep: 0,
+      preMoves: [],
+      preMoveSelectedFrom: null,
     });
     return true;
   },
@@ -417,6 +443,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animatingPiece: null,
       animationPath: null,
       animationStep: 0,
+      preMoves: [],
+      preMoveSelectedFrom: null,
     });
   },
 
@@ -440,6 +468,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       animationStep: 0,
       pendingServerSubmission: false,
       pendingAnimationSubmission: false,
+      preMoves: [],
+      preMoveSelectedFrom: null,
     });
   },
 
@@ -471,6 +501,64 @@ export const useGameStore = create<GameStore>((set, get) => ({
         pendingAnimationSubmission: false,
       } : {}),
     });
+  },
+
+  // ---- Pre-moves ----
+
+  // Compute the board with all queued pre-moves applied in order.
+  // Used to determine what pieces "will be" where, so the player can plan
+  // pre-moves that depend on earlier ones (e.g. vacate then land in that spot).
+  getVirtualBoard: () => {
+    const { gameState, preMoves } = get();
+    if (!gameState) return new Map<string, CellContent>();
+    const board = new Map<string, CellContent>(gameState.board);
+    for (const pm of preMoves) {
+      const fromKey = coordKey(pm.from);
+      const toKey = coordKey(pm.to);
+      const piece = board.get(fromKey);
+      if (!piece || piece.type !== 'piece') continue;
+      board.set(fromKey, { type: 'empty' });
+      board.set(toKey, piece);
+    }
+    return board;
+  },
+
+  // Pick a piece as the origin of the next pre-move. If a different piece is already
+  // selected, replace it. If the same piece is selected, cancel selection.
+  selectPreMovePiece: (coord: CubeCoord) => {
+    const { preMoveSelectedFrom } = get();
+    if (preMoveSelectedFrom && cubeEquals(preMoveSelectedFrom, coord)) {
+      set({ preMoveSelectedFrom: null });
+      return;
+    }
+    set({ preMoveSelectedFrom: coord });
+  },
+
+  // Commit the currently-selected piece + `to` as a queued pre-move.
+  // Silently ignores if at cap or no origin selected.
+  queuePreMove: (to: CubeCoord) => {
+    const { preMoveSelectedFrom, preMoves } = get();
+    if (!preMoveSelectedFrom) return;
+    if (preMoves.length >= MAX_PRE_MOVES) return;
+    set({
+      preMoves: [...preMoves, { from: preMoveSelectedFrom, to }],
+      preMoveSelectedFrom: null,
+    });
+  },
+
+  cancelPreMoveSelection: () => {
+    set({ preMoveSelectedFrom: null });
+  },
+
+  // Drop preMoves[index..end]. Used by right-click cancellation.
+  cancelPreMoveAt: (index: number) => {
+    const { preMoves } = get();
+    if (index < 0 || index >= preMoves.length) return;
+    set({ preMoves: preMoves.slice(0, index) });
+  },
+
+  clearAllPreMoves: () => {
+    set({ preMoves: [], preMoveSelectedFrom: null });
   },
 
 }));

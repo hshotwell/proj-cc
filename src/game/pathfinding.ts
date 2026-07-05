@@ -1,6 +1,6 @@
-import type { CubeCoord, GameState, PlayerIndex } from '@/types/game';
+import type { CubeCoord, GameState, Move, PlayerIndex } from '@/types/game';
 import { DIRECTIONS } from './constants';
-import { coordKey, cubeAdd, getJumpDestination } from './coordinates';
+import { coordKey, cubeAdd, cubeEquals, getJumpDestination } from './coordinates';
 import { canJumpOver } from './moves';
 
 /**
@@ -276,6 +276,98 @@ export function getWorstAssignmentCost(
  */
 export function clearPathfindingCache(): void {
   distanceFromGoalsCache.clear();
+}
+
+/**
+ * Find a sequence of legal Moves that gets a piece from `from` to `to` in one turn.
+ * Returns null if no such sequence exists.
+ *
+ * Rules:
+ *   - A single step to an adjacent empty cell is a valid one-move sequence.
+ *   - Otherwise, we BFS the jump graph (jump over any jumpable neighbor, land on empty)
+ *     and return the shortest chain of jump Moves reaching `to`.
+ *   - Steps and jumps never mix in a single turn.
+ *
+ * Only used for firing queued pre-moves at the start of the local user's turn.
+ */
+export function findMovePath(
+  state: GameState,
+  from: CubeCoord,
+  to: CubeCoord,
+  player: PlayerIndex
+): Move[] | null {
+  if (cubeEquals(from, to)) return null;
+
+  const fromKey = coordKey(from);
+  const toKey = coordKey(to);
+  const fromContent = state.board.get(fromKey);
+  if (!fromContent || fromContent.type !== 'piece' || fromContent.player !== player) {
+    return null;
+  }
+  const toContent = state.board.get(toKey);
+  if (!toContent || toContent.type !== 'empty') return null;
+
+  // Case 1: single step
+  for (const dir of DIRECTIONS) {
+    const stepped = cubeAdd(from, dir);
+    if (cubeEquals(stepped, to)) {
+      return [{ from, to, isJump: false }];
+    }
+  }
+
+  // Case 2: BFS jump graph with parent pointers
+  interface Parent {
+    from: CubeCoord;
+    over: CubeCoord;
+  }
+  const parents = new Map<string, Parent>();
+  const visited = new Set<string>();
+  visited.add(fromKey);
+
+  const queue: CubeCoord[] = [from];
+  let found = false;
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (coordKey(current) === toKey) {
+      found = true;
+      break;
+    }
+    for (const dir of DIRECTIONS) {
+      const over = cubeAdd(current, dir);
+      const landing = getJumpDestination(current, over);
+      const landingKey = coordKey(landing);
+      if (visited.has(landingKey)) continue;
+      if (!state.board.has(landingKey)) continue;
+      if (!canJumpOver(state, over, player)) continue;
+      const landingContent = state.board.get(landingKey);
+      if (!landingContent || landingContent.type !== 'empty') continue;
+
+      visited.add(landingKey);
+      parents.set(landingKey, { from: current, over });
+      queue.push(landing);
+    }
+  }
+
+  if (!found && !parents.has(toKey)) return null;
+
+  // Reconstruct chain of jump moves
+  const reverseChain: Move[] = [];
+  let cursor = to;
+  let cursorKey = toKey;
+  while (cursorKey !== fromKey) {
+    const parent = parents.get(cursorKey);
+    if (!parent) return null; // defensive
+    reverseChain.push({
+      from: parent.from,
+      to: cursor,
+      isJump: true,
+      jumpPath: [parent.over],
+    });
+    cursor = parent.from;
+    cursorKey = coordKey(cursor);
+  }
+  return reverseChain.reverse();
 }
 
 // Legacy exports for API compatibility
