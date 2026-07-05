@@ -26,9 +26,28 @@ function serializeMove(move: Move): Move {
   };
 }
 
-export function saveCompletedGame(gameId: string, finalState: GameState): SavedGameSummary {
+export function saveCompletedGame(
+  gameId: string,
+  finalState: GameState,
+  layoutName?: string,
+): SavedGameSummary {
   const normalizedMoves = normalizeMoveHistory(finalState.moveHistory, finalState.activePlayers);
   const dateSaved = Date.now();
+
+  // Derive game mode from playerPieceTypes: if all active players share a non-normal
+  // variant it's the game mode. Anything mixed or empty is 'normal' (classic).
+  let derivedGameMode: import('@/types/game').PieceVariant | undefined;
+  if (finalState.playerPieceTypes) {
+    const variants = finalState.activePlayers
+      .map((p) => finalState.playerPieceTypes?.[p])
+      .filter((v): v is import('@/types/game').PieceVariant => v !== undefined);
+    if (variants.length === finalState.activePlayers.length && variants.length > 0) {
+      const first = variants[0];
+      if (variants.every((v) => v === first) && first !== 'normal') {
+        derivedGameMode = first;
+      }
+    }
+  }
 
   // Build a temporary SavedGameData to reconstruct states for % gain computation
   const tempSavedGame = {
@@ -67,6 +86,8 @@ export function saveCompletedGame(gameId: string, finalState: GameState): SavedG
     ...(finalState.playerColors ? { playerColors: { ...finalState.playerColors } } : {}),
     ...(finalState.aiPlayers ? { aiPlayers: { ...finalState.aiPlayers } } : {}),
     ...(finalState.teamMode ? { teamMode: true } : {}),
+    ...(layoutName ? { boardName: layoutName } : {}),
+    ...(derivedGameMode ? { gameMode: derivedGameMode } : {}),
   };
 
   // Build custom layout data if this is a custom board

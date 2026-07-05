@@ -29,7 +29,7 @@ export function GameOverDialog() {
     if (!isOver || !gameState || !gameId) return;
     if (savedRef.current === gameId) return;
     savedRef.current = gameId;
-    saveCompletedGame(gameId, gameState);
+    saveCompletedGame(gameId, gameState, currentLayout?.name);
 
     // Record puzzle completion
     if (currentLayout?.puzzleGoalMoves) {

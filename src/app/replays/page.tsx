@@ -7,6 +7,21 @@ import type { SavedGameSummary, SavedGameData } from '@/types/replay';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
 import { getSavedGamesList, deleteSavedGame, importSavedGame } from '@/game/persistence';
 
+const GAME_MODE_LABELS: Record<string, string> = {
+  turbo: 'Turbo mode',
+  ghost: 'Spectral mode',
+  big: 'Blockade mode',
+};
+
+function describeVariations(game: SavedGameSummary): string {
+  const parts: string[] = [];
+  if (game.gameMode && game.gameMode !== 'normal' && GAME_MODE_LABELS[game.gameMode]) {
+    parts.push(GAME_MODE_LABELS[game.gameMode]);
+  }
+  if (game.teamMode) parts.push('Team mode');
+  return parts.length === 0 ? 'Classic mode' : parts.join(' · ');
+}
+
 export default function ReplaysPage() {
   const router = useRouter();
   const [games, setGames] = useState<SavedGameSummary[]>([]);
@@ -121,11 +136,14 @@ export default function ReplaysPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      {game.longestHop > 0 && (
-                        <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
-                          ✶ {Math.round(game.longestHop)}%
-                        </span>
-                      )}
+                      <div className="text-right mr-1">
+                        <div className="text-sm text-gray-700 leading-tight">
+                          {game.boardName ?? 'Standard Board'}
+                        </div>
+                        <div className="text-xs text-gray-400 leading-tight">
+                          {describeVariations(game)}
+                        </div>
+                      </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); router.push(`/review/${game.id}`); }}
                         className="text-xs px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"

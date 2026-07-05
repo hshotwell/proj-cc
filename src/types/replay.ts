@@ -1,4 +1,4 @@
-import type { PlayerCount, PlayerIndex, ColorMapping, Move } from './game';
+import type { PlayerCount, PlayerIndex, ColorMapping, Move, PieceVariant } from './game';
 import type { AIPlayerMap } from './ai';
 
 export interface SavedGameSummary {
@@ -13,6 +13,10 @@ export interface SavedGameSummary {
   playerColors?: ColorMapping;
   aiPlayers?: AIPlayerMap;
   teamMode?: boolean;
+  // Custom board name (undefined = Standard Board)
+  boardName?: string;
+  // Game mode (piece variant applied to all players; undefined or 'normal' = classic)
+  gameMode?: PieceVariant;
 }
 
 export interface SavedGameData {
