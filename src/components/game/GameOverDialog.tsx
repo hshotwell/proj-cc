@@ -73,6 +73,20 @@ export function GameOverDialog() {
   }
   const firstPlayerTurns = finishedPlayers[0] ? (playerTurnCounts.get(finishedPlayers[0].player) ?? 0) : 0;
 
+  // Additional turns each other player took after the winner's finishing move.
+  // We count distinct turnNumbers appearing in moveHistory strictly after the winner's
+  // finishing move (indexed by moveCount). This correctly handles the case where a
+  // later-order player still has a move in the same turnNumber as the winner's finish.
+  const winnerFinishAt = finishedPlayers[0]?.moveCount ?? moveHistory.length;
+  const extraTurnsByPlayer = new Map<PlayerIndex, Set<number>>();
+  for (let i = winnerFinishAt; i < moveHistory.length; i++) {
+    const m = moveHistory[i];
+    if (m.player !== undefined && m.turnNumber !== undefined) {
+      if (!extraTurnsByPlayer.has(m.player)) extraTurnsByPlayer.set(m.player, new Set());
+      extraTurnsByPlayer.get(m.player)!.add(m.turnNumber);
+    }
+  }
+
   const handleWatchReplay = () => {
     if (!gameId) return;
     loadReplayFromState(gameState, gameId);
@@ -129,10 +143,8 @@ export function GameOverDialog() {
             })() : finishedPlayers.map((fp, i) => {
               const color = getPlayerColorFromState(fp.player, gameState);
               const name = getPlayerDisplayNameFromState(fp.player, gameState);
-              // Additional turns this player took beyond the first finisher
-              const extra = i > 0
-                ? Math.max(1, (playerTurnCounts.get(fp.player) ?? 0) - firstPlayerTurns)
-                : 0;
+              // Additional turns this player took after the winner's finishing move
+              const extra = i > 0 ? (extraTurnsByPlayer.get(fp.player)?.size ?? 1) : 0;
               return (
                 <div key={fp.player} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                   <span className="text-sm font-bold text-gray-500 w-8">{RANK_LABELS[i]}</span>
