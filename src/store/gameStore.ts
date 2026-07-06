@@ -293,12 +293,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Confirm the pending move - advances the turn
   confirmMove: () => {
-    const { gameState, selectedPiece, originalPiecePosition, gameId } = get();
+    const { gameState, selectedPiece, originalPiecePosition, gameId, preMoveSelectedFrom: stagedPreMoveSelected } = get();
     if (!gameState) return;
 
+    // Destination for the "last move" indicator: prefer selectedPiece (normal chain-jump
+    // flow where the piece is selected at its landing), else derive from the most recent
+    // history entry (fire hook clears selectedPiece for a clean UI).
+    const lastMove = gameState.moveHistory[gameState.moveHistory.length - 1];
+    const destinationCoord = selectedPiece ?? (lastMove?.to ?? null);
+
     // Record the just-confirmed move info BEFORE advancing turn
-    const confirmedMoveInfo = selectedPiece && originalPiecePosition
-      ? { origin: originalPiecePosition, destination: selectedPiece, player: gameState.currentPlayer }
+    const confirmedMoveInfo = destinationCoord && originalPiecePosition
+      ? { origin: originalPiecePosition, destination: destinationCoord, player: gameState.currentPlayer }
       : null;
 
     // Advance turn to the next player
@@ -322,9 +328,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({
       gameState: newState,
-      // Carry the just-confirmed piece's landing coord into preMoveSelectedFrom so
-      // the pre-move fire hook can restore it as a normal selection next turn.
-      preMoveSelectedFrom: selectedPiece ?? null,
+      // Prefer any preMoveSelectedFrom already staged by the fire hook, else use the
+      // just-confirmed piece's landing coord. This preserves selection across turns for
+      // both normal manual moves and fired pre-moves.
+      preMoveSelectedFrom: stagedPreMoveSelected ?? destinationCoord ?? null,
       pendingConfirmation: false,
       stateBeforeMove: null,
       selectedPiece: null,

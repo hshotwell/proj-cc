@@ -6,6 +6,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useOpeningStore } from '@/store/openingStore';
 import { isGameFullyOver } from '@/game/state';
 import { getMovesForOpening, getOpeningMove } from '@/game/ai/openingBook';
+import { getValidMoves } from '@/game/moves';
+import { cubeEquals } from '@/game/coordinates';
 
 const OPENING_PLAY_DELAY = 500; // ms before auto-playing (player can see it happening)
 
@@ -65,11 +67,23 @@ export function usePlayerOpening(active: boolean = true) {
         current.gameState.currentPlayer !== playerSnapshot
       ) return;
 
-      current.selectPiece(move.from);
-      setTimeout(() => {
-        const animate = useSettingsStore.getState().animateMoves;
-        useGameStore.getState().makeMove(move.to, animate);
-      }, 50);
+      // Fire the opening move the same way pre-moves fire: bypass selectPiece so there is
+      // no "piece selected + destinations highlighted" blip. Populate the minimum state
+      // makeMove needs, fire it, then wipe the UI state.
+      const validMoves = getValidMoves(current.gameState, move.from);
+      const target = validMoves.find((m) => cubeEquals(m.to, move.to));
+      if (!target) return;
+      const animate = useSettingsStore.getState().animateMoves;
+      useGameStore.setState({
+        selectedPiece: move.from,
+        validMovesForSelected: validMoves,
+      });
+      useGameStore.getState().makeMove(move.to, animate);
+      useGameStore.setState({
+        selectedPiece: null,
+        validMovesForSelected: [],
+        preMoveSelectedFrom: move.to,
+      });
     }, OPENING_PLAY_DELAY);
 
     return () => {

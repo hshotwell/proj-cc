@@ -4,18 +4,21 @@ import { useEffect, useRef } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { cubeEquals } from '@/game/coordinates';
+import { getValidMoves } from '@/game/moves';
 import { isGameFullyOver } from '@/game/state';
 import type { PlayerIndex } from '@/types/game';
 
-const SELECT_DELAY = 50; // ms after selectPiece before makeMove; matches usePlayerOpening
-
 /**
  * Fires queued pre-moves when the local user's turn arrives.
- * - Waits for animation to finish before firing (so the opponent's move settles first).
- * - Uses the game store's own valid-moves list (which already treats a chain jump as
- *   a single Move with a jumpPath) so a queued destination fires in one makeMove call.
- * - If the destination isn't reachable in one turn, clears the entire queue and lets
- *   the player move manually.
+ *
+ * - Waits for animation to finish before firing (so opponent's move settles first).
+ * - Uses the game's own valid-move list (which represents each chain-jump destination as
+ *   a single Move with a full jumpPath) so a queued destination fires in one makeMove.
+ * - Bypasses `selectPiece` so there is no visible "piece selected" ring or destination
+ *   highlights on the pm.from cell — the move just happens.
+ * - Clears the selection UI (selectedPiece + validMovesForSelected) after the move so
+ *   the landing coord doesn't show as "still selectable"; the persist-selection logic
+ *   in confirmMove handles restoring the piece across turn transitions.
  * - Also promotes a lingering pre-move piece selection into the normal selection when
  *   the turn arrives with no queued pre-moves, so the player doesn't have to reselect.
  *
@@ -41,10 +44,9 @@ export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: b
     if (pendingConfirmation) return;
     if (animatingPiece) return;
 
-    // If the player had a piece selected for a pre-move but never queued one, keep
-    // that piece selected as the normal turn's selection so they don't have to reclick.
-    // Guarded by !firingRef so this doesn't run in the effect re-entry that happens
-    // right after we've popped the queue below.
+    // Promote a lingering pre-move piece into the normal selection when the turn arrives
+    // with no queued pre-moves. Guarded by !firingRef so this doesn't run in the effect
+    // re-entry that happens right after we've popped the queue below.
     if (preMoves.length === 0 && preMoveSelectedFrom && !firingRef.current) {
       const held = preMoveSelectedFrom;
       useGameStore.setState({ preMoveSelectedFrom: null });
@@ -56,37 +58,35 @@ export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: b
     if (firingRef.current) return;
 
     const pm = preMoves[0];
-
     firingRef.current = true;
-    const turnAtStart = gameState.turnNumber;
 
-    // Pop this pre-move optimistically and select the origin piece. Also drop any
-    // in-progress pre-move selection so the effect re-run can't promote it and
-    // hijack `selectedPiece` before the makeMove setTimeout fires.
-    useGameStore.setState({ preMoves: preMoves.slice(1), preMoveSelectedFrom: null });
-    useGameStore.getState().selectPiece(pm.from);
-
-    setTimeout(() => {
-      const current = useGameStore.getState();
+    // Look up the move directly against the current board without going through
+    // selectPiece. The game's own getValidMoves treats a chain jump as a single Move
+    // with a full jumpPath, so a matching entry fires the whole chain in one makeMove.
+    const moves = getValidMoves(gameState, pm.from);
+    const target = moves.find((m) => cubeEquals(m.to, pm.to));
+    if (!target) {
+      // Not reachable this turn — clear the rest of the queue and let the player move manually.
+      useGameStore.setState({ preMoves: [], preMoveSelectedFrom: null });
       firingRef.current = false;
-      if (
-        !current.gameState ||
-        isGameFullyOver(current.gameState) ||
-        current.gameState.turnNumber !== turnAtStart ||
-        current.gameState.currentPlayer !== localPlayer
-      ) {
-        return;
-      }
-      // The game's own valid-move list treats chain jumps as a single Move whose to =
-      // the final landing (with a multi-cell jumpPath). Look it up and fire in one call.
-      const target = current.validMovesForSelected.find((m) => cubeEquals(m.to, pm.to));
-      if (!target) {
-        // Not reachable this turn — clear the rest of the queue and let the player move manually.
-        current.clearSelection();
-        useGameStore.getState().clearAllPreMoves();
-        return;
-      }
-      current.makeMove(pm.to, animateMoves);
-    }, SELECT_DELAY);
+      return;
+    }
+
+    // Populate the minimum state makeMove needs, fire it, then wipe the UI state.
+    // All synchronous so React batches into a single render — no selection blip.
+    useGameStore.setState({
+      preMoves: preMoves.slice(1),
+      preMoveSelectedFrom: null,
+      selectedPiece: pm.from,
+      validMovesForSelected: moves,
+    });
+    useGameStore.getState().makeMove(pm.to, animateMoves);
+    useGameStore.setState({
+      selectedPiece: null,
+      validMovesForSelected: [],
+      // Stash the landing so confirmMove can persist it as the next-turn selection.
+      preMoveSelectedFrom: pm.to,
+    });
+    firingRef.current = false;
   }, [active, localPlayer, gameState, preMoves, preMoveSelectedFrom, pendingConfirmation, animatingPiece, animateMoves]);
 }
