@@ -52,7 +52,7 @@ function categoryGain(category: Category): number {
   return master * cat;
 }
 
-// Coalesce identical rapid-fire calls (prevents overlapping same-sound chains).
+// Coalesce identical rapid-fire calls (prevents overlapping same-sound spam).
 const lastPlayedAt: Record<string, number> = {};
 const COALESCE_MS = 8;
 
@@ -62,6 +62,11 @@ function shouldCoalesce(key: string): boolean {
   if (prev !== undefined && now - prev < COALESCE_MS) return true;
   lastPlayedAt[key] = now;
   return false;
+}
+
+// Symmetric random factor in [1-pct, 1+pct].
+function jitter(pct: number): number {
+  return 1 + (Math.random() * 2 - 1) * pct;
 }
 
 interface ToneSpec {
@@ -75,6 +80,9 @@ interface ToneSpec {
   type2?: OscillatorType;
   peakGain2?: number;
   noise?: { duration: number; filterFreq: number; peakGain: number };
+  freqJitter?: number;   // fractional randomization on freq (default 0.03)
+  gainJitter?: number;   // fractional randomization on peakGain (default 0.1)
+  durationJitter?: number; // fractional randomization on duration (default 0.1)
 }
 
 function playTone(spec: ToneSpec): void {
@@ -86,6 +94,14 @@ function playTone(spec: ToneSpec): void {
   const c = getContext();
   if (!c) return;
 
+  const fJ = spec.freqJitter ?? 0.03;
+  const gJ = spec.gainJitter ?? 0.1;
+  const dJ = spec.durationJitter ?? 0.1;
+
+  const freq = spec.freq * jitter(fJ);
+  const duration = spec.duration * jitter(dJ);
+  const peakGain = spec.peakGain * jitter(gJ);
+
   const now = c.currentTime;
   const master = c.createGain();
   master.gain.value = gain;
@@ -94,30 +110,34 @@ function playTone(spec: ToneSpec): void {
   // Primary oscillator
   const osc = c.createOscillator();
   osc.type = spec.type;
-  osc.frequency.value = spec.freq;
+  osc.frequency.value = freq;
   const oscGain = c.createGain();
-  oscGain.gain.setValueAtTime(spec.peakGain, now);
-  oscGain.gain.exponentialRampToValueAtTime(0.0001, now + spec.duration);
+  oscGain.gain.setValueAtTime(peakGain, now);
+  oscGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
   osc.connect(oscGain).connect(master);
   osc.start(now);
-  osc.stop(now + spec.duration + 0.02);
+  osc.stop(now + duration + 0.02);
 
   // Optional second oscillator (for thicker sounds like confirm)
   if (spec.freq2 !== undefined) {
+    const freq2 = spec.freq2 * jitter(fJ);
+    const peakGain2 = (spec.peakGain2 ?? spec.peakGain) * jitter(gJ);
     const osc2 = c.createOscillator();
     osc2.type = spec.type2 ?? spec.type;
-    osc2.frequency.value = spec.freq2;
+    osc2.frequency.value = freq2;
     const osc2Gain = c.createGain();
-    osc2Gain.gain.setValueAtTime(spec.peakGain2 ?? spec.peakGain, now);
-    osc2Gain.gain.exponentialRampToValueAtTime(0.0001, now + spec.duration);
+    osc2Gain.gain.setValueAtTime(peakGain2, now);
+    osc2Gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     osc2.connect(osc2Gain).connect(master);
     osc2.start(now);
-    osc2.stop(now + spec.duration + 0.02);
+    osc2.stop(now + duration + 0.02);
   }
 
   // Optional filtered noise burst (adds the "click" impact)
   if (spec.noise) {
-    const { duration: nDur, filterFreq, peakGain: nPeak } = spec.noise;
+    const nDur = spec.noise.duration * jitter(dJ);
+    const filterFreq = spec.noise.filterFreq * jitter(fJ);
+    const nPeak = spec.noise.peakGain * jitter(gJ);
     const bufferLen = Math.max(1, Math.floor(c.sampleRate * nDur));
     const buffer = c.createBuffer(1, bufferLen, c.sampleRate);
     const data = buffer.getChannelData(0);
@@ -177,35 +197,18 @@ export function playConfirm(): void {
   });
 }
 
-export function playSelect(): void {
-  playTone({
-    category: 'ui',
-    key: 'select',
-    type: 'triangle',
-    freq: 900,
-    duration: 0.03,
-    peakGain: 0.28,
-  });
-}
-
-export function playDeselect(): void {
-  playTone({
-    category: 'ui',
-    key: 'deselect',
-    type: 'triangle',
-    freq: 600,
-    duration: 0.03,
-    peakGain: 0.28,
-  });
-}
-
+// Light, crisp UI click — brighter than the old sound.
 export function playClick(): void {
   playTone({
     category: 'ui',
     key: 'click',
     type: 'triangle',
-    freq: 1200,
-    duration: 0.02,
-    peakGain: 0.22,
+    freq: 1000,
+    duration: 0.04,
+    peakGain: 0.26,
+    freq2: 2000,
+    type2: 'triangle',
+    peakGain2: 0.08,
+    freqJitter: 0.05,
   });
 }

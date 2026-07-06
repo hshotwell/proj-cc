@@ -119,7 +119,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-gray-800">Settings</h2>
             <button
-              onClick={closeSettingsMenu}
+              onClick={() => { playClick(); closeSettingsMenu(); }}
               className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
             >
               &times;
@@ -130,7 +130,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
             {(['main', 'gameplay', 'visuals', 'sound'] as SettingsTab[]).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => { playClick(); setActiveTab(tab); }}
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                   activeTab === tab
                     ? 'bg-white text-gray-900 shadow'
@@ -353,7 +353,7 @@ function ToggleOption({ label, description, checked, onChange }: ToggleOptionPro
         <input
           type="checkbox"
           checked={checked}
-          onChange={onChange}
+          onChange={() => { playClick(); onChange(); }}
           className="sr-only peer"
         />
         <div className={`w-10 h-6 rounded-full transition-colors ${checked ? 'bg-blue-500' : 'bg-gray-200'}`} />

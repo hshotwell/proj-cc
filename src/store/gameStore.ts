@@ -12,7 +12,7 @@ import { recordBoardState, clearStateHistory } from '@/game/ai/search';
 import { clearPathfindingCache } from '@/game/pathfinding';
 import { extractGamePatterns, createGameSummary, learnFromGame, clearWeightsCache } from '@/game/learning';
 import { useSettingsStore } from './settingsStore';
-import { playStep, playJump, playConfirm, playSelect, playDeselect } from '@/audio/soundEffects';
+import { playStep, playJump, playConfirm } from '@/audio/soundEffects';
 
 export interface QueuedPreMove {
   from: CubeCoord;
@@ -159,7 +159,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Check if clicking on the same piece - toggle selection off
     if (selectedPiece && cubeEquals(selectedPiece, coord)) {
       set({ selectedPiece: null, validMovesForSelected: [] });
-      playDeselect();
       return;
     }
 
@@ -171,9 +170,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       content.player !== gameState.currentPlayer
     ) {
       // Clicked on empty cell or opponent's piece - clear selection
-      const hadSelection = selectedPiece !== null;
       set({ selectedPiece: null, validMovesForSelected: [] });
-      if (hadSelection) playDeselect();
       return;
     }
 
@@ -183,7 +180,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedPiece: coord,
       validMovesForSelected: validMoves,
     });
-    playSelect();
   },
 
   // Make a move to the specified destination
