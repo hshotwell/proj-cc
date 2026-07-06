@@ -8,6 +8,9 @@ export interface CubeCoord {
 // Player indices (0-5) for up to 6 players
 export type PlayerIndex = 0 | 1 | 2 | 3 | 4 | 5;
 
+// Piece color: a valid CSS color, hex code, or special sentinel (rainbow, opal, bouquet, etc.)
+export type PieceColor = string;
+
 // Valid player counts for Chinese Checkers
 export type PlayerCount = 2 | 3 | 4 | 6;
 
