@@ -15,6 +15,7 @@ import { SettingsPopup } from '@/components/SettingsPopup';
 import { SettingsButton } from '@/components/SettingsButton';
 import { BoardCell } from '@/components/board/BoardCell';
 import { Piece } from '@/components/board/Piece';
+import { playStep, playJump } from '@/audio/soundEffects';
 
 type EditorMode = 'cells' | 'starting' | 'goals' | 'special';
 type SpecialBrush = 'turbo' | 'ghost' | 'big';
@@ -242,6 +243,20 @@ export default function EditorPage() {
   // Apply an action (add or remove) to a cell
   const applyActionToCell = (key: string, action: 'add' | 'remove') => {
     const symmetricKeys = getSymmetricCoords(key, symmetry);
+
+    // Sound feedback: skip no-op clicks (modes below early-return on inactive cells).
+    //  - normal cells (nodes) → step, both add & remove
+    //  - any piece (wall, starting, goal, special) placed → jump
+    //  - piece removed → step
+    const requiresActiveCell =
+      mode === 'starting' || mode === 'goals' || mode === 'special';
+    const isNoOp = requiresActiveCell && !activeCells.has(key);
+    if (!isNoOp) {
+      const isNodeBrush = mode === 'cells' && cellBrush === 'normal';
+      if (isNodeBrush) playStep();
+      else if (action === 'add') playJump();
+      else playStep();
+    }
 
     if (mode === 'cells' && cellBrush === 'normal') {
       setActiveCells((prev) => {
