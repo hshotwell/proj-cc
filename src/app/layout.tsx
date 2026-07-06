@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 import { AuthSync } from "@/components/auth/AuthProvider";
 import { GlobalShortcuts } from "@/components/GlobalShortcuts";
+import { GlobalClickSound } from "@/components/GlobalClickSound";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,6 +42,7 @@ export default function RootLayout({
         <ConvexClientProvider>
           <AuthSync />
           <GlobalShortcuts />
+          <GlobalClickSound />
           {children}
         </ConvexClientProvider>
         <Analytics />

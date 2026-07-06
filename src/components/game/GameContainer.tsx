@@ -15,7 +15,6 @@ import { useLocalGameSync } from '@/hooks/useLocalGameSync';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { playClick } from '@/audio/soundEffects';
 import { saveCompletedGame } from '@/game/persistence';
 import { isGameFullyOver } from '@/game/state';
 import { ClearPreMovesButton } from './ClearPreMovesButton';
@@ -65,7 +64,7 @@ export function GameContainer() {
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <div className="w-full max-w-2xl mx-auto px-2 sm:px-4 py-2 sm:py-4">
-        <Link href="/home" onClick={() => playClick()} className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-2 transition-colors">
+        <Link href="/home" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-2 transition-colors">
           ← Home
         </Link>
         <div className="relative w-full bg-white rounded-lg shadow-lg p-2 sm:p-4">
@@ -81,7 +80,7 @@ export function GameContainer() {
         {showAbandon && (
           <div className="mt-3 text-center">
             <button
-              onClick={() => { playClick(); handleAbandon(); }}
+              onClick={handleAbandon}
               className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 transition-colors"
             >
               End game &amp; review moves

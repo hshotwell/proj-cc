@@ -1,14 +1,13 @@
 'use client';
 
 import { useSettingsStore } from '@/store/settingsStore';
-import { playClick } from '@/audio/soundEffects';
 
 export function SettingsButton() {
   const { toggleSettingsMenu } = useSettingsStore();
 
   return (
     <button
-      onClick={() => { playClick(); toggleSettingsMenu(); }}
+      onClick={toggleSettingsMenu}
       className="absolute top-2 left-2 z-10 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
       title="Settings (Esc)"
     >

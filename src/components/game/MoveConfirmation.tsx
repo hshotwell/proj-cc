@@ -6,7 +6,6 @@ import { isGemColor, getCSSColor } from '@/game/constants';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
-import { playClick } from '@/audio/soundEffects';
 
 export function MoveConfirmation() {
   const { gameState, pendingConfirmation, validMovesForSelected, confirmMove, undoLastMove, undoConfirmedMove, canUndoConfirmedMove } = useGameStore();
@@ -68,7 +67,7 @@ export function MoveConfirmation() {
     return (
       <div className="flex justify-start mt-4">
         <button
-          onClick={() => { playClick(); undoConfirmedMove(); }}
+          onClick={undoConfirmedMove}
           className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors border-2"
           style={{ borderColor: getCSSColor(color) }}
           title="Press 'U' to undo"
@@ -109,7 +108,7 @@ export function MoveConfirmation() {
           </div>
           <div className="flex gap-2 ml-2">
             <button
-              onClick={() => { playClick(); undoLastMove(); }}
+              onClick={undoLastMove}
               className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
               title="Press 'U' to undo"
             >
