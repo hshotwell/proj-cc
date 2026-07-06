@@ -6,6 +6,8 @@ import type { SavedGameSummary } from '@/types/replay';
 import { loadSavedGame } from '@/game/persistence';
 import { normalizeMoveHistory, reconstructGameStates, findLongestHopIndices, findBestHopGain } from '@/game/replay';
 import { MOVE_ANIMATION_DURATION } from '@/game/constants';
+import { getGoalPositionsForState } from '@/game/state';
+import { coordKey } from '@/game/coordinates';
 import { playStep, playJump } from '@/audio/soundEffects';
 
 interface ReplayStore {
@@ -145,14 +147,19 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
     if (currentStep >= moves.length) return;
     const next = currentStep + 1;
     const move = moves[currentStep];
+    const preState = states[currentStep];
+    const player = move?.player ?? preState?.currentPlayer;
+    const landsInEndzone = !!(move && preState && player !== undefined &&
+      new Set(getGoalPositionsForState(preState, player).map(coordKey)).has(coordKey(move.to)));
     if (move?.isJump) {
       const hops = move.jumpPath?.length ?? 1;
       for (let i = 0; i < hops; i++) {
-        if (i === 0) playJump(i);
-        else setTimeout(() => playJump(i), i * MOVE_ANIMATION_DURATION);
+        const endzone = i === hops - 1 && landsInEndzone;
+        if (i === 0) playJump(i, endzone);
+        else setTimeout(() => playJump(i, endzone), i * MOVE_ANIMATION_DURATION);
       }
     } else {
-      playStep();
+      playStep(landsInEndzone);
     }
     set({ currentStep: next, displayState: states[next] });
   },

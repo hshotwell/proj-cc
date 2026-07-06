@@ -376,7 +376,7 @@ export default function PlayPage() {
         )}
 
         {/* Row 1: player colors + neutrals + custom picker */}
-        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center">
+        <div data-hover-sound className="flex gap-x-2 gap-y-1 flex-wrap items-center">
           {DEFAULT_COLORS.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
@@ -427,7 +427,7 @@ export default function PlayPage() {
           />
         </div>
         {/* Row 2: metallics + rainbow */}
-        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center">
+        <div data-hover-sound className="flex gap-x-2 gap-y-1 flex-wrap items-center">
           {METALLIC_COLORS_LIST.map((color, idx) => {
             if (color === null) return <Fragment key={`blank-${idx}`}>{idx === 5 && <div className="w-full h-0 sm:hidden" />}<div className="w-7 h-7 flex-shrink-0" /></Fragment>;
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
@@ -456,7 +456,7 @@ export default function PlayPage() {
           })}
         </div>
         {/* Row 3: gems */}
-        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center mt-2 sm:mt-0">
+        <div data-hover-sound className="flex gap-x-2 gap-y-1 flex-wrap items-center mt-2 sm:mt-0">
           {GEM_COLORS.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
@@ -483,7 +483,7 @@ export default function PlayPage() {
           })}
         </div>
         {/* Row 4: flowers */}
-        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center">
+        <div data-hover-sound className="flex gap-x-2 gap-y-1 flex-wrap items-center">
           {FLOWER_COLORS_LIST.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
@@ -507,7 +507,7 @@ export default function PlayPage() {
           })}
         </div>
         {/* Row 5: eggs */}
-        <div className="flex gap-x-2 gap-y-1 flex-wrap items-center mt-2 sm:mt-0">
+        <div data-hover-sound className="flex gap-x-2 gap-y-1 flex-wrap items-center mt-2 sm:mt-0">
           {EGG_COLORS_LIST.map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);

@@ -640,6 +640,7 @@ export default function HomePage() {
             >
               <div className="flex flex-col items-center">
                 <button
+                  data-hover-sound
                   onClick={() => setShowModes(!showModes)}
                   className="w-full px-12 py-4 text-xl font-semibold text-gray-800 rounded-full hover:bg-gray-100 transition-colors"
                 >
@@ -649,12 +650,14 @@ export default function HomePage() {
                 {showModes && (
                   <div className="w-full flex flex-col animate-[fadeIn_0.15s_ease-in]">
                     <button
+                      data-hover-sound
                       onClick={() => router.push('/play')}
                       className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
                     >
                       Local
                     </button>
                     <button
+                      data-hover-sound
                       onClick={() => void handleOnlinePlay()}
                       disabled={creatingLobby}
                       className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -665,6 +668,7 @@ export default function HomePage() {
                       <p className="text-sm text-red-500 text-center px-4">{lobbyError}</p>
                     )}
                     <button
+                      data-hover-sound
                       onClick={() => router.push('/practice')}
                       className="w-full px-12 py-3 text-lg text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
                     >
@@ -674,6 +678,7 @@ export default function HomePage() {
                 )}
 
                 <Link
+                  data-hover-sound
                   href="/editor"
                   className="w-full inline-block px-12 py-4 text-xl font-semibold text-gray-800 text-center rounded-full hover:bg-gray-100 transition-colors"
                 >

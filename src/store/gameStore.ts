@@ -5,7 +5,7 @@ import type { CellContent, CubeCoord, Move, GameState, PlayerCount, PlayerIndex,
 import type { AIPlayerMap } from '@/types/ai';
 import { createGame, createGameFromLayout } from '@/game/setup';
 import { getValidMoves } from '@/game/moves';
-import { movePiece, advanceTurn, isGameFullyOver, undoMove } from '@/game/state';
+import { movePiece, advanceTurn, isGameFullyOver, undoMove, getGoalPositionsForState } from '@/game/state';
 import { coordKey, cubeEquals, getMovePath } from '@/game/coordinates';
 import { MOVE_ANIMATION_DURATION } from '@/game/constants';
 import { recordBoardState, clearStateHistory } from '@/game/ai/search';
@@ -208,21 +208,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Fire move sound. For chain jumps, chainIndex = number of prior hops this turn.
     // A single Move may bundle multiple hops (jumpPath.length > 1 — used by the AI
     // and by showAllMoves human clicks). Play one jump sound per hop, spaced by the
-    // animation duration so the chain is audible as a sequence.
+    // animation duration so the chain is audible as a sequence. Only the FINAL
+    // landing checks the endzone (goal triangle) for a deeper thud.
+    const goalKeys = new Set(
+      getGoalPositionsForState(gameState, gameState.currentPlayer).map(coordKey)
+    );
+    const landsInEndzone = goalKeys.has(coordKey(to));
     if (move.isJump) {
       const priorHops = pendingConfirmation && stateBeforeMove
         ? gameState.moveHistory.length - stateBeforeMove.moveHistory.length
         : 0;
       const hops = move.jumpPath?.length ?? 1;
       for (let i = 0; i < hops; i++) {
+        const isFinal = i === hops - 1;
+        const endzone = isFinal && landsInEndzone;
         if (i === 0) {
-          playJump(priorHops);
+          playJump(priorHops, endzone);
         } else {
-          setTimeout(() => playJump(priorHops + i), i * MOVE_ANIMATION_DURATION);
+          setTimeout(() => playJump(priorHops + i, endzone), i * MOVE_ANIMATION_DURATION);
         }
       }
     } else {
-      playStep();
+      playStep(landsInEndzone);
     }
 
     // After a step, no further moves are possible - steps end the turn.

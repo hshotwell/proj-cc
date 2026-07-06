@@ -158,28 +158,36 @@ function playTone(spec: ToneSpec): void {
   }
 }
 
-export function playStep(): void {
+// Landing in the player's goal triangle plays a deeper variant of the marble sound.
+const ENDZONE_FREQ_SCALE = 0.65;
+
+export function playStep(inEndzone: boolean = false): void {
+  const scale = inEndzone ? ENDZONE_FREQ_SCALE : 1;
   playTone({
     category: 'game',
-    key: 'step',
+    key: inEndzone ? 'step-goal' : 'step',
     type: 'sine',
-    freq: 220,
-    duration: 0.08,
-    peakGain: 0.35,
-    noise: { duration: 0.02, filterFreq: 1800, peakGain: 0.5 },
+    freq: 340 * scale,
+    duration: inEndzone ? 0.09 : 0.06,
+    peakGain: 0.22,
+    noise: { duration: 0.012, filterFreq: 2000 * scale, peakGain: 0.32 },
   });
 }
 
-export function playJump(chainIndex: number = 0): void {
+export function playJump(chainIndex: number = 0, inEndzone: boolean = false): void {
   const detune = Math.min(chainIndex, 8) * 8;
+  const scale = inEndzone ? ENDZONE_FREQ_SCALE : 1;
   playTone({
     category: 'game',
-    key: 'jump',
+    key: inEndzone ? 'jump-goal' : 'jump',
     type: 'sine',
-    freq: 380 + detune,
-    duration: 0.065,
-    peakGain: 0.32,
-    noise: { duration: 0.015, filterFreq: 4000, peakGain: 0.45 },
+    freq: (270 + detune) * scale,
+    duration: inEndzone ? 0.09 : 0.07,
+    peakGain: 0.36,
+    freq2: (540 + detune * 2) * scale,
+    type2: 'sine',
+    peakGain2: 0.12,
+    noise: { duration: 0.018, filterFreq: 3200 * scale, peakGain: 0.5 },
   });
 }
 
@@ -197,15 +205,31 @@ export function playConfirm(): void {
   });
 }
 
-// Light, crisp UI click — brighter than the old sound.
+// Deep, satisfying "select" click for actual button activation.
 export function playClick(): void {
   playTone({
     category: 'ui',
     key: 'click',
     type: 'triangle',
+    freq: 480,
+    duration: 0.05,
+    peakGain: 0.28,
+    freq2: 240,
+    type2: 'sine',
+    peakGain2: 0.14,
+    noise: { duration: 0.01, filterFreq: 2200, peakGain: 0.18 },
+  });
+}
+
+// Light, brighter ping used for hover / focus feedback on primary controls.
+export function playHover(): void {
+  playTone({
+    category: 'ui',
+    key: 'hover',
+    type: 'triangle',
     freq: 1000,
     duration: 0.04,
-    peakGain: 0.26,
+    peakGain: 0.18,
     freq2: 2000,
     type2: 'triangle',
     peakGain2: 0.08,
