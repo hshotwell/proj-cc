@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import type { CubeCoord, PlayerIndex, ColorMapping, PieceVariant } from '@/types/game';
+import type { BoardPieceType } from '@/types/boardView';
 import { MOVE_ANIMATION_DURATION, RAINBOW_UI_COLORS } from '@/game/constants';
 import { cubeToPixel } from '@/game/coordinates';
 import { getPlayerColor } from '@/game/colors';
@@ -32,6 +33,8 @@ interface PieceProps {
   boardRotation?: number;
   // When true, draw the spinning 6-segment ring around the current player's pieces.
   showActivePlayerRing?: boolean;
+  // Optional piece type; when set to a value other than 'marble' or undefined, renders a placeholder glyph
+  pieceType?: BoardPieceType;
 }
 
 // Metallic colors that get special shiny treatment
@@ -367,6 +370,12 @@ function flameStarPath(
   return `M ${pts[0]} L ${pts.slice(1).join(' L ')} Z`;
 }
 
+// Helper to determine glyph text color based on background piece color
+function glyphColor(color: string): string {
+  const lightColors = new Set(['yellow', 'white', 'egg', '#f4f4f0', '#d4a020']);
+  return lightColors.has(color) ? '#111' : '#fafafa';
+}
+
 
 export function Piece({
   coord,
@@ -387,6 +396,7 @@ export function Piece({
   variant = 'normal',
   boardRotation = 0,
   showActivePlayerRing = false,
+  pieceType,
 }: PieceProps) {
   // Start the global sheen sync loop (idempotent)
   useEffect(() => { startSheenSync(); }, []);
@@ -2320,6 +2330,21 @@ export function Piece({
           />
         );
       })()}
+      {/* Placeholder glyph for non-marble piece types */}
+      {pieceType && pieceType !== 'marble' && (
+        <text
+          x={0}
+          y={0}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={pieceRadius * 0.9}
+          fontWeight="bold"
+          fill={glyphColor(baseColor)}
+          pointerEvents="none"
+        >
+          {pieceType[0].toUpperCase()}
+        </text>
+      )}
     </g>
   );
 }
