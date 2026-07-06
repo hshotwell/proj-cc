@@ -1181,8 +1181,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         ))}
       </g>
 
-      {/* Layer 2: Valid move indicators (hidden during animation, AI turns, and replay) */}
-      {!isReplayActive && !animatingPiece && !isAITurn && (
+      {/* Layer 2: Valid move indicators (hidden on AI turns and replay; visible during
+          animation so the player can queue the next hop without waiting for the piece
+          to finish sliding). */}
+      {!isReplayActive && !isAITurn && (
         <g>
           {displayedMoves.map(({ coord, isJump, isSwap }) => (
             <MoveIndicator
