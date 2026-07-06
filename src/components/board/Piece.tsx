@@ -30,6 +30,8 @@ interface PieceProps {
   variant?: PieceVariant;
   // Counter-rotate piece to stay upright when the board is rotated
   boardRotation?: number;
+  // When true, draw the spinning 6-segment ring around the current player's pieces.
+  showActivePlayerRing?: boolean;
 }
 
 // Metallic colors that get special shiny treatment
@@ -384,6 +386,7 @@ export function Piece({
   hexCells,
   variant = 'normal',
   boardRotation = 0,
+  showActivePlayerRing = false,
 }: PieceProps) {
   // Start the global sheen sync loop (idempotent)
   useEffect(() => { startSheenSync(); }, []);
@@ -2252,6 +2255,43 @@ export function Piece({
             ))}
           </>
         );
+      })()}
+      {/* Active-player ring — 6 spinning segments outside the border. Optional; toggled
+          via the "Active-player ring" visual setting. Suppressed while selected so the
+          selection spikes stay legible. */}
+      {showActivePlayerRing && isCurrentPlayer && !isAnimating && (() => {
+        const borderOuter = pieceRadius + 0.75; // half of 1.5 strokeWidth
+        const ringWidth = hexCells ? 3.5 : 2;
+        const highlightR = borderOuter + 1 + ringWidth / 2;
+        const circumference = 2 * Math.PI * highlightR;
+        const segmentLen = circumference / 12;
+        const isRainbowOrOpal = isRainbowPiece || isOpalPiece;
+        const isRainbowLike = isRainbowOrOpal || isBouquetPiece || RAINBOW_UI_COLORS.has(baseColor);
+        const isGreyRing = isFlowerPiece;
+        const ringBaseColor = isRainbowLike ? '#808080' : pieceColor;
+        const cleanHex = isRainbowLike ? '808080' : ringBaseColor.replace('#', '');
+        const luminance = (parseInt(cleanHex.substring(0, 2), 16) + parseInt(cleanHex.substring(2, 4), 16) + parseInt(cleanHex.substring(4, 6), 16)) / 3;
+        const segmentColor = isRainbowLike ? '#ff0000'
+          : isGreyRing
+            ? (luminance > 185 ? darkenColor(ringBaseColor, 0.25) : lightenColor(ringBaseColor, 0.35))
+            : (!darkMode && luminance > 185 ? darkenColor(ringBaseColor, 0.35) : lightenColor(ringBaseColor, 0.4));
+        const ring = (
+          <circle
+            cx={0}
+            cy={0}
+            r={highlightR}
+            fill="none"
+            stroke={segmentColor}
+            strokeWidth={ringWidth}
+            strokeDasharray={`${segmentLen} ${segmentLen}`}
+            className="active-piece-highlight"
+            style={{ transformOrigin: '0px 0px' }}
+          />
+        );
+        const hiddenStyle: React.CSSProperties | undefined = isSelected ? { opacity: 0, pointerEvents: 'none' } : undefined;
+        return isRainbowLike
+          ? <g className="rainbow-ui-filter" style={hiddenStyle}>{ring}</g>
+          : <g style={hiddenStyle}>{ring}</g>;
       })()}
       {/* Selection indicator - 12 triangle spikes rotating opposite */}
       {isSelected && !isAnimating && (() => {

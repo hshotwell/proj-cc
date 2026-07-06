@@ -37,6 +37,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     usePlayerOpening,
     hexCells,
     preMoves,
+    activePlayerRing,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -52,6 +53,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     toggleUsePlayerOpening,
     toggleHexCells,
     togglePreMoves,
+    toggleActivePlayerRing,
   } = useSettingsStore();
 
   const { resetGame } = useGameStore();
@@ -250,6 +252,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
                 description={hexCells ? 'Cells shown as hexagon tiles' : 'Cells shown as circles'}
                 checked={hexCells}
                 onChange={toggleHexCells}
+              />
+              <ToggleOption
+                label="Active-player ring"
+                description={activePlayerRing ? 'Spinning ring around the current player’s pieces' : 'No ring around the current player’s pieces'}
+                checked={activePlayerRing}
+                onChange={toggleActivePlayerRing}
               />
               <ToggleOption
                 label="Dark mode"

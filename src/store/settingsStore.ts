@@ -29,6 +29,7 @@ interface SettingsStore {
   usePlayerOpening: boolean;
   hexCells: boolean;
   preMoves: boolean;
+  activePlayerRing: boolean;
 
   // Sync state
   isSyncing: boolean;
@@ -57,6 +58,7 @@ interface SettingsStore {
   toggleUsePlayerOpening: () => void;
   toggleHexCells: () => void;
   togglePreMoves: () => void;
+  toggleActivePlayerRing: () => void;
 
   // Sync actions
   syncFromCloud: () => Promise<void>;
@@ -105,6 +107,7 @@ export const useSettingsStore = create<SettingsStore>()(
       usePlayerOpening: false,
       hexCells: false,
       preMoves: true,
+      activePlayerRing: false,
 
       // Sync state
       isSyncing: false,
@@ -188,6 +191,9 @@ export const useSettingsStore = create<SettingsStore>()(
       togglePreMoves: () => {
         set((state) => ({ preMoves: !state.preMoves }));
       },
+      toggleActivePlayerRing: () => {
+        set((state) => ({ activePlayerRing: !state.activePlayerRing }));
+      },
 
       // Sync from cloud (called on sign-in)
       syncFromCloud: async () => {
@@ -255,6 +261,7 @@ export const useSettingsStore = create<SettingsStore>()(
         usePlayerOpening: state.usePlayerOpening,
         hexCells: state.hexCells,
         preMoves: state.preMoves,
+        activePlayerRing: state.activePlayerRing,
       }),
     }
   )

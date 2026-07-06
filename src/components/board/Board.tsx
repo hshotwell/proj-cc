@@ -98,7 +98,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       cancelPreMoveAt,
       getVirtualBoard,
     } = useGameStore();
-  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard, glassPieces, hopEffect, hexCells } = useSettingsStore();
+  const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard, glassPieces, hopEffect, hexCells, activePlayerRing } = useSettingsStore();
 
   // Track hovered cell for coordinate display
   const [hoveredCell, setHoveredCell] = useState<CubeCoord | null>(null);
@@ -1482,6 +1482,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 hexCells={hexCells}
                 variant={gameState.pieceVariants?.get(pieceKey) ?? gameState.playerPieceTypes?.[player] ?? 'normal'}
                 boardRotation={cumulativeRotation}
+                showActivePlayerRing={activePlayerRing}
               />
             </g>
           );
