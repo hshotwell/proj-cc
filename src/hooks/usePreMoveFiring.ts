@@ -74,9 +74,11 @@ export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: b
 
     // Populate the minimum state makeMove needs, fire it, then wipe the UI state.
     // All synchronous so React batches into a single render — no selection blip.
+    // preMoveSelectedFrom is intentionally left untouched: if the player already
+    // selected a different piece for a future pre-move, that selection survives
+    // through this fire and is picked up by the promote branch on the next turn.
     useGameStore.setState({
       preMoves: preMoves.slice(1),
-      preMoveSelectedFrom: null,
       selectedPiece: pm.from,
       validMovesForSelected: moves,
     });
@@ -84,8 +86,6 @@ export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: b
     useGameStore.setState({
       selectedPiece: null,
       validMovesForSelected: [],
-      // Stash the landing so confirmMove can persist it as the next-turn selection.
-      preMoveSelectedFrom: pm.to,
     });
     firingRef.current = false;
   }, [active, localPlayer, gameState, preMoves, preMoveSelectedFrom, pendingConfirmation, animatingPiece, animateMoves]);

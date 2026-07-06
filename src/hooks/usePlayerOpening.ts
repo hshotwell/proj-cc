@@ -82,7 +82,6 @@ export function usePlayerOpening(active: boolean = true) {
       useGameStore.setState({
         selectedPiece: null,
         validMovesForSelected: [],
-        preMoveSelectedFrom: move.to,
       });
     }, OPENING_PLAY_DELAY);
 
