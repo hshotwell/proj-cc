@@ -3,10 +3,11 @@
 import { create } from 'zustand';
 import type { CellContent, CubeCoord, Move, GameState, PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMapping, PieceVariant } from '@/types/game';
 import type { AIPlayerMap } from '@/types/ai';
+import type { BoardView, BoardPiece } from '@/types/boardView';
 import { createGame, createGameFromLayout } from '@/game/setup';
 import { getValidMoves } from '@/game/moves';
 import { movePiece, advanceTurn, isGameFullyOver, undoMove, getGoalPositionsForState } from '@/game/state';
-import { coordKey, cubeEquals, getMovePath } from '@/game/coordinates';
+import { coordKey, cubeEquals, getMovePath, parseCoordKey } from '@/game/coordinates';
 import { MOVE_ANIMATION_DURATION } from '@/game/constants';
 import { recordBoardState, clearStateHistory } from '@/game/ai/search';
 import { clearPathfindingCache } from '@/game/pathfinding';
@@ -601,3 +602,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
 }));
+
+/**
+ * Selector that transforms the current GameState into a BoardView.
+ * Produces all pieces, home zones, valid cells, and active player info.
+ */
+export function selectBoardView(state: GameState): BoardView {
+  const pieces: BoardPiece[] = [];
+
+  // Collect all pieces from the board
+  for (const [key, cell] of state.board) {
+    const owner = cell.type === 'piece' ? cell.player : null;
+    if (owner == null) continue;
+
+    pieces.push({
+      id: `sternhalma-${key}`,
+      cell: parseCoordKey(key),
+      color: state.playerColors?.[owner] ?? '#000000',
+      pieceType: 'marble',
+    });
+  }
+
+  // Build home zones map for all active players
+  const homeZones = new Map<PlayerIndex, CubeCoord[]>();
+  for (const player of state.activePlayers) {
+    const goalPositions = getGoalPositionsForState(state, player);
+    homeZones.set(player, goalPositions);
+  }
+
+  return {
+    cells: Array.from(state.board.keys()).map(parseCoordKey),
+    homeZones,
+    pieces,
+    highlights: [],
+    animatingMove: null,
+    rotation: 0,
+    activePlayerIndex: state.currentPlayer,
+  };
+}
