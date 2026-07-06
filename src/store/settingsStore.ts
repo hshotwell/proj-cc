@@ -30,6 +30,9 @@ interface SettingsStore {
   hexCells: boolean;
   preMoves: boolean;
   activePlayerRing: boolean;
+  masterVolume: number; // 0-100
+  gameVolume: number; // 0-100
+  uiVolume: number; // 0-100
 
   // Sync state
   isSyncing: boolean;
@@ -59,6 +62,9 @@ interface SettingsStore {
   toggleHexCells: () => void;
   togglePreMoves: () => void;
   toggleActivePlayerRing: () => void;
+  setMasterVolume: (value: number) => void;
+  setGameVolume: (value: number) => void;
+  setUiVolume: (value: number) => void;
 
   // Sync actions
   syncFromCloud: () => Promise<void>;
@@ -108,6 +114,9 @@ export const useSettingsStore = create<SettingsStore>()(
       hexCells: false,
       preMoves: true,
       activePlayerRing: false,
+      masterVolume: 70,
+      gameVolume: 80,
+      uiVolume: 60,
 
       // Sync state
       isSyncing: false,
@@ -194,6 +203,15 @@ export const useSettingsStore = create<SettingsStore>()(
       toggleActivePlayerRing: () => {
         set((state) => ({ activePlayerRing: !state.activePlayerRing }));
       },
+      setMasterVolume: (value) => {
+        set({ masterVolume: Math.max(0, Math.min(100, value)) });
+      },
+      setGameVolume: (value) => {
+        set({ gameVolume: Math.max(0, Math.min(100, value)) });
+      },
+      setUiVolume: (value) => {
+        set({ uiVolume: Math.max(0, Math.min(100, value)) });
+      },
 
       // Sync from cloud (called on sign-in)
       syncFromCloud: async () => {
@@ -262,6 +280,9 @@ export const useSettingsStore = create<SettingsStore>()(
         hexCells: state.hexCells,
         preMoves: state.preMoves,
         activePlayerRing: state.activePlayerRing,
+        masterVolume: state.masterVolume,
+        gameVolume: state.gameVolume,
+        uiVolume: state.uiVolume,
       }),
     }
   )

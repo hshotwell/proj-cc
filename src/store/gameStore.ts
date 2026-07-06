@@ -12,6 +12,7 @@ import { recordBoardState, clearStateHistory } from '@/game/ai/search';
 import { clearPathfindingCache } from '@/game/pathfinding';
 import { extractGamePatterns, createGameSummary, learnFromGame, clearWeightsCache } from '@/game/learning';
 import { useSettingsStore } from './settingsStore';
+import { playStep, playJump, playConfirm, playSelect, playDeselect } from '@/audio/soundEffects';
 
 export interface QueuedPreMove {
   from: CubeCoord;
@@ -158,6 +159,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Check if clicking on the same piece - toggle selection off
     if (selectedPiece && cubeEquals(selectedPiece, coord)) {
       set({ selectedPiece: null, validMovesForSelected: [] });
+      playDeselect();
       return;
     }
 
@@ -169,7 +171,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       content.player !== gameState.currentPlayer
     ) {
       // Clicked on empty cell or opponent's piece - clear selection
+      const hadSelection = selectedPiece !== null;
       set({ selectedPiece: null, validMovesForSelected: [] });
+      if (hadSelection) playDeselect();
       return;
     }
 
@@ -179,6 +183,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedPiece: coord,
       validMovesForSelected: validMoves,
     });
+    playSelect();
   },
 
   // Make a move to the specified destination
@@ -203,6 +208,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     // Move the piece without advancing the turn (turn advances on confirm)
     const newState = movePiece(gameState, move);
+
+    // Fire move sound. For chain jumps, chainIndex = number of prior hops this turn.
+    if (move.isJump) {
+      const chainIndex = pendingConfirmation && stateBeforeMove
+        ? gameState.moveHistory.length - stateBeforeMove.moveHistory.length
+        : 0;
+      playJump(chainIndex);
+    } else {
+      playStep();
+    }
 
     // After a step, no further moves are possible - steps end the turn.
     // After a jump, only further jumps are valid (no single steps).
@@ -292,6 +307,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   confirmMove: () => {
     const { gameState, selectedPiece, originalPiecePosition, gameId, preMoveSelectedFrom: stagedPreMoveSelected } = get();
     if (!gameState) return;
+    playConfirm();
 
     // Destination for the "last move" indicator: prefer selectedPiece (normal chain-jump
     // flow where the piece is selected at its landing), else derive from the most recent

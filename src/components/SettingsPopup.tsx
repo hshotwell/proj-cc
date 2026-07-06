@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useGameStore } from '@/store/gameStore';
 import { useReplayStore } from '@/store/replayStore';
+import { playStep, playClick } from '@/audio/soundEffects';
 
 type SettingsMode = 'game' | 'replay' | 'editor';
-type SettingsTab = 'main' | 'gameplay' | 'visuals';
+type SettingsTab = 'main' | 'gameplay' | 'visuals' | 'sound';
 
 interface SettingsPopupProps {
   mode: SettingsMode;
@@ -38,6 +39,12 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
     hexCells,
     preMoves,
     activePlayerRing,
+    masterVolume,
+    gameVolume,
+    uiVolume,
+    setMasterVolume,
+    setGameVolume,
+    setUiVolume,
     toggleShowAllMoves,
     toggleAnimateMoves,
     toggleRotateBoard,
@@ -69,15 +76,18 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
   if (!settingsMenuOpen) return null;
 
   const handleResume = () => {
+    playClick();
     closeSettingsMenu();
   };
 
   const handleReturnToMenu = () => {
+    playClick();
     closeSettingsMenu();
     router.push('/home');
   };
 
   const handleRestart = () => {
+    playClick();
     if (onRestart) {
       onRestart();
     } else if (mode === 'game') {
@@ -117,7 +127,7 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
           </div>
           {/* Tabs */}
           <div className="flex gap-1 mt-4">
-            {(['main', 'gameplay', 'visuals'] as SettingsTab[]).map((tab) => (
+            {(['main', 'gameplay', 'visuals', 'sound'] as SettingsTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -267,8 +277,64 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
               />
             </div>
           )}
+
+          {activeTab === 'sound' && (
+            <div className="space-y-5">
+              <VolumeSlider
+                label="Master volume"
+                value={masterVolume}
+                onChange={setMasterVolume}
+                onRelease={() => playStep()}
+              />
+              <VolumeSlider
+                label="Game effects"
+                description="Moves, jumps, and turn confirmations"
+                value={gameVolume}
+                onChange={setGameVolume}
+                onRelease={() => playStep()}
+              />
+              <VolumeSlider
+                label="UI effects"
+                description="Piece selection and button clicks"
+                value={uiVolume}
+                onChange={setUiVolume}
+                onRelease={() => playClick()}
+              />
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface VolumeSliderProps {
+  label: string;
+  description?: string;
+  value: number;
+  onChange: (value: number) => void;
+  onRelease: () => void;
+}
+
+function VolumeSlider({ label, description, value, onChange, onRelease }: VolumeSliderProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className="text-xs tabular-nums text-gray-500 w-8 text-right">{value}</span>
+      </div>
+      {description && <div className="text-xs text-gray-500">{description}</div>}
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onMouseUp={onRelease}
+        onTouchEnd={onRelease}
+        onKeyUp={onRelease}
+        className="w-full accent-blue-500"
+      />
     </div>
   );
 }
