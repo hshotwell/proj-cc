@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { findMovePath } from '@/game/pathfinding';
+import { cubeEquals } from '@/game/coordinates';
 import { isGameFullyOver } from '@/game/state';
 import type { PlayerIndex } from '@/types/game';
 
@@ -12,9 +12,12 @@ const SELECT_DELAY = 50; // ms after selectPiece before makeMove; matches usePla
 /**
  * Fires queued pre-moves when the local user's turn arrives.
  * - Waits for animation to finish before firing (so the opponent's move settles first).
- * - Finds a full step/chain-jump path from queued origin to queued destination.
- * - If the path exists, executes it via existing makeMove flow (respects autoConfirm).
- * - If the path doesn't exist, clears the entire queue and lets the player move manually.
+ * - Uses the game store's own valid-moves list (which already treats a chain jump as
+ *   a single Move with a jumpPath) so a queued destination fires in one makeMove call.
+ * - If the destination isn't reachable in one turn, clears the entire queue and lets
+ *   the player move manually.
+ * - Also promotes a lingering pre-move piece selection into the normal selection when
+ *   the turn arrives with no queued pre-moves, so the player doesn't have to reselect.
  *
  * @param localPlayer - the local user's PlayerIndex (undefined disables the hook)
  * @param active     - false disables the hook regardless of state
@@ -22,6 +25,7 @@ const SELECT_DELAY = 50; // ms after selectPiece before makeMove; matches usePla
 export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: boolean = true) {
   const gameState = useGameStore((s) => s.gameState);
   const preMoves = useGameStore((s) => s.preMoves);
+  const preMoveSelectedFrom = useGameStore((s) => s.preMoveSelectedFrom);
   const pendingConfirmation = useGameStore((s) => s.pendingConfirmation);
   const animatingPiece = useGameStore((s) => s.animatingPiece);
   const animateMoves = useSettingsStore((s) => s.animateMoves);
@@ -36,48 +40,49 @@ export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: b
     if (gameState.currentPlayer !== localPlayer) return;
     if (pendingConfirmation) return;
     if (animatingPiece) return;
+
+    // If the player had a piece selected for a pre-move but never queued one, keep
+    // that piece selected as the normal turn's selection so they don't have to reclick.
+    if (preMoves.length === 0 && preMoveSelectedFrom) {
+      const held = preMoveSelectedFrom;
+      useGameStore.setState({ preMoveSelectedFrom: null });
+      useGameStore.getState().selectPiece(held);
+      return;
+    }
+
     if (preMoves.length === 0) return;
     if (firingRef.current) return;
 
     const pm = preMoves[0];
-    const path = findMovePath(gameState, pm.from, pm.to, localPlayer);
-    if (!path || path.length === 0) {
-      // Unreachable — clear the entire queue.
-      useGameStore.getState().clearAllPreMoves();
-      return;
-    }
 
     firingRef.current = true;
-    // Snapshot for guarded execution
     const turnAtStart = gameState.turnNumber;
 
-    // Pop this pre-move optimistically
+    // Pop this pre-move optimistically and select the origin piece.
     useGameStore.setState({ preMoves: preMoves.slice(1) });
+    useGameStore.getState().selectPiece(pm.from);
 
-    const store = useGameStore.getState();
-    store.selectPiece(pm.from);
-
-    const fireHop = (i: number) => {
+    setTimeout(() => {
       const current = useGameStore.getState();
+      firingRef.current = false;
       if (
         !current.gameState ||
         isGameFullyOver(current.gameState) ||
         current.gameState.turnNumber !== turnAtStart ||
         current.gameState.currentPlayer !== localPlayer
       ) {
-        firingRef.current = false;
         return;
       }
-      const move = path[i];
-      current.makeMove(move.to, animateMoves);
-      if (i < path.length - 1) {
-        setTimeout(() => fireHop(i + 1), SELECT_DELAY);
-      } else {
-        // Last hop dispatched; release the ref so the next tick can fire the next pre-move
-        firingRef.current = false;
+      // The game's own valid-move list treats chain jumps as a single Move whose to =
+      // the final landing (with a multi-cell jumpPath). Look it up and fire in one call.
+      const target = current.validMovesForSelected.find((m) => cubeEquals(m.to, pm.to));
+      if (!target) {
+        // Not reachable this turn — clear the rest of the queue and let the player move manually.
+        current.clearSelection();
+        useGameStore.getState().clearAllPreMoves();
+        return;
       }
-    };
-
-    setTimeout(() => fireHop(0), SELECT_DELAY);
-  }, [active, localPlayer, gameState, preMoves, pendingConfirmation, animatingPiece, animateMoves]);
+      current.makeMove(pm.to, animateMoves);
+    }, SELECT_DELAY);
+  }, [active, localPlayer, gameState, preMoves, preMoveSelectedFrom, pendingConfirmation, animatingPiece, animateMoves]);
 }
