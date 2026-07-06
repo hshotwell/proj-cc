@@ -43,7 +43,9 @@ export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: b
 
     // If the player had a piece selected for a pre-move but never queued one, keep
     // that piece selected as the normal turn's selection so they don't have to reclick.
-    if (preMoves.length === 0 && preMoveSelectedFrom) {
+    // Guarded by !firingRef so this doesn't run in the effect re-entry that happens
+    // right after we've popped the queue below.
+    if (preMoves.length === 0 && preMoveSelectedFrom && !firingRef.current) {
       const held = preMoveSelectedFrom;
       useGameStore.setState({ preMoveSelectedFrom: null });
       useGameStore.getState().selectPiece(held);
@@ -58,8 +60,10 @@ export function usePreMoveFiring(localPlayer: PlayerIndex | undefined, active: b
     firingRef.current = true;
     const turnAtStart = gameState.turnNumber;
 
-    // Pop this pre-move optimistically and select the origin piece.
-    useGameStore.setState({ preMoves: preMoves.slice(1) });
+    // Pop this pre-move optimistically and select the origin piece. Also drop any
+    // in-progress pre-move selection so the effect re-run can't promote it and
+    // hijack `selectedPiece` before the makeMove setTimeout fires.
+    useGameStore.setState({ preMoves: preMoves.slice(1), preMoveSelectedFrom: null });
     useGameStore.getState().selectPiece(pm.from);
 
     setTimeout(() => {
