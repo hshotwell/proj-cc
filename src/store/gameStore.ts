@@ -206,11 +206,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const newState = movePiece(gameState, move);
 
     // Fire move sound. For chain jumps, chainIndex = number of prior hops this turn.
+    // A single Move may bundle multiple hops (jumpPath.length > 1 — used by the AI
+    // and by showAllMoves human clicks). Play one jump sound per hop, spaced by the
+    // animation duration so the chain is audible as a sequence.
     if (move.isJump) {
-      const chainIndex = pendingConfirmation && stateBeforeMove
+      const priorHops = pendingConfirmation && stateBeforeMove
         ? gameState.moveHistory.length - stateBeforeMove.moveHistory.length
         : 0;
-      playJump(chainIndex);
+      const hops = move.jumpPath?.length ?? 1;
+      for (let i = 0; i < hops; i++) {
+        if (i === 0) {
+          playJump(priorHops);
+        } else {
+          setTimeout(() => playJump(priorHops + i), i * MOVE_ANIMATION_DURATION);
+        }
+      }
     } else {
       playStep();
     }

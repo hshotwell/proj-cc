@@ -5,6 +5,7 @@ import type { GameState, Move } from '@/types/game';
 import type { SavedGameSummary } from '@/types/replay';
 import { loadSavedGame } from '@/game/persistence';
 import { normalizeMoveHistory, reconstructGameStates, findLongestHopIndices, findBestHopGain } from '@/game/replay';
+import { MOVE_ANIMATION_DURATION } from '@/game/constants';
 import { playStep, playJump } from '@/audio/soundEffects';
 
 interface ReplayStore {
@@ -144,8 +145,15 @@ export const useReplayStore = create<ReplayStore>((set, get) => ({
     if (currentStep >= moves.length) return;
     const next = currentStep + 1;
     const move = moves[currentStep];
-    if (move?.isJump) playJump(0);
-    else playStep();
+    if (move?.isJump) {
+      const hops = move.jumpPath?.length ?? 1;
+      for (let i = 0; i < hops; i++) {
+        if (i === 0) playJump(i);
+        else setTimeout(() => playJump(i), i * MOVE_ANIMATION_DURATION);
+      }
+    } else {
+      playStep();
+    }
     set({ currentStep: next, displayState: states[next] });
   },
 
