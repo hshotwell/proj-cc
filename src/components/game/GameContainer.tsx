@@ -19,7 +19,8 @@ import { saveCompletedGame } from '@/game/persistence';
 import { isGameFullyOver } from '@/game/state';
 import { ClearPreMovesButton } from './ClearPreMovesButton';
 import type { PlayerIndex } from '@/types/game';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { playYourTurn } from '@/audio/soundEffects';
 
 export function GameContainer() {
   const router = useRouter();
@@ -51,6 +52,23 @@ export function GameContainer() {
   }, [preMovesSetting, clearAllPreMoves]);
 
   const hasAI = Object.keys(gameState?.aiPlayers ?? {}).length > 0;
+
+  // Ping when the human player's turn comes around (only in games with AI
+  // opponents — hotseat games would ping constantly and it isn't useful).
+  const prevPlayerRef = useRef<PlayerIndex | null>(null);
+  useEffect(() => {
+    if (!gameState || localPlayer === undefined || !hasAI) {
+      prevPlayerRef.current = gameState?.currentPlayer ?? null;
+      return;
+    }
+    const prev = prevPlayerRef.current;
+    const curr = gameState.currentPlayer;
+    prevPlayerRef.current = curr;
+    if (prev === null) return; // skip initial mount
+    if (prev !== curr && curr === localPlayer && !isGameFullyOver(gameState)) {
+      playYourTurn();
+    }
+  }, [gameState, localPlayer, hasAI]);
   const isOver = gameState ? isGameFullyOver(gameState) : false;
   const hasMoves = (gameState?.moveHistory.length ?? 0) > 0;
   const showAbandon = hasAI && !isOver && hasMoves;

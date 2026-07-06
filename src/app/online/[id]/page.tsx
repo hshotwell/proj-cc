@@ -27,6 +27,7 @@ import { getCSSColor } from '@/game/constants';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 import { saveCompletedGame } from '@/game/persistence';
 import type { PlayerIndex } from '@/types/game';
+import { playYourTurn, playGameOver } from '@/audio/soundEffects';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
@@ -56,6 +57,7 @@ function OnlineGameOverDialog({ gameId }: { gameId: Id<"onlineGames"> }) {
     if (isFinished && gameState && !hasSavedRef.current) {
       hasSavedRef.current = true;
       saveCompletedGame(gameId.toString(), gameState);
+      playGameOver();
     }
   }, [isFinished, gameState, gameId]);
 
@@ -220,6 +222,18 @@ function OnlineGameContent() {
   useEffect(() => {
     if (!preMovesSetting) clearAllPreMoves();
   }, [preMovesSetting, clearAllPreMoves]);
+
+  // Ping when it becomes my turn (skip the initial mount so refreshing on
+  // your own turn doesn't chime).
+  const wasMyTurnRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const prev = wasMyTurnRef.current;
+    wasMyTurnRef.current = isMyTurn;
+    if (prev === null) return;
+    if (!prev && isMyTurn && onlineGame?.status === 'playing') {
+      playYourTurn();
+    }
+  }, [isMyTurn, onlineGame?.status]);
 
   // Learn from finished games
   useOnlineGameLearning(gameId, onlineGame);

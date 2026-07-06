@@ -1,9 +1,11 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { useAuthStore } from '@/store/authStore';
+import { playInvite } from '@/audio/soundEffects';
 
 export function InviteNotification() {
   const { isAuthenticated } = useAuthStore();
@@ -15,6 +17,25 @@ export function InviteNotification() {
   );
   const acceptInvite = useMutation(api.gameInvites.acceptInvite);
   const declineInvite = useMutation(api.gameInvites.declineInvite);
+
+  // Chime once when a new invite ID appears (skip the initial hydration
+  // load so we don't ping the user on page refresh with existing invites).
+  const seenInvitesRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!invites) return;
+    const ids = new Set(invites.map((inv) => String(inv.inviteId)));
+    if (seenInvitesRef.current === null) {
+      seenInvitesRef.current = ids;
+      return;
+    }
+    for (const id of ids) {
+      if (!seenInvitesRef.current.has(id)) {
+        playInvite();
+        break;
+      }
+    }
+    seenInvitesRef.current = ids;
+  }, [invites]);
 
   if (!invites || invites.length === 0) return null;
 

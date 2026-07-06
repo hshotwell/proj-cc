@@ -236,3 +236,57 @@ export function playHover(): void {
     freqJitter: 0.05,
   });
 }
+
+// Notification sounds — simple pitched sequences scheduled inline.
+function playSequence(
+  category: Category,
+  key: string,
+  notes: { freq: number; delay: number; duration: number; peakGain: number; type?: OscillatorType }[]
+): void {
+  if (shouldCoalesce(key)) return;
+  const gain = categoryGain(category);
+  if (gain <= 0) return;
+  const c = getContext();
+  if (!c) return;
+  const start = c.currentTime;
+  const master = c.createGain();
+  master.gain.value = gain;
+  master.connect(c.destination);
+  for (const n of notes) {
+    const osc = c.createOscillator();
+    osc.type = n.type ?? 'triangle';
+    osc.frequency.value = n.freq * jitter(0.02);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, start + n.delay);
+    g.gain.exponentialRampToValueAtTime(n.peakGain * jitter(0.08), start + n.delay + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + n.delay + n.duration);
+    osc.connect(g).connect(master);
+    osc.start(start + n.delay);
+    osc.stop(start + n.delay + n.duration + 0.02);
+  }
+}
+
+// Cheerful two-note rising chime for a friend's game invite.
+export function playInvite(): void {
+  playSequence('ui', 'invite', [
+    { freq: 660, delay: 0,    duration: 0.13, peakGain: 0.28 },
+    { freq: 990, delay: 0.12, duration: 0.18, peakGain: 0.28 },
+  ]);
+}
+
+// Soft double-tap alert when it becomes your turn.
+export function playYourTurn(): void {
+  playSequence('ui', 'your-turn', [
+    { freq: 620, delay: 0,    duration: 0.12, peakGain: 0.22 },
+    { freq: 830, delay: 0.11, duration: 0.16, peakGain: 0.22 },
+  ]);
+}
+
+// Falling three-note resolution when the game ends.
+export function playGameOver(): void {
+  playSequence('ui', 'game-over', [
+    { freq: 880, delay: 0,    duration: 0.18, peakGain: 0.26, type: 'sine' },
+    { freq: 660, delay: 0.16, duration: 0.22, peakGain: 0.26, type: 'sine' },
+    { freq: 440, delay: 0.34, duration: 0.34, peakGain: 0.28, type: 'sine' },
+  ]);
+}

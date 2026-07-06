@@ -12,6 +12,7 @@ import { savePuzzleCompletion, setTutorialComplete } from '@/game/puzzleProgress
 import { useGameStore } from '@/store/gameStore';
 import { useReplayStore } from '@/store/replayStore';
 import { useTutorialStore } from '@/store/tutorialStore';
+import { playGameOver } from '@/audio/soundEffects';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
@@ -30,6 +31,7 @@ export function GameOverDialog() {
     if (savedRef.current === gameId) return;
     savedRef.current = gameId;
     saveCompletedGame(gameId, gameState, currentLayout?.name);
+    playGameOver();
 
     // Record puzzle completion
     if (currentLayout?.puzzleGoalMoves) {
