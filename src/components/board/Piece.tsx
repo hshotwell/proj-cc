@@ -2253,44 +2253,6 @@ export function Piece({
           </>
         );
       })()}
-      {/* Highlight for current player's pieces - 6 spinning segments outside border */}
-      {/* Keep mounted even when selected (hidden) so the hue-rotate CSS animation never restarts */}
-      {isCurrentPlayer && !isAnimating && (() => {
-        const borderOuter = pieceRadius + 0.75; // half of 1.5 strokeWidth
-        const ringWidth = hexCells ? 3.5 : 2;
-        const highlightR = borderOuter + 1 + ringWidth / 2; // keep same gap as before
-        const circumference = 2 * Math.PI * highlightR;
-        const segmentLen = circumference / 12;
-        // In light mode, darken near-grey colors (e.g. silver) that would wash out against the board
-        const isRainbowOrOpal = isRainbowPiece || isOpalPiece;
-        const isRainbowLike = isRainbowOrOpal || isBouquetPiece || RAINBOW_UI_COLORS.has(baseColor);
-        const isGreyRing = isFlowerPiece;
-        // Flowers/bouquet ring uses their own colour without dark-mode variation (stable across mode switches)
-        const ringBaseColor = isRainbowLike ? '#808080' : pieceColor;
-        const cleanHex = isRainbowLike ? '808080' : ringBaseColor.replace('#', '');
-        const luminance = (parseInt(cleanHex.substring(0, 2), 16) + parseInt(cleanHex.substring(2, 4), 16) + parseInt(cleanHex.substring(4, 6), 16)) / 3;
-        const segmentColor = isRainbowLike ? '#ff0000'
-          : isGreyRing
-            ? (luminance > 185 ? darkenColor(ringBaseColor, 0.25) : lightenColor(ringBaseColor, 0.35))
-            : (!darkMode && luminance > 185 ? darkenColor(ringBaseColor, 0.35) : lightenColor(ringBaseColor, 0.4));
-        const ring = (
-          <circle
-            cx={0}
-            cy={0}
-            r={highlightR}
-            fill="none"
-            stroke={segmentColor}
-            strokeWidth={ringWidth}
-            strokeDasharray={`${segmentLen} ${segmentLen}`}
-            className="active-piece-highlight"
-            style={{ transformOrigin: '0px 0px' }}
-          />
-        );
-        const hiddenStyle: React.CSSProperties | undefined = isSelected ? { opacity: 0, pointerEvents: 'none' } : undefined;
-        return isRainbowLike
-          ? <g className="rainbow-ui-filter" style={hiddenStyle}>{ring}</g>
-          : <g style={hiddenStyle}>{ring}</g>;
-      })()}
       {/* Selection indicator - 12 triangle spikes rotating opposite */}
       {isSelected && !isAnimating && (() => {
         const spikeR = pieceRadius + size * 0.18;
