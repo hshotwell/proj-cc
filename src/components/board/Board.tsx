@@ -8,9 +8,10 @@ import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath, cubeDist
 import { getPlayerColorFromState, hexToRgba, blendColorsRgba, lightenHex } from '@/game/colors';
 import { findBoardTriangles, findBorderEdges } from '@/game/triangles';
 import { isGameFullyOver } from '@/game/state';
-import { useGameStore } from '@/store/gameStore';
+import { useGameStore, selectBoardView } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useReplayStore } from '@/store/replayStore';
+import type { BoardView, BoardHighlight } from '@/types/boardView';
 import { BoardCell } from './BoardCell';
 import { Piece } from './Piece';
 import { MoveIndicator } from './MoveIndicator';
@@ -61,9 +62,16 @@ interface BoardProps {
   preMovesAllowed?: boolean;
   /** The local user's player index — determines which pieces they may pre-move. */
   localPlayer?: PlayerIndex;
+  /**
+   * When supplied, the board uses this view instead of deriving one from the game store.
+   * Interactive highlights (selection, valid moves, last-move markers) are expected to be
+   * included in view.highlights by the caller. When omitted, the store-based path is used
+   * and highlights are built locally from store fields.
+   */
+  view?: BoardView;
 }
 
-export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, highlightCoord, preMovesAllowed, localPlayer }: BoardProps = {}) {
+export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, highlightCoord, preMovesAllowed, localPlayer, view: viewProp }: BoardProps = {}) {
   // Replay store
   const {
     isReplayActive,
@@ -131,6 +139,32 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     : liveGameState;
   const selectedPiece = isReplayActive ? null : liveSelectedPiece;
   const validMovesForSelected = isReplayActive ? [] : liveValidMoves;
+
+  // ---- BoardView seam (Task 3) ----
+  // When a caller passes `view`, use it directly.
+  // Otherwise derive a view from the store-side game state.
+  // NOTE: the actual rendering still reads from gameState/store fields directly;
+  // resolvedView and renderHighlights are the computed seam ready for Task 4 to wire up.
+  const resolvedView: BoardView | null = viewProp ?? deriveViewFromStore(gameState);
+
+  // For the store-fallback path, build the interactive highlights that live on the store
+  // (selection ring, valid-move dots, last-move markers) so they are available alongside
+  // resolvedView. When a caller provides viewProp, it is expected to include its own highlights.
+  const renderHighlights: BoardHighlight[] = viewProp
+    ? [...viewProp.highlights]
+    : (() => {
+        const hl: BoardHighlight[] = resolvedView ? [...resolvedView.highlights] : [];
+        if (selectedPiece) hl.push({ kind: 'selection', cell: selectedPiece });
+        for (const move of validMovesForSelected) {
+          hl.push({ kind: move.isSwap ? 'legalMoveCapture' : 'legalMoveEmpty', cell: move.to });
+        }
+        if (lastMoveInfo) {
+          hl.push({ kind: 'lastMoveFrom', cell: lastMoveInfo.origin });
+          hl.push({ kind: 'lastMoveTo', cell: lastMoveInfo.destination });
+        }
+        return hl;
+      })();
+  // ---- end BoardView seam ----
 
   // Current player (turn no longer advances until confirmed)
   const displayCurrentPlayer = gameState?.currentPlayer;
@@ -1576,4 +1610,16 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       })()}
     </svg>
   );
+}
+
+/**
+ * Derive a BoardView from the current GameState (store-fallback path).
+ * Returns null when there is no active game state.
+ * Interactive highlights (selection, valid moves, last-move markers) are NOT
+ * included here — they live on store fields and are added by the caller in
+ * renderHighlights.
+ */
+function deriveViewFromStore(gameState: GameState | null | undefined): BoardView | null {
+  if (!gameState) return null;
+  return selectBoardView(gameState);
 }
