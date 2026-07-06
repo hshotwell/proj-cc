@@ -244,6 +244,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const isAnimatingMove = animate && path && path.length > 1;
       set({
         gameState: finalState,
+        // Carry the just-moved piece's landing coord into preMoveSelectedFrom so
+        // the pre-move fire hook can restore it as a normal selection next turn.
+        preMoveSelectedFrom: to,
         selectedPiece: null,
         validMovesForSelected: [],
         pendingConfirmation: false,
@@ -319,6 +322,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({
       gameState: newState,
+      // Carry the just-confirmed piece's landing coord into preMoveSelectedFrom so
+      // the pre-move fire hook can restore it as a normal selection next turn.
+      preMoveSelectedFrom: selectedPiece ?? null,
       pendingConfirmation: false,
       stateBeforeMove: null,
       selectedPiece: null,

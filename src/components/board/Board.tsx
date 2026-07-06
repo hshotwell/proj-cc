@@ -699,8 +699,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     if (preMovesAllowed) { handlePreMoveClick(coord); return; }
     // Allow confirming a pending move even if the game just ended (winning move)
     if (isGameFullyOver(gameState) && !pendingConfirmation) return;
-    // Block interaction during animation or AI turn
-    if (animatingPiece || isAITurn) return;
+    // Block clicks on an AI turn, or on the piece that's currently mid-animation.
+    if (isAITurn) return;
+    if (animatingPiece && cubeEquals(animatingPiece, coord)) return;
 
     // If pending and clicking on the original starting position, undo all moves
     if (pendingConfirmation && originalPiecePosition && cubeEquals(coord, originalPiecePosition)) {
@@ -761,8 +762,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     // Pre-move mode: divert
     if (preMovesAllowed) { handlePreMoveClick(coord); return; }
     if (isGameFullyOver(gameState) && !pendingConfirmation) return;
-    // Block interaction during animation or AI turn
-    if (animatingPiece || isAITurn) return;
+    // Block clicks on an AI turn, or on the piece that's currently mid-animation.
+    if (isAITurn) return;
+    if (animatingPiece && cubeEquals(animatingPiece, coord)) return;
 
     // If pending and clicking on the original starting position, undo all moves
     if (pendingConfirmation && originalPiecePosition && cubeEquals(coord, originalPiecePosition)) {
@@ -813,8 +815,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
 
   const handleMoveClick = (coord: CubeCoord) => {
     if (isReplayActive) return;
-    // Block interaction during animation or AI turn
-    if (animatingPiece || isAITurn) return;
+    // Block clicks on an AI turn, or on the piece that's currently mid-animation.
+    if (isAITurn) return;
+    if (animatingPiece && cubeEquals(animatingPiece, coord)) return;
     // If clicking on the original starting position, undo instead of moving
     if (pendingConfirmation && originalPiecePosition && cubeEquals(coord, originalPiecePosition)) {
       undoLastMove();
