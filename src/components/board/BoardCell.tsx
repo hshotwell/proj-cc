@@ -20,6 +20,12 @@ interface BoardCellProps {
   glassPieces?: boolean;
   hexCells?: boolean;
   showTriangleLines?: boolean;
+  /**
+   * When provided, this cell is in the given player's home/goal zone and
+   * should render the goal-zone shimmer ring in that player's color.
+   * Overrides the internal zone-detection logic when set.
+   */
+  homeZonePlayer?: PlayerIndex;
 }
 
 function lightenColor(hex: string, amount: number): string {
@@ -103,6 +109,7 @@ export function BoardCell({
   glassPieces = false,
   hexCells = false,
   showTriangleLines = false,
+  homeZonePlayer,
 }: BoardCellProps) {
   const { x, y } = cubeToPixel(coord, size);
   const coordKeyStr = `${coord.q},${coord.r}`;
@@ -117,7 +124,15 @@ export function BoardCell({
   let homeIsActive = false;
   let zoneExists = false; // true if cell belongs to any triangle
 
-  if (isCustomLayout && customGoalPositions) {
+  if (homeZonePlayer !== undefined) {
+    // Prop-driven path: caller (Board.tsx via BoardView.homeZones) has already
+    // resolved which player owns this goal zone.
+    goalColor = getPlayerColor(homeZonePlayer, playerColors);
+    zoneExists = true;
+    // Also tint the home-zone background using the same player color.
+    homeColor = goalColor;
+    homeIsActive = true;
+  } else if (isCustomLayout && customGoalPositions) {
     const players: PlayerIndex[] = activePlayers || [0, 1, 2, 3, 4, 5];
     for (const player of players) {
       if (customGoalPositions[player]?.includes(coordKeyStr)) {

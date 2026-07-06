@@ -1210,6 +1210,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
               glassPieces={glassPieces}
               hexCells={hexCells}
               showTriangleLines={showTriangleLines}
+              homeZonePlayer={resolvedView ? homeZonePlayerFor(coord, resolvedView.homeZones) : undefined}
             />
           </g>
         ))}
@@ -1622,4 +1623,16 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
 function deriveViewFromStore(gameState: GameState | null | undefined): BoardView | null {
   if (!gameState) return null;
   return selectBoardView(gameState);
+}
+
+/**
+ * Look up which player (if any) claims `cell` as their home/goal zone
+ * in the given BoardView's homeZones map.
+ * Returns undefined when the cell is not in any player's home zone.
+ */
+function homeZonePlayerFor(cell: CubeCoord, homeZones: BoardView['homeZones']): PlayerIndex | undefined {
+  for (const [player, cells] of homeZones) {
+    if (cells.some(c => cubeEquals(c, cell))) return player;
+  }
+  return undefined;
 }
