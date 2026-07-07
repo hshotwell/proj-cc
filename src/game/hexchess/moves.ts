@@ -92,6 +92,8 @@ export interface PawnPseudoMove {
   to: CubeCoord;
   isCapture: boolean;
   isDoubleStep?: boolean;
+  isEnPassant?: boolean;
+  epCapturedCell?: CubeCoord;
 }
 
 export interface PawnMovesOptions {
@@ -125,6 +127,24 @@ export function pawnMoves(
     const occ = pieceAt(state, diagCell);
     if (occ && occ.player !== piece.player) out.push({ to: diagCell, isCapture: true });
   }
+  // En passant capture: if the diagonal cell is an enPassantTarget, add an en passant move
+  const ep = state.enPassantTarget;
+  if (ep && ep.availableUntilTurn === state.turnNumber) {
+    for (const targetCell of ep.targetCells) {
+      if (diagCell.q === targetCell.q && diagCell.r === targetCell.r) {
+        // Verify the captured piece is actually a pawn
+        const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
+        if (capturedPiece && capturedPiece.player !== piece.player && capturedPiece.type === 'pawn') {
+          out.push({
+            to: diagCell,
+            isCapture: true,
+            isEnPassant: true,
+            epCapturedCell: capturedPiece.cell,
+          });
+        }
+      }
+    }
+  }
   return out;
 }
 
@@ -143,8 +163,26 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
   // and set pendingPromotion accordingly.
   const pendingPromotion = null;
 
-  // TODO(Task 21/22): set enPassantTarget for soldier forward-diagonal or pawn double-step
-  const enPassantTarget = null;
+  // Set enPassantTarget when a pawn does a double-step
+  let enPassantTarget: HexChessState['enPassantTarget'] = null;
+  if (move.isDoubleStep) {
+    const movingPiece = state.pieces.find(p => p.id === move.pieceId);
+    if (movingPiece?.type === 'pawn') {
+      const passedThrough = {
+        q: (move.from.q + move.to.q) / 2,
+        r: (move.from.r + move.to.r) / 2,
+        s: (move.from.s + move.to.s) / 2,
+      };
+      // turnNumber hasn't advanced yet — the next state will have turnNumber+1,
+      // so availableUntilTurn must equal the NEXT turnNumber.
+      const nextTurnNumber = state.turnNumber + 1;
+      enPassantTarget = {
+        capturedPieceId: move.pieceId,
+        targetCells: [passedThrough],
+        availableUntilTurn: nextTurnNumber,
+      };
+    }
+  }
 
   const advanceTurn = pendingPromotion === null;
 
@@ -195,7 +233,7 @@ export function applyMove(state: HexChessState, move: HexMove): HexChessState {
 }
 
 export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexMove[] {
-  let rawTargets: { to: CubeCoord; isCapture?: boolean; isDoubleStep?: boolean }[] = [];
+  let rawTargets: { to: CubeCoord; isCapture?: boolean; isDoubleStep?: boolean; isEnPassant?: boolean; epCapturedCell?: CubeCoord }[] = [];
   switch (piece.type) {
     case 'king':    rawTargets = kingMoves(state, piece).map(to => ({ to })); break;
     case 'queen':   rawTargets = queenMoves(state, piece).map(to => ({ to })); break;
@@ -205,9 +243,16 @@ export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexM
     case 'soldier': rawTargets = soldierMoves(state, piece); break;
     case 'pawn':    rawTargets = pawnMoves(state, piece); break;
   }
-  return rawTargets.map(({ to, isCapture, isDoubleStep }) => {
+  return rawTargets.map(({ to, isCapture, isDoubleStep, isEnPassant, epCapturedCell }) => {
     let capture: HexMove['capture'] = null;
-    if (isCapture || (isCapture === undefined && pieceAt(state, to)?.player !== piece.player && pieceAt(state, to) !== null)) {
+    if (isEnPassant && epCapturedCell) {
+      // En passant: the captured piece is NOT at `to` — find it by id from enPassantTarget
+      const ep = state.enPassantTarget;
+      if (ep) {
+        const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
+        if (capturedPiece) capture = { pieceId: capturedPiece.id, cell: capturedPiece.cell };
+      }
+    } else if (isCapture || (isCapture === undefined && pieceAt(state, to)?.player !== piece.player && pieceAt(state, to) !== null)) {
       const enemy = pieceAt(state, to);
       if (enemy) capture = { pieceId: enemy.id, cell: enemy.cell };
     }
@@ -217,7 +262,7 @@ export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexM
       to,
       capture,
       promotion: null,
-      isEnPassant: false,
+      isEnPassant: isEnPassant ?? false,
       isDoubleStep: isDoubleStep ?? false,
       player: piece.player,
       turnNumber: state.turnNumber,
