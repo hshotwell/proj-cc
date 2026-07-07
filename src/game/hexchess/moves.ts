@@ -85,3 +85,25 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
   }
   return out;
 }
+
+export interface PawnPseudoMove {
+  to: CubeCoord;
+  isCapture: boolean;
+}
+
+export function pawnMoves(state: HexChessState, piece: HexPiece): PawnPseudoMove[] {
+  const out: PawnPseudoMove[] = [];
+  // Move: forward edges (2), only if empty
+  for (const e of forwardEdges(piece.player)) {
+    const cell = cubeAdd(piece.cell, e);
+    if (!isOnBoard(cell)) continue;
+    if (pieceAt(state, cell) === null) out.push({ to: cell, isCapture: false });
+  }
+  // Capture: forward diagonal (1), only if enemy
+  const diagCell = cubeAdd(piece.cell, forwardDiagonal(piece.player));
+  if (isOnBoard(diagCell)) {
+    const occ = pieceAt(state, diagCell);
+    if (occ && occ.player !== piece.player) out.push({ to: diagCell, isCapture: true });
+  }
+  return out;
+}
