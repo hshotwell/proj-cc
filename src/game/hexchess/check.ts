@@ -2,7 +2,8 @@ import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
 import { isOnBoard, pieceAt, kingOf, otherPlayer } from './board';
-import type { HexChessState, HexPiece, HexPlayerIndex } from './state';
+import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
+import { applyMove, pseudoMovesForPiece } from './moves';
 
 /**
  * Compute all cells attacked (defended/threatened) by a sliding piece.
@@ -95,4 +96,34 @@ export function isInCheck(state: HexChessState, player: HexPlayerIndex): boolean
   const king = kingOf(state, player);
   if (!king) return false;
   return isCellAttacked(state, king.cell, otherPlayer(player));
+}
+
+/**
+ * Filters `pseudos` to only those moves that do NOT leave `state.currentPlayer`'s
+ * king in check after the move is applied.
+ */
+export function filterLegal(state: HexChessState, pseudos: HexMove[]): HexMove[] {
+  const mover = state.currentPlayer;
+  return pseudos.filter(move => {
+    const next = applyMove(state, move);
+    // `next.currentPlayer` has flipped; `mover` is the player who just moved.
+    // The move is legal only if it does not leave that player's king in check.
+    return !isInCheck(next, mover);
+  });
+}
+
+/**
+ * Returns all fully legal moves for `state.currentPlayer`: generates pseudo-moves
+ * for every piece belonging to that player, then filters through `filterLegal`.
+ */
+export function legalMoves(state: HexChessState): HexMove[] {
+  const mover = state.currentPlayer;
+  const result: HexMove[] = [];
+  for (const piece of state.pieces) {
+    if (piece.player !== mover) continue;
+    const pseudos = pseudoMovesForPiece(state, piece);
+    const legal = filterLegal(state, pseudos);
+    result.push(...legal);
+  }
+  return result;
 }
