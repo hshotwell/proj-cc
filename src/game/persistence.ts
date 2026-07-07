@@ -1,10 +1,84 @@
-import type { GameState, PlayerIndex, Move, CubeCoord } from '@/types/game';
+import type { GameState, PlayerIndex, Move, CubeCoord, PieceColor } from '@/types/game';
 import type { SavedGameSummary, SavedGameData } from '@/types/replay';
 import { normalizeMoveHistory, reconstructGameStates, findBestHopGain } from './replay';
 import {
   localGameStorage,
   cloudGameStorage,
 } from '@/services/storage';
+import { listSavedHexChessGames } from '@/game/hexchess/persistence';
+import type { HexChessSavedGameSummary } from '@/game/hexchess/persistence';
+
+// ---------------------------------------------------------------------------
+// Unified saved-game summary (merges Sternhalma + hex chess)
+// ---------------------------------------------------------------------------
+
+export interface UnifiedSavedGameSummary {
+  id: string;
+  mode: 'sternhalma' | 'hexchess';
+  createdAt: number;
+  updatedAt: number;
+  players: { color: PieceColor; name: string; isAI: boolean }[];
+  result: null | { winnerLabel: string; reason: string };
+}
+
+/**
+ * Return all saved games from both Sternhalma and hex chess indexes,
+ * merged into a single list sorted by updatedAt descending.
+ *
+ * Malformed or missing index entries are excluded gracefully.
+ */
+export function listAllSavedGames(): UnifiedSavedGameSummary[] {
+  // --- Sternhalma entries ---
+  const sternhalmaEntries: UnifiedSavedGameSummary[] = [];
+  try {
+    const raw = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('chinese-checkers-saved-games')
+      : null;
+    if (raw) {
+      const index = JSON.parse(raw) as SavedGameSummary[];
+      for (const entry of index) {
+        if (!entry || typeof entry.id !== 'string') continue;
+        const ts = entry.dateSaved ?? 0;
+        // Build a minimal players array from activePlayers + playerColors
+        const players: { color: PieceColor; name: string; isAI: boolean }[] =
+          (entry.activePlayers ?? []).map((pi: PlayerIndex, i: number) => ({
+            color: (entry.playerColors?.[pi] ?? '#888888') as PieceColor,
+            name: `Player ${i + 1}`,
+            isAI: entry.aiPlayers != null && entry.aiPlayers[pi] != null,
+          }));
+        sternhalmaEntries.push({
+          id: entry.id,
+          mode: 'sternhalma',
+          createdAt: ts,
+          updatedAt: ts,
+          players,
+          result: null,
+        });
+      }
+    }
+  } catch {
+    // Malformed index — skip all Sternhalma entries
+  }
+
+  // --- Hex chess entries ---
+  let hexEntries: UnifiedSavedGameSummary[] = [];
+  try {
+    const list: HexChessSavedGameSummary[] = listSavedHexChessGames();
+    hexEntries = list.map(entry => ({
+      id: entry.id,
+      mode: 'hexchess' as const,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      players: entry.players,
+      result: entry.result,
+    }));
+  } catch {
+    // Index unavailable — skip hex chess entries
+  }
+
+  // Merge and sort by updatedAt descending
+  return [...sternhalmaEntries, ...hexEntries].sort((a, b) => b.updatedAt - a.updatedAt);
+}
 
 const GAMES_INDEX_KEY = 'chinese-checkers-saved-games';
 const GAME_DATA_PREFIX = 'chinese-checkers-game-';
