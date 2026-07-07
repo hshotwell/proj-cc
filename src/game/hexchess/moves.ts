@@ -3,6 +3,7 @@ import { cubeAdd } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
 import { isOnBoard, pieceAt } from './board';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
+import { isCheckmate, isStalemate } from './check';
 
 export function slidingMoves(
   state: HexChessState,
@@ -108,7 +109,12 @@ export function pawnMoves(state: HexChessState, piece: HexPiece): PawnPseudoMove
   return out;
 }
 
-export function applyMove(state: HexChessState, move: HexMove): HexChessState {
+/**
+ * Core move application: clones state, moves piece, advances turn.
+ * Does NOT detect checkmate/stalemate — used internally by check.ts (filterLegal)
+ * to avoid infinite recursion (filterLegal calls applyMove to probe legality).
+ */
+export function applyMoveCore(state: HexChessState, move: HexMove): HexChessState {
   // Clone pieces array: drop the captured piece (if any), update the moving piece
   const nextPieces = state.pieces
     .filter(p => move.capture === null || p.id !== move.capture!.pieceId)
@@ -132,6 +138,27 @@ export function applyMove(state: HexChessState, move: HexMove): HexChessState {
     currentPlayer: advanceTurn ? ((1 - state.currentPlayer) as 0 | 1) : state.currentPlayer,
     turnNumber: advanceTurn ? state.turnNumber + 1 : state.turnNumber,
   };
+}
+
+/**
+ * Full move application: calls applyMoveCore, then detects checkmate/stalemate
+ * and populates next.result accordingly.
+ */
+export function applyMove(state: HexChessState, move: HexMove): HexChessState {
+  const mover = state.currentPlayer;
+  const next = applyMoveCore(state, move);
+
+  // TODO(Task 23): when pendingPromotion !== null, turn is not yet advanced —
+  // skip result detection until the promotion is resolved.
+  if (next.pendingPromotion === null) {
+    if (isCheckmate(next)) {
+      next.result = { winner: mover, reason: 'checkmate' };
+    } else if (isStalemate(next)) {
+      next.result = { winner: 'draw', reason: 'stalemate' };
+    }
+  }
+
+  return next;
 }
 
 export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexMove[] {

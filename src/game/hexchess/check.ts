@@ -3,7 +3,7 @@ import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
 import { isOnBoard, pieceAt, kingOf, otherPlayer } from './board';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
-import { applyMove, pseudoMovesForPiece } from './moves';
+import { applyMoveCore, pseudoMovesForPiece } from './moves';
 
 /**
  * Compute all cells attacked (defended/threatened) by a sliding piece.
@@ -105,7 +105,9 @@ export function isInCheck(state: HexChessState, player: HexPlayerIndex): boolean
 export function filterLegal(state: HexChessState, pseudos: HexMove[]): HexMove[] {
   const mover = state.currentPlayer;
   return pseudos.filter(move => {
-    const next = applyMove(state, move);
+    // Use applyMoveCore (no result detection) to avoid infinite recursion:
+    // applyMove → isCheckmate → legalMoves → filterLegal → applyMove → ...
+    const next = applyMoveCore(state, move);
     // `next.currentPlayer` has flipped; `mover` is the player who just moved.
     // The move is legal only if it does not leave that player's king in check.
     return !isInCheck(next, mover);
@@ -126,4 +128,22 @@ export function legalMoves(state: HexChessState): HexMove[] {
     result.push(...legal);
   }
   return result;
+}
+
+/**
+ * Returns true if `state.currentPlayer` is in checkmate: they have no legal
+ * moves AND their king is currently in check.
+ * Called after `applyMove` has advanced the turn to the player who may be mated.
+ */
+export function isCheckmate(state: HexChessState): boolean {
+  return legalMoves(state).length === 0 && isInCheck(state, state.currentPlayer);
+}
+
+/**
+ * Returns true if `state.currentPlayer` is stalemated: they have no legal
+ * moves AND their king is NOT currently in check.
+ * Called after `applyMove` has advanced the turn to the player who may be stalemated.
+ */
+export function isStalemate(state: HexChessState): boolean {
+  return legalMoves(state).length === 0 && !isInCheck(state, state.currentPlayer);
 }
