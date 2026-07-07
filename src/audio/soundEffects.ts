@@ -290,3 +290,43 @@ export function playGameOver(): void {
     { freq: 440, delay: 0.34, duration: 0.34, peakGain: 0.28, type: 'sine' },
   ]);
 }
+
+// --- Hex chess sound effects ---
+
+// Percussive marble-collision sound for a piece capture.
+// Lower pitch and shorter envelope than playJump — conveys impact rather than travel.
+// The optional color parameter is accepted for future tonal variation per piece color
+// but currently has no effect on the synthesis.
+export function playCapture(_color?: string): void {
+  playTone({
+    category: 'game',
+    key: 'capture',
+    type: 'sine',
+    freq: 180,
+    duration: 0.055,
+    peakGain: 0.42,
+    freq2: 360,
+    type2: 'sine',
+    peakGain2: 0.15,
+    noise: { duration: 0.025, filterFreq: 2400, peakGain: 0.65 },
+    freqJitter: 0.04,
+    gainJitter: 0.08,
+  });
+}
+
+// Short bell-like chime signalling that the opponent's king is in check.
+export function playCheck(): void {
+  playSequence('game', 'check', [
+    { freq: 1320, delay: 0,    duration: 0.25, peakGain: 0.3,  type: 'sine' },
+    { freq: 1760, delay: 0.04, duration: 0.18, peakGain: 0.18, type: 'triangle' },
+  ]);
+}
+
+// Descending 3-note motif signalling checkmate — ~800 ms total.
+export function playCheckmate(): void {
+  playSequence('game', 'checkmate', [
+    { freq: 880, delay: 0,    duration: 0.28, peakGain: 0.34, type: 'sine' },
+    { freq: 660, delay: 0.26, duration: 0.28, peakGain: 0.32, type: 'sine' },
+    { freq: 440, delay: 0.54, duration: 0.38, peakGain: 0.36, type: 'sine' },
+  ]);
+}
