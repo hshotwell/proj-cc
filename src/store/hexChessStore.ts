@@ -33,6 +33,7 @@ interface HexChessStoreState {
   legalMoveTargets: HexMove[];
   lastMove: HexMove | null;
   animatingCapture: AnimatingCapture | null;
+  captureTimeoutId: ReturnType<typeof setTimeout> | null;
 
   createGame: (config: HexChessConfig) => string;
   selectPiece: (pieceId: string | null) => void;
@@ -51,8 +52,11 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
   legalMoveTargets: [],
   lastMove: null,
   animatingCapture: null,
+  captureTimeoutId: null,
 
   createGame(config) {
+    const { captureTimeoutId } = get();
+    if (captureTimeoutId !== null) clearTimeout(captureTimeoutId);
     const state = createInitialState(config);
     set({
       state,
@@ -62,6 +66,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       legalMoveTargets: [],
       lastMove: null,
       animatingCapture: null,
+      captureTimeoutId: null,
     });
     return config.id;
   },
@@ -104,16 +109,22 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     const move = legalMoveTargets.find(m => cubeEquals(m.to, targetCell));
     if (!move) return false;
 
+    // Cancel any pending capture-animation timeout from a prior move, so a rapid
+    // second capture is not cleared by the first move's stale timer.
+    const { captureTimeoutId: existingTimeout } = get();
+    if (existingTimeout !== null) clearTimeout(existingTimeout);
+
     // If this move captures a piece, snapshot the captured piece BEFORE applyMove
     // removes it from state.pieces, so we can animate its fade-out.
     let animatingCapture: AnimatingCapture | null = null;
+    let captureTimeoutId: ReturnType<typeof setTimeout> | null = null;
     if (move.capture !== null) {
       const capturedPiece = state.pieces.find(p => p.id === move.capture!.pieceId);
       if (capturedPiece) {
         animatingCapture = { piece: capturedPiece, startedAt: Date.now() };
         // Schedule automatic cleanup after the animation window.
-        setTimeout(() => {
-          set({ animatingCapture: null });
+        captureTimeoutId = setTimeout(() => {
+          set({ animatingCapture: null, captureTimeoutId: null });
         }, CAPTURE_ANIM_DURATION_MS);
       }
     }
@@ -125,6 +136,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       selectedPieceId: null,
       legalMoveTargets: [],
       animatingCapture,
+      captureTimeoutId,
     });
     return true;
   },
@@ -150,6 +162,8 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
   },
 
   loadGame(id, savedState, savedConfig) {
+    const { captureTimeoutId } = get();
+    if (captureTimeoutId !== null) clearTimeout(captureTimeoutId);
     set({
       gameId: id,
       state: savedState,
@@ -158,10 +172,13 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       legalMoveTargets: [],
       lastMove: null,
       animatingCapture: null,
+      captureTimeoutId: null,
     });
   },
 
   clearGame() {
+    const { captureTimeoutId } = get();
+    if (captureTimeoutId !== null) clearTimeout(captureTimeoutId);
     set({
       state: null,
       gameId: null,
@@ -170,6 +187,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       legalMoveTargets: [],
       lastMove: null,
       animatingCapture: null,
+      captureTimeoutId: null,
     });
   },
 }));
