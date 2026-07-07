@@ -68,6 +68,8 @@ export function knightMoves(state: HexChessState, piece: HexPiece): CubeCoord[] 
 export interface SoldierPseudoMove {
   to: CubeCoord;
   isCapture: boolean;
+  isEnPassant?: boolean;
+  epCapturedCell?: CubeCoord;
 }
 
 export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseudoMove[] {
@@ -83,6 +85,24 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
     const occ = pieceAt(state, cell);
     if (occ && occ.player !== piece.player) {
       out.push({ to: cell, isCapture: true });
+    }
+  }
+  // En passant: if there is an active soldier en passant target and this soldier's
+  // forward diagonal lands on one of the passed-through cells, add an EP move.
+  const ep = state.enPassantTarget;
+  if (ep && ep.availableUntilTurn === state.turnNumber) {
+    const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
+    if (capturedPiece && capturedPiece.player !== piece.player && capturedPiece.type === 'soldier') {
+      for (const targetCell of ep.targetCells) {
+        if (forwardDiagCell.q === targetCell.q && forwardDiagCell.r === targetCell.r) {
+          out.push({
+            to: forwardDiagCell,
+            isCapture: true,
+            isEnPassant: true,
+            epCapturedCell: capturedPiece.cell,
+          });
+        }
+      }
     }
   }
   return out;
@@ -163,25 +183,35 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
   // and set pendingPromotion accordingly.
   const pendingPromotion = null;
 
-  // Set enPassantTarget when a pawn does a double-step
+  // Set enPassantTarget when a pawn does a double-step, or a soldier does a forward-diagonal non-capture move.
   let enPassantTarget: HexChessState['enPassantTarget'] = null;
-  if (move.isDoubleStep) {
-    const movingPiece = state.pieces.find(p => p.id === move.pieceId);
-    if (movingPiece?.type === 'pawn') {
-      const passedThrough = {
-        q: (move.from.q + move.to.q) / 2,
-        r: (move.from.r + move.to.r) / 2,
-        s: (move.from.s + move.to.s) / 2,
-      };
-      // turnNumber hasn't advanced yet — the next state will have turnNumber+1,
-      // so availableUntilTurn must equal the NEXT turnNumber.
-      const nextTurnNumber = state.turnNumber + 1;
-      enPassantTarget = {
-        capturedPieceId: move.pieceId,
-        targetCells: [passedThrough],
-        availableUntilTurn: nextTurnNumber,
-      };
-    }
+  const movingPiece = state.pieces.find(p => p.id === move.pieceId);
+  // turnNumber hasn't advanced yet — the next state will have turnNumber+1,
+  // so availableUntilTurn must equal the NEXT turnNumber.
+  const nextTurnNumber = state.turnNumber + 1;
+  if (move.isDoubleStep && movingPiece?.type === 'pawn') {
+    const passedThrough = {
+      q: (move.from.q + move.to.q) / 2,
+      r: (move.from.r + move.to.r) / 2,
+      s: (move.from.s + move.to.s) / 2,
+    };
+    enPassantTarget = {
+      capturedPieceId: move.pieceId,
+      targetCells: [passedThrough],
+      availableUntilTurn: nextTurnNumber,
+    };
+  } else if (movingPiece?.type === 'soldier' && move.capture === null && !move.isEnPassant) {
+    // Soldier forward-diagonal non-capture: the passed-through cells are
+    // the two edge-neighbors shared by move.from and move.to.
+    // Since to = from + (e1 + e2), the two cells are from + e1 and from + e2.
+    const [e1, e2] = forwardEdges(movingPiece.player);
+    const passedCell1 = cubeAdd(move.from, e1);
+    const passedCell2 = cubeAdd(move.from, e2);
+    enPassantTarget = {
+      capturedPieceId: move.pieceId,
+      targetCells: [passedCell1, passedCell2],
+      availableUntilTurn: nextTurnNumber,
+    };
   }
 
   const advanceTurn = pendingPromotion === null;
