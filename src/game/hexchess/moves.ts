@@ -2,7 +2,7 @@ import type { CubeCoord } from '@/types/game';
 import { cubeAdd } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
 import { isOnBoard, pieceAt } from './board';
-import type { HexChessState, HexPiece, HexPlayerIndex } from './state';
+import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
 
 export function slidingMoves(
   state: HexChessState,
@@ -106,4 +106,35 @@ export function pawnMoves(state: HexChessState, piece: HexPiece): PawnPseudoMove
     if (occ && occ.player !== piece.player) out.push({ to: diagCell, isCapture: true });
   }
   return out;
+}
+
+export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexMove[] {
+  let rawTargets: { to: CubeCoord; isCapture?: boolean }[] = [];
+  switch (piece.type) {
+    case 'king':    rawTargets = kingMoves(state, piece).map(to => ({ to })); break;
+    case 'queen':   rawTargets = queenMoves(state, piece).map(to => ({ to })); break;
+    case 'rook':    rawTargets = rookMoves(state, piece).map(to => ({ to })); break;
+    case 'bishop':  rawTargets = bishopMoves(state, piece).map(to => ({ to })); break;
+    case 'knight':  rawTargets = knightMoves(state, piece).map(to => ({ to })); break;
+    case 'soldier': rawTargets = soldierMoves(state, piece); break;
+    case 'pawn':    rawTargets = pawnMoves(state, piece); break;
+  }
+  return rawTargets.map(({ to, isCapture }) => {
+    let capture: HexMove['capture'] = null;
+    if (isCapture || (isCapture === undefined && pieceAt(state, to)?.player !== piece.player && pieceAt(state, to) !== null)) {
+      const enemy = pieceAt(state, to);
+      if (enemy) capture = { pieceId: enemy.id, cell: enemy.cell };
+    }
+    return {
+      pieceId: piece.id,
+      from: piece.cell,
+      to,
+      capture,
+      promotion: null,
+      isEnPassant: false,
+      isDoubleStep: false,
+      player: piece.player,
+      turnNumber: state.turnNumber,
+    };
+  });
 }
