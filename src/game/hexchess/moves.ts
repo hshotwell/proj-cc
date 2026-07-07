@@ -108,6 +108,32 @@ export function pawnMoves(state: HexChessState, piece: HexPiece): PawnPseudoMove
   return out;
 }
 
+export function applyMove(state: HexChessState, move: HexMove): HexChessState {
+  // Clone pieces array: drop the captured piece (if any), update the moving piece
+  const nextPieces = state.pieces
+    .filter(p => move.capture === null || p.id !== move.capture!.pieceId)
+    .map(p => p.id === move.pieceId ? { ...p, cell: move.to, hasMoved: true } : p);
+
+  // TODO(Task 23): detect promotion — soldier/pawn arriving on the opposing arm
+  // and set pendingPromotion accordingly.
+  const pendingPromotion = null;
+
+  // TODO(Task 21/22): set enPassantTarget for soldier forward-diagonal or pawn double-step
+  const enPassantTarget = null;
+
+  const advanceTurn = pendingPromotion === null;
+
+  return {
+    ...state,
+    pieces: nextPieces,
+    moveHistory: [...state.moveHistory, move],
+    enPassantTarget,
+    pendingPromotion,
+    currentPlayer: advanceTurn ? ((1 - state.currentPlayer) as 0 | 1) : state.currentPlayer,
+    turnNumber: advanceTurn ? state.turnNumber + 1 : state.turnNumber,
+  };
+}
+
 export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexMove[] {
   let rawTargets: { to: CubeCoord; isCapture?: boolean }[] = [];
   switch (piece.type) {
