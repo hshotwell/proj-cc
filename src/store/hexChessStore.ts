@@ -15,6 +15,7 @@ import { cubeEquals, parseCoordKey } from '@/game/coordinates';
 import { getDefaultBoardCells } from '@/game/defaultLayout';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
 import { kingOf, otherPlayer } from '@/game/hexchess/board';
+import { saveHexChessGame } from '@/game/hexchess/persistence';
 
 /** Duration (ms) the captured piece overlay persists for the fade-out animation. */
 const CAPTURE_ANIM_DURATION_MS = 400;
@@ -68,6 +69,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       animatingCapture: null,
       captureTimeoutId: null,
     });
+    saveHexChessGame(config, state);
     return config.id;
   },
 
@@ -138,19 +140,22 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       animatingCapture,
       captureTimeoutId,
     });
+    const { config: currentConfig } = get();
+    if (currentConfig) saveHexChessGame(currentConfig, nextState);
     return true;
   },
 
   confirmPromotion(choice) {
-    const { state } = get();
+    const { state, config } = get();
     if (!state || !state.pendingPromotion) return;
 
     const nextState = applyConfirmPromotion(state, choice);
     set({ state: nextState });
+    if (config) saveHexChessGame(config, nextState);
   },
 
   resign() {
-    const { state } = get();
+    const { state, config } = get();
     if (!state || state.result !== null) return;
 
     const winner: 0 | 1 = state.currentPlayer === 0 ? 1 : 0;
@@ -159,6 +164,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       result: { winner, reason: 'resignation' },
     };
     set({ state: nextState });
+    if (config) saveHexChessGame(config, nextState);
   },
 
   loadGame(id, savedState, savedConfig) {
@@ -174,6 +180,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       animatingCapture: null,
       captureTimeoutId: null,
     });
+    saveHexChessGame(savedConfig, savedState);
   },
 
   clearGame() {

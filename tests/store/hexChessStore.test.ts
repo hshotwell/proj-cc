@@ -1,10 +1,30 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// localStorage mock — must be set up BEFORE any module that touches persistence
+// ---------------------------------------------------------------------------
+
+const _lsStore: Record<string, string> = {};
+const _localStorageMock = {
+  getItem: (key: string) => _lsStore[key] ?? null,
+  setItem: (key: string, value: string) => { _lsStore[key] = value; },
+  removeItem: (key: string) => { delete _lsStore[key]; },
+  clear: () => { Object.keys(_lsStore).forEach(k => delete _lsStore[k]); },
+};
+vi.stubGlobal('localStorage', _localStorageMock);
+vi.stubGlobal('window', { localStorage: _localStorageMock });
+
+// ---------------------------------------------------------------------------
+// Module imports (after mock)
+// ---------------------------------------------------------------------------
+
 import { useHexChessStore } from '@/store/hexChessStore';
 import {
   createInitialState,
   legalMoves,
 } from '@/game/hexchess';
 import type { HexChessConfig, HexChessState } from '@/game/hexchess';
+import { loadHexChessGame } from '@/game/hexchess/persistence';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,6 +45,7 @@ function makeConfig(id = 'test-game'): HexChessConfig {
 
 function reset() {
   useHexChessStore.getState().clearGame();
+  _localStorageMock.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +196,49 @@ describe('hexChessStore', () => {
     expect(s.state!.result).not.toBeNull();
     expect(s.state!.result!.winner).toBe(1);
     expect(s.state!.result!.reason).toBe('resignation');
+  });
+
+  // Persistence tests
+
+  // P1. createGame persists to localStorage
+  it('createGame writes the game to localStorage', () => {
+    const config = makeConfig('persist-create');
+    useHexChessStore.getState().createGame(config);
+    const saved = loadHexChessGame('persist-create');
+    expect(saved).not.toBeNull();
+    expect(saved!.id).toBe('persist-create');
+    expect(saved!.mode).toBe('hexchess');
+  });
+
+  // P2. attemptMove persists updated state
+  it('attemptMove persists the updated state to localStorage', () => {
+    const config = makeConfig('persist-move');
+    useHexChessStore.getState().createGame(config);
+    const state = useHexChessStore.getState().state!;
+    const legal = legalMoves(state);
+    const move = legal[0];
+    useHexChessStore.getState().selectPiece(move.pieceId);
+    useHexChessStore.getState().attemptMove(move.to);
+
+    const saved = loadHexChessGame('persist-move');
+    expect(saved).not.toBeNull();
+    // After the move, the saved state's currentPlayer should be 1 (turn advanced).
+    expect(saved!.state.currentPlayer).toBe(1);
+    // Move history should contain one entry.
+    expect(saved!.moveHistory).toHaveLength(1);
+  });
+
+  // P3. resign persists the result
+  it('resign persists the result to localStorage', () => {
+    const config = makeConfig('persist-resign');
+    useHexChessStore.getState().createGame(config);
+    useHexChessStore.getState().resign();
+
+    const saved = loadHexChessGame('persist-resign');
+    expect(saved).not.toBeNull();
+    expect(saved!.result).not.toBeNull();
+    expect(saved!.result!.winner).toBe(1);
+    expect(saved!.result!.reason).toBe('resignation');
   });
 
   // 9. loadGame and clearGame round-trip
