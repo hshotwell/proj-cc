@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import type { CubeCoord, PlayerIndex } from '@/types/game';
-import type { HexChessConfig, HexChessState, HexMove, HexPieceType } from '@/game/hexchess';
+import type { HexChessConfig, HexChessState, HexMove, HexPiece, HexPieceType } from '@/game/hexchess';
 import {
   createInitialState,
   applyMove,
@@ -16,6 +16,15 @@ import { getDefaultBoardCells } from '@/game/defaultLayout';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
 import { kingOf, otherPlayer } from '@/game/hexchess/board';
 
+/** Duration (ms) the captured piece overlay persists for the fade-out animation. */
+const CAPTURE_ANIM_DURATION_MS = 400;
+
+/** Captured piece kept alive in the store for the fade-out window. */
+export interface AnimatingCapture {
+  piece: HexPiece;
+  startedAt: number;
+}
+
 interface HexChessStoreState {
   state: HexChessState | null;
   gameId: string | null;
@@ -23,6 +32,7 @@ interface HexChessStoreState {
   selectedPieceId: string | null;
   legalMoveTargets: HexMove[];
   lastMove: HexMove | null;
+  animatingCapture: AnimatingCapture | null;
 
   createGame: (config: HexChessConfig) => string;
   selectPiece: (pieceId: string | null) => void;
@@ -40,6 +50,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
   selectedPieceId: null,
   legalMoveTargets: [],
   lastMove: null,
+  animatingCapture: null,
 
   createGame(config) {
     const state = createInitialState(config);
@@ -50,6 +61,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       selectedPieceId: null,
       legalMoveTargets: [],
       lastMove: null,
+      animatingCapture: null,
     });
     return config.id;
   },
@@ -92,12 +104,27 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     const move = legalMoveTargets.find(m => cubeEquals(m.to, targetCell));
     if (!move) return false;
 
+    // If this move captures a piece, snapshot the captured piece BEFORE applyMove
+    // removes it from state.pieces, so we can animate its fade-out.
+    let animatingCapture: AnimatingCapture | null = null;
+    if (move.capture !== null) {
+      const capturedPiece = state.pieces.find(p => p.id === move.capture!.pieceId);
+      if (capturedPiece) {
+        animatingCapture = { piece: capturedPiece, startedAt: Date.now() };
+        // Schedule automatic cleanup after the animation window.
+        setTimeout(() => {
+          set({ animatingCapture: null });
+        }, CAPTURE_ANIM_DURATION_MS);
+      }
+    }
+
     const nextState = applyMove(state, move);
     set({
       state: nextState,
       lastMove: move,
       selectedPieceId: null,
       legalMoveTargets: [],
+      animatingCapture,
     });
     return true;
   },
@@ -130,6 +157,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       selectedPieceId: null,
       legalMoveTargets: [],
       lastMove: null,
+      animatingCapture: null,
     });
   },
 
@@ -141,6 +169,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       selectedPieceId: null,
       legalMoveTargets: [],
       lastMove: null,
+      animatingCapture: null,
     });
   },
 }));
@@ -151,6 +180,8 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
  */
 export function selectHexChessBoardView(store: HexChessStoreState): BoardView | null {
   const { state, config, selectedPieceId, legalMoveTargets, lastMove } = store;
+  // animatingCapture may be absent in legacy test snapshots (passed via `as never`)
+  const animatingCapture: AnimatingCapture | null = store.animatingCapture ?? null;
 
   if (!state || !config) return null;
 
@@ -172,6 +203,20 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     pieceType: piece.type,
     faded: false,
   }));
+
+  // If a capture animation is in progress, overlay the captured piece as faded
+  // so Board.tsx can render it fading out. applyMove already removed it from
+  // state.pieces, so we append it here for the duration of the animation window.
+  if (animatingCapture !== null) {
+    const cp = animatingCapture.piece;
+    pieces.push({
+      id: cp.id,
+      cell: cp.cell,
+      color: config.players[cp.player].color,
+      pieceType: cp.type,
+      faded: true,
+    });
+  }
 
   // Build highlights
   const highlights: BoardHighlight[] = [];

@@ -36,6 +36,8 @@ interface PieceProps {
   showActivePlayerRing?: boolean;
   // Optional piece type; when set to a value other than 'marble' or undefined, renders a placeholder glyph
   pieceType?: BoardPieceType;
+  // When true, fade the piece out (used for capture animation overlay)
+  faded?: boolean;
 }
 
 // Metallic colors that get special shiny treatment
@@ -398,6 +400,7 @@ export function Piece({
   boardRotation = 0,
   showActivePlayerRing = false,
   pieceType,
+  faded = false,
 }: PieceProps) {
   // Start the global sheen sync loop (idempotent)
   useEffect(() => { startSheenSync(); }, []);
@@ -462,7 +465,10 @@ export function Piece({
         // No CSS transition when using pixel-based arc animation (RAF handles it)
         transition: isAnimating && !displayPx
           ? `transform ${animationDuration ?? MOVE_ANIMATION_DURATION}ms ease-in-out`
+          : faded
+          ? 'opacity 180ms ease-out'
           : undefined,
+        opacity: faded ? 0 : undefined,
       }}
     >
       {useGlassGradient && (
