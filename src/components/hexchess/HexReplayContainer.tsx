@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { loadHexChessGame } from '@/game/hexchess/persistence';
-import { createInitialState, applyMove } from '@/game/hexchess';
+import { createInitialState, applyMove, confirmPromotion } from '@/game/hexchess';
 import { selectHexChessBoardView } from '@/store/hexChessStore';
 import { Board } from '@/components/board/Board';
 import { HexTurnIndicator } from '@/components/hexchess/HexTurnIndicator';
@@ -20,7 +20,12 @@ export function HexReplayContainer({ gameId }: HexReplayContainerProps) {
     if (!saved) return [];
     const arr = [createInitialState(saved.config)];
     for (const move of saved.moveHistory) {
-      arr.push(applyMove(arr[arr.length - 1], move));
+      let next = applyMove(arr[arr.length - 1], move);
+      // If a promotion is pending and this move recorded a promotion choice, apply it.
+      if (next.pendingPromotion !== null && move.promotion !== null) {
+        next = confirmPromotion(next, move.promotion);
+      }
+      arr.push(next);
     }
     return arr;
   }, [saved]);

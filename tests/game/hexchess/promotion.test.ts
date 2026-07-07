@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyMoveCore, applyMove } from '@/game/hexchess/moves';
 import { confirmPromotion } from '@/game/hexchess/promotion';
-import { armCellsForPlayer } from '@/game/hexchess/starting';
+import { armCellsForPlayer, createInitialState } from '@/game/hexchess/starting';
 import type { HexChessState, HexPiece, HexMove } from '@/game/hexchess/state';
 import { coordKey, cubeCoord } from '@/game/coordinates';
 
@@ -260,5 +260,62 @@ describe('confirmPromotion', () => {
     expect(confirmed.result).not.toBeNull();
     expect(confirmed.result!.reason).toBe('checkmate');
     expect(confirmed.result!.winner).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test: replay reconstruction — promotions in moveHistory are applied
+// ---------------------------------------------------------------------------
+
+describe('replay reconstruction with promotion', () => {
+  it('reconstructing a moveHistory that includes a promotion yields the promoted piece type', () => {
+    // Build a state with a soldier one step away from the promotion zone.
+    const targetCell = armCellsForPlayer(1)[9]; // last base-row cell of player 1's arm
+    const soldier: HexPiece = {
+      id: 's0-soldier',
+      player: 0,
+      type: 'soldier',
+      cell: cubeCoord(0, 0),
+      hasMoved: true,
+    };
+    const king0: HexPiece = {
+      id: 'k0', player: 0, type: 'king', cell: cubeCoord(4, -8), hasMoved: false,
+    };
+    const king1: HexPiece = {
+      id: 'k1', player: 1, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false,
+    };
+
+    const initial = stateWith([soldier, king0, king1]);
+
+    // Simulate what the store records: applyMove followed by confirmPromotion.
+    const afterMove = applyMove(initial, buildMove(soldier, targetCell));
+    expect(afterMove.pendingPromotion).not.toBeNull();
+    const afterConfirm = confirmPromotion(afterMove, 'queen');
+    expect(afterConfirm.pendingPromotion).toBeNull();
+
+    // moveHistory now contains one entry with promotion = 'queen'.
+    const moveHistory = afterConfirm.moveHistory;
+    expect(moveHistory).toHaveLength(1);
+    expect(moveHistory[0].promotion).toBe('queen');
+
+    // Replay reconstruction: reproduce what HexReplayContainer does.
+    const arr = [initial];
+    for (const move of moveHistory) {
+      let next = applyMove(arr[arr.length - 1], move);
+      if (next.pendingPromotion !== null && move.promotion !== null) {
+        next = confirmPromotion(next, move.promotion);
+      }
+      arr.push(next);
+    }
+
+    // The final state should have the soldier promoted to a queen.
+    const finalState = arr[arr.length - 1];
+    const promotedPiece = finalState.pieces.find(p => p.id === 's0-soldier');
+    expect(promotedPiece).toBeDefined();
+    expect(promotedPiece!.type).toBe('queen');
+    // pendingPromotion cleared
+    expect(finalState.pendingPromotion).toBeNull();
+    // Turn advanced past player 0
+    expect(finalState.currentPlayer).toBe(1);
   });
 });
