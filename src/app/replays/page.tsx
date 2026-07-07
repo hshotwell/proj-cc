@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { SavedGameSummary, SavedGameData } from '@/types/replay';
 import { getPlayerColor, getPlayerDisplayName } from '@/game/colors';
-import { getSavedGamesList, deleteSavedGame, importSavedGame } from '@/game/persistence';
+import {
+  getSavedGamesList,
+  deleteSavedGame,
+  importSavedGame,
+  listAllSavedGames,
+} from '@/game/persistence';
+import type { UnifiedSavedGameSummary } from '@/game/persistence';
+import { deleteHexChessGame } from '@/game/hexchess/persistence';
 
 const GAME_MODE_LABELS: Record<string, string> = {
   turbo: 'Turbo mode',
@@ -24,18 +31,38 @@ function describeVariations(game: SavedGameSummary): string {
 
 export default function ReplaysPage() {
   const router = useRouter();
-  const [games, setGames] = useState<SavedGameSummary[]>([]);
+  const [unified, setUnified] = useState<UnifiedSavedGameSummary[]>([]);
+  // Keep the full Sternhalma summaries for enriched display (winner color, moves, board name, etc.)
+  const [sternhalmaMap, setSternhalmaMap] = useState<Map<string, SavedGameSummary>>(new Map());
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  function refresh() {
+    setUnified(listAllSavedGames());
+    const list = getSavedGamesList();
+    setSternhalmaMap(new Map(list.map((g) => [g.id, g])));
+  }
+
   useEffect(() => {
-    setGames(getSavedGamesList());
+    refresh();
   }, []);
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = (entry: UnifiedSavedGameSummary, e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteSavedGame(id);
-    setGames(getSavedGamesList());
+    if (entry.mode === 'hexchess') {
+      deleteHexChessGame(entry.id);
+    } else {
+      deleteSavedGame(entry.id);
+    }
+    refresh();
+  };
+
+  const handleClick = (entry: UnifiedSavedGameSummary) => {
+    if (entry.mode === 'hexchess') {
+      router.push(`/hexchess/replay/${entry.id}`);
+    } else {
+      router.push(`/replay/${entry.id}`);
+    }
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +80,7 @@ export default function ReplaysPage() {
         errors.push(`${file.name}: ${err instanceof Error ? err.message : 'parse error'}`);
       }
     }
-    setGames(getSavedGamesList());
+    refresh();
     if (errors.length > 0) setImportError(errors.join('; '));
   };
 
@@ -92,7 +119,7 @@ export default function ReplaysPage() {
           </div>
         )}
 
-        {games.length === 0 ? (
+        {unified.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <p className="text-gray-500 mb-4">No saved games yet</p>
             <Link
@@ -104,55 +131,172 @@ export default function ReplaysPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {games.map((game) => {
-              const winnerColor = getPlayerColor(game.winner, game.playerColors);
-              const winnerName = getPlayerDisplayName(game.winner, game.activePlayers);
-              const dateStr = new Date(game.dateSaved).toLocaleDateString(undefined, {
+            {unified.map((entry) => {
+              if (entry.mode === 'sternhalma') {
+                // Use the full SavedGameSummary from the Sternhalma index for rich display
+                const game = sternhalmaMap.get(entry.id);
+                if (!game) {
+                  // Fallback: render minimal row using unified shape
+                  const dateStr = new Date(entry.updatedAt).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  return (
+                    <div
+                      key={entry.id}
+                      onClick={() => handleClick(entry)}
+                      className="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 flex-shrink-0">
+                            CC
+                          </span>
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {entry.players.length} players
+                            </div>
+                            <div className="text-xs text-gray-500">{dateStr}</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => handleDelete(entry, e)}
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                          title="Delete"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const winnerColor = getPlayerColor(game.winner, game.playerColors);
+                const winnerName = getPlayerDisplayName(game.winner, game.activePlayers);
+                const dateStr = new Date(game.dateSaved).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+
+                return (
+                  <div
+                    key={entry.id}
+                    onClick={() => handleClick(entry)}
+                    className="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 flex-shrink-0">
+                          CC
+                        </span>
+                        <div
+                          className="w-5 h-5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: winnerColor }}
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            <span style={{ color: winnerColor }}>{winnerName}</span> won
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {game.playerCount} players &middot; {game.totalMoves} moves &middot; {dateStr}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right mr-1">
+                          <div className="text-sm text-gray-700 leading-tight">
+                            {game.boardName ?? 'Standard Board'}
+                          </div>
+                          <div className="text-xs text-gray-400 leading-tight">
+                            {describeVariations(game)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); router.push(`/review/${entry.id}`); }}
+                          className="text-xs px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                          title="Review this game"
+                        >
+                          Review
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(entry, e)}
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                          title="Delete"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Hex chess row
+              const dateStr = new Date(entry.updatedAt).toLocaleDateString(undefined, {
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit',
               });
+              const winner = entry.result?.winnerLabel ?? null;
+              const winnerPlayer = entry.players.find(
+                (p) => winner && (p.name === winner || p.color === winner),
+              );
+              const winnerColor = winnerPlayer?.color ?? null;
 
               return (
                 <div
-                  key={game.id}
-                  onClick={() => router.push(`/replay/${game.id}`)}
+                  key={entry.id}
+                  onClick={() => handleClick(entry)}
                   className="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="w-5 h-5 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: winnerColor }}
-                      />
+                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0">
+                        Hex
+                      </span>
+                      {winnerColor && (
+                        <div
+                          className="w-5 h-5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: winnerColor }}
+                        />
+                      )}
                       <div>
                         <div className="font-medium text-gray-900">
-                          <span style={{ color: winnerColor }}>{winnerName}</span> won
+                          {entry.result ? (
+                            winnerColor ? (
+                              <span style={{ color: winnerColor }}>{winner}</span>
+                            ) : (
+                              <span>{winner}</span>
+                            )
+                          ) : (
+                            <span className="text-gray-500">In progress</span>
+                          )}
+                          {entry.result && ' won'}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {game.playerCount} players &middot; {game.totalMoves} moves &middot; {dateStr}
+                          {entry.players.length} players &middot; {dateStr}
+                          {entry.result?.reason ? ` · ${entry.result.reason}` : ''}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right mr-1">
-                        <div className="text-sm text-gray-700 leading-tight">
-                          {game.boardName ?? 'Standard Board'}
-                        </div>
+                        <div className="text-sm text-gray-700 leading-tight">Hex Chess</div>
                         <div className="text-xs text-gray-400 leading-tight">
-                          {describeVariations(game)}
+                          {entry.players.map((p) => p.name).join(' vs ')}
                         </div>
                       </div>
                       <button
-                        onClick={(e) => { e.stopPropagation(); router.push(`/review/${game.id}`); }}
-                        className="text-xs px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
-                        title="Review this game"
-                      >
-                        Review
-                      </button>
-                      <button
-                        onClick={(e) => handleDelete(game.id, e)}
+                        onClick={(e) => handleDelete(entry, e)}
                         className="text-gray-400 hover:text-red-500 transition-colors p-1"
                         title="Delete"
                       >
