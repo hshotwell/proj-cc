@@ -7,6 +7,7 @@ import { MOVE_ANIMATION_DURATION, RAINBOW_UI_COLORS } from '@/game/constants';
 import { cubeToPixel } from '@/game/coordinates';
 import { getPlayerColor } from '@/game/colors';
 import { startSheenSync, METALLIC_SHEEN_KEY } from '@/game/sheenSync';
+import { pieceIconFor } from '@/components/board/pieceIcons';
 
 
 interface PieceProps {
@@ -2330,21 +2331,25 @@ export function Piece({
           />
         );
       })()}
-      {/* Placeholder glyph for non-marble piece types */}
-      {pieceType && pieceType !== 'marble' && (
-        <text
-          x={0}
-          y={0}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={pieceRadius * 0.9}
-          fontWeight="bold"
-          fill={glyphColor(baseColor)}
-          pointerEvents="none"
-        >
-          {pieceType[0].toUpperCase()}
-        </text>
-      )}
+      {/* Chess piece icon glyph for non-marble piece types */}
+      {pieceType && pieceType !== 'marble' && (() => {
+        const IconComponent = pieceIconFor(pieceType);
+        if (!IconComponent) return null;
+        const iconSize = pieceRadius * 1.6;
+        return (
+          <g opacity={glassPieces ? 0.85 : 1}>
+            <svg
+              x={-iconSize / 2}
+              y={-iconSize / 2}
+              width={iconSize}
+              height={iconSize}
+              style={{ pointerEvents: 'none' }}
+            >
+              <IconComponent size={iconSize} fill={glyphColor(baseColor)} />
+            </svg>
+          </g>
+        );
+      })()}
     </g>
   );
 }
