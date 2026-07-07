@@ -104,6 +104,15 @@ export default function PlayPage() {
 
   useEffect(() => { loadLayouts(); }, [loadLayouts]);
 
+  // When switching to Hex Chess, lock to standard board and 2 players
+  useEffect(() => {
+    if (gameMode === 'hexchess') {
+      setSelectedCount(2);
+      setSelectedLayout(null);
+      setShowBoardSelector(false);
+    }
+  }, [gameMode]);
+
   // On first mount, seed colors from favoriteColor
   useEffect(() => {
     const { favoriteColor } = useSettingsStore.getState();
@@ -601,15 +610,21 @@ export default function PlayPage() {
                 {selectedLayout ? `${selectedLayout.cells.length} cells` : '121 cells · classic Chinese Checkers'}
               </div>
             </div>
-            <button
-              onClick={() => setShowBoardSelector(v => !v)}
-              className="px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
-            >
-              {showBoardSelector ? 'Close' : 'Select Board'}
-            </button>
+            {gameMode !== 'hexchess' && (
+              <button
+                onClick={() => setShowBoardSelector(v => !v)}
+                className="px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+              >
+                {showBoardSelector ? 'Close' : 'Select Board'}
+              </button>
+            )}
           </div>
 
-          {showBoardSelector && (
+          {gameMode === 'hexchess' ? (
+            <p className="mt-3 text-sm text-gray-500 italic">
+              Hex Chess v1 supports only the standard 121-cell board. Custom layouts coming later.
+            </p>
+          ) : showBoardSelector && (
             <div className="mt-4 border-t border-gray-100 pt-4 space-y-2 max-h-80 overflow-y-auto">
               {/* Standard board option */}
               <button
@@ -668,21 +683,34 @@ export default function PlayPage() {
 
         {/* Player count */}
         {!selectedLayout ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {PLAYER_COUNT_OPTIONS.map(({ count, description }) => (
-              <button
-                key={count}
-                onClick={() => setSelectedCount(count)}
-                className={`p-6 rounded-xl border-2 transition-all ${
-                  selectedCount === count
-                    ? 'border-blue-500 bg-blue-50 shadow-lg'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                <div className="text-4xl font-bold text-gray-900 mb-1">{count}</div>
-                <div className="text-sm text-gray-500">{description}</div>
-              </button>
-            ))}
+          <div className="mb-8">
+            {gameMode === 'hexchess' && (
+              <p className="text-sm text-gray-500 italic mb-2">
+                Hex Chess v1 supports only 2 players. More player counts coming later.
+              </p>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {PLAYER_COUNT_OPTIONS.map(({ count, description }) => {
+                const lockedOut = gameMode === 'hexchess' && count !== 2;
+                return (
+                  <button
+                    key={count}
+                    onClick={() => { if (!lockedOut) setSelectedCount(count); }}
+                    disabled={lockedOut}
+                    className={`p-6 rounded-xl border-2 transition-all ${
+                      selectedCount === count
+                        ? 'border-blue-500 bg-blue-50 shadow-lg'
+                        : lockedOut
+                        ? 'border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="text-4xl font-bold text-gray-900 mb-1">{count}</div>
+                    <div className="text-sm text-gray-500">{description}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : availableCustomCounts.length > 1 ? (
           <div className="bg-white rounded-xl shadow p-4 mb-8">
