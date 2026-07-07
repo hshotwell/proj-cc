@@ -450,14 +450,17 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     return () => clearInterval(timer);
   }, [hopParticles.length]);
 
-  // Generate board positions - use game state for custom layouts, or standard positions
+  // Generate board positions - use viewProp.cells when available, else game state / standard
   const boardPositions = useMemo(() => {
+    if (viewProp) {
+      return viewProp.cells;
+    }
     if (gameState?.isCustomLayout) {
       // Extract positions from the game state board
       return Array.from(gameState.board.keys()).map(parseCoordKey);
     }
     return generateBoardPositions();
-  }, [gameState?.isCustomLayout, gameState?.board]);
+  }, [viewProp, gameState?.isCustomLayout, gameState?.board]);
 
   // Board cell keys as a set (used for triangle detection and border edges)
   const boardKeys = useMemo(() => {
@@ -500,8 +503,20 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
   }, [boardPositions]);
 
-  // Get pieces from board state
+  // Get pieces from viewProp or board state
   const pieces = useMemo(() => {
+    if (viewProp) {
+      // Hex chess path: pieces come directly from the view.
+      // BoardPiece carries `color` (not player index); we use player=0 with a per-piece
+      // customColors override so <Piece> receives the exact color via its normal lookup path.
+      return viewProp.pieces.map(p => ({
+        coord: p.cell,
+        player: 0 as PlayerIndex,
+        color: p.color,
+        pieceType: p.pieceType,
+        faded: p.faded,
+      }));
+    }
     if (!gameState) return [];
     // During a swap arc animation, hide both pieces (they are rendered by the arc overlay).
     // For non-swap animations, hide only the displaced piece at animationPath[0].
@@ -509,7 +524,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       animatingPiece && animationPath ? coordKey(animationPath[0]) : null;
     const hideMovingKey =
       isSwapAnimation && animatingPiece ? coordKey(animatingPiece) : null;
-    const result: Array<{ coord: CubeCoord; player: PlayerIndex }> = [];
+    const result: Array<{ coord: CubeCoord; player: PlayerIndex; color?: string; pieceType?: import('@/types/boardView').BoardPieceType; faded?: boolean }> = [];
     for (const [key, content] of gameState.board) {
       if (content.type === 'piece') {
         if (hideDisplacedKey && key === hideDisplacedKey) continue;
@@ -522,7 +537,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       }
     }
     return result;
-  }, [gameState, animatingPiece, animationPath, isSwapAnimation]);
+  }, [viewProp, gameState, animatingPiece, animationPath, isSwapAnimation]);
 
   // Get walls from board state
   const wallPositions = useMemo(() => {
@@ -935,7 +950,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     return animationPath[animationStep];
   };
 
-  if (!gameState) {
+  // When viewProp is supplied (e.g. hex chess route), skip the gameState null check —
+  // the view provides everything needed for rendering.
+  if (!gameState && !viewProp) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500">
         No game in progress
@@ -1448,7 +1465,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       </g>
 
       {/* Layer 2g: Powerup indicators */}
-      {gameState.powerups && gameState.powerups.size > 0 && (
+      {gameState?.powerups && gameState.powerups.size > 0 && (
         <g style={{ pointerEvents: 'none' }}>
           {Array.from(gameState.powerups.entries()).map(([key, variant]) => {
             const [q, r] = key.split(',').map(Number);
@@ -1471,7 +1488,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
 
       {/* Layer 3: Pieces */}
       <g>
-        {pieces.map(({ coord, player }) => {
+        {pieces.map(({ coord, player, color: pieceColor, pieceType: piecePieceType, faded: pieceFaded }) => {
           const displayCoord = getAnimationDisplayCoord(coord);
           const isThisAnimating = !!displayCoord;
 
@@ -1489,17 +1506,24 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
             (showLastMoves && lastMoveInfo?.destination && cubeEquals(lastMoveInfo.destination, coord)) ||
             queuedOriginSet.has(pieceKey);
 
+          // When viewProp is supplied, use the per-piece color directly via customColors.
+          // Otherwise fall through to the gameState path.
+          const effectiveCustomColors = viewProp && pieceColor
+            ? { [player]: pieceColor } as Record<number, string>
+            : gameState?.playerColors;
+
           return (
             <g
-              key={`piece-${pieceKey}`}
+              key={`piece-${pieceKey}${pieceFaded ? '-faded' : ''}`}
               onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
               onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
               onContextMenu={preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined}
+              style={pieceFaded ? { opacity: 0, animation: 'fadeOut 0.4s ease-out forwards' } : undefined}
             >
               <Piece
                 coord={coord}
                 player={player}
-                isCurrentPlayer={!isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer && (isLocalPlayerTurn === undefined || player === fixedRotationPlayer)}
+                isCurrentPlayer={!viewProp && !isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer && (isLocalPlayerTurn === undefined || player === fixedRotationPlayer)}
                 isSelected={
                   (!isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)) ||
                   (highlightCoord != null && cubeEquals(highlightCoord, coord)) ||
@@ -1507,7 +1531,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 }
                 onClick={() => handlePieceClick(coord)}
                 size={HEX_SIZE}
-                customColors={gameState.playerColors}
+                customColors={effectiveCustomColors}
                 displayCoord={displayCoord}
                 isAnimating={isThisAnimating}
                 animationDuration={pieceAnimDuration}
@@ -1515,9 +1539,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 darkMode={darkMode}
                 glassPieces={glassPieces}
                 hexCells={hexCells}
-                variant={gameState.pieceVariants?.get(pieceKey) ?? gameState.playerPieceTypes?.[player] ?? 'normal'}
+                variant={gameState?.pieceVariants?.get(pieceKey) ?? gameState?.playerPieceTypes?.[player] ?? 'normal'}
                 boardRotation={cumulativeRotation}
                 showActivePlayerRing={activePlayerRing}
+                pieceType={piecePieceType}
+                faded={pieceFaded}
               />
             </g>
           );
@@ -1525,7 +1551,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       </g>
 
       {/* Layer 3b: Swap arc overlay — both pieces rendered at bezier arc positions */}
-      {swapArcPos && animatingPiece && animationPath && animationPath.length >= 2 && (() => {
+      {swapArcPos && animatingPiece && animationPath && animationPath.length >= 2 && gameState && (() => {
         const movingCoord = animatingPiece;
         const displacedCoord = animationPath[0];
         const movingPlayer = gameState.board.get(coordKey(movingCoord))?.type === 'piece'
