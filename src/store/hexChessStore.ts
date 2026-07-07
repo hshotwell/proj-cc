@@ -1,15 +1,20 @@
 'use client';
 
 import { create } from 'zustand';
-import type { CubeCoord } from '@/types/game';
+import type { CubeCoord, PlayerIndex } from '@/types/game';
 import type { HexChessConfig, HexChessState, HexMove, HexPieceType } from '@/game/hexchess';
 import {
   createInitialState,
   applyMove,
   legalMoves,
   confirmPromotion as applyConfirmPromotion,
+  armCellsForPlayer,
+  isInCheck,
 } from '@/game/hexchess';
-import { cubeEquals } from '@/game/coordinates';
+import { cubeEquals, parseCoordKey } from '@/game/coordinates';
+import { getDefaultBoardCells } from '@/game/defaultLayout';
+import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
+import { kingOf, otherPlayer } from '@/game/hexchess/board';
 
 interface HexChessStoreState {
   state: HexChessState | null;
@@ -139,3 +144,73 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     });
   },
 }));
+
+/**
+ * Selector that transforms HexChessStoreState into a BoardView consumable by Board.tsx.
+ * Returns null when no game is active (state is null).
+ */
+export function selectHexChessBoardView(store: HexChessStoreState): BoardView | null {
+  const { state, config, selectedPieceId, legalMoveTargets, lastMove } = store;
+
+  if (!state || !config) return null;
+
+  // Build all 121 board cells
+  const defaultCells = getDefaultBoardCells();
+  const cells: CubeCoord[] = Array.from(defaultCells).map(parseCoordKey);
+
+  // Build homeZones: each player's homeZone is the OPPONENT's arm cells (promotion zone)
+  const homeZones = new Map<PlayerIndex, CubeCoord[]>();
+  for (const player of [0, 1] as const) {
+    homeZones.set(player as PlayerIndex, armCellsForPlayer(otherPlayer(player)));
+  }
+
+  // Build pieces list from active pieces in state
+  const pieces: BoardPiece[] = state.pieces.map(piece => ({
+    id: piece.id,
+    cell: piece.cell,
+    color: config.players[piece.player].color,
+    pieceType: piece.type,
+    faded: false,
+  }));
+
+  // Build highlights
+  const highlights: BoardHighlight[] = [];
+
+  // Selection highlight
+  if (selectedPieceId !== null) {
+    const selectedPiece = state.pieces.find(p => p.id === selectedPieceId);
+    if (selectedPiece) {
+      highlights.push({ kind: 'selection', cell: selectedPiece.cell });
+    }
+  }
+
+  // Legal move highlights
+  for (const target of legalMoveTargets) {
+    const kind = target.capture !== null ? 'legalMoveCapture' : 'legalMoveEmpty';
+    highlights.push({ kind, cell: target.to });
+  }
+
+  // Last move highlights
+  if (lastMove !== null) {
+    highlights.push({ kind: 'lastMoveFrom', cell: lastMove.from });
+    highlights.push({ kind: 'lastMoveTo', cell: lastMove.to });
+  }
+
+  // Check highlight on king if current player is in check
+  if (isInCheck(state, state.currentPlayer)) {
+    const king = kingOf(state, state.currentPlayer);
+    if (king) {
+      highlights.push({ kind: 'check', cell: king.cell });
+    }
+  }
+
+  return {
+    cells,
+    homeZones,
+    pieces,
+    highlights,
+    animatingMove: null,
+    rotation: 0,
+    activePlayerIndex: state.currentPlayer as PlayerIndex,
+  };
+}
