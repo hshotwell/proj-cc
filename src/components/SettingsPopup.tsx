@@ -7,7 +7,7 @@ import { useGameStore } from '@/store/gameStore';
 import { useReplayStore } from '@/store/replayStore';
 import { playStep, playClick } from '@/audio/soundEffects';
 
-type SettingsMode = 'game' | 'replay' | 'editor';
+type SettingsMode = 'game' | 'replay' | 'editor' | 'hexchess';
 type SettingsTab = 'main' | 'gameplay' | 'visuals' | 'sound';
 
 interface SettingsPopupProps {
