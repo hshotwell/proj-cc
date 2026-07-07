@@ -1584,13 +1584,14 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         if (newKindHighlights.length === 0) return null;
         return (
           <g style={{ pointerEvents: 'none' }}>
-            {newKindHighlights.map((h, i) => {
+            {newKindHighlights.map((h) => {
               const { x: px, y: py } = cubeToPixel(h.cell, HEX_SIZE);
+              const stableKey = `${h.kind}-${h.cell.q}-${h.cell.r}-${h.cell.s}`;
               switch (h.kind) {
                 case 'legalMoveEmpty':
                   return (
                     <circle
-                      key={i}
+                      key={stableKey}
                       cx={px}
                       cy={py}
                       r={6}
@@ -1602,7 +1603,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 case 'legalMoveCapture':
                   return (
                     <circle
-                      key={i}
+                      key={stableKey}
                       cx={px}
                       cy={py}
                       r={pieceRadius + 3}
@@ -1615,7 +1616,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 case 'check':
                   return (
                     <circle
-                      key={i}
+                      key={stableKey}
                       cx={px}
                       cy={py}
                       r={pieceRadius + 4}
