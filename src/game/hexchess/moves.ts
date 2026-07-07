@@ -146,15 +146,15 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
  */
 export function applyMove(state: HexChessState, move: HexMove): HexChessState {
   const mover = state.currentPlayer;
-  const next = applyMoveCore(state, move);
+  let next = applyMoveCore(state, move);
 
   // TODO(Task 23): when pendingPromotion !== null, turn is not yet advanced —
   // skip result detection until the promotion is resolved.
   if (next.pendingPromotion === null) {
     if (isCheckmate(next)) {
-      next.result = { winner: mover, reason: 'checkmate' };
+      next = { ...next, result: { winner: mover, reason: 'checkmate' } };
     } else if (isStalemate(next)) {
-      next.result = { winner: 'draw', reason: 'stalemate' };
+      next = { ...next, result: { winner: 'draw', reason: 'stalemate' } };
     }
   }
 
