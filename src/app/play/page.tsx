@@ -10,6 +10,8 @@ import { ColorSwatch, SpecialSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
+import { useHexChessStore } from '@/store/hexChessStore';
+import type { HexChessConfig } from '@/game/hexchess';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { areTooSimilar } from '@/game/colors';
 import { validateLayout } from '@/game/layoutValidation';
@@ -190,6 +192,36 @@ export default function PlayPage() {
   };
 
   const handleStartGame = () => {
+    if (gameMode === 'hexchess') {
+      // configPlayers for 2-player standard board = [0, 2] (Sternhalma arm indices)
+      const p0 = configPlayers[0] ?? (0 as PlayerIndex);
+      const p1 = configPlayers[1] ?? (2 as PlayerIndex);
+      const hexGameId = Math.random().toString(36).substring(2, 10);
+      const hexConfig: HexChessConfig = {
+        id: hexGameId,
+        players: [
+          {
+            color: getEffectiveColor(p0),
+            name: playerNames[p0] ?? getDefaultName(p0, configPlayers),
+            isAI: false,
+          },
+          {
+            color: getEffectiveColor(p1),
+            name: playerNames[p1] ?? getDefaultName(p1, configPlayers),
+            isAI: aiConfig[p1] != null,
+          },
+        ],
+        layoutPreset: 'v1-default',
+        soldierVariant: 'soldier',
+        ai: aiConfig[p1] != null
+          ? { forPlayer: 1, difficulty: aiConfig[p1]!.difficulty ?? 'medium' }
+          : null,
+      };
+      useHexChessStore.getState().createGame(hexConfig);
+      router.push(`/hexchess/${hexGameId}`);
+      return;
+    }
+
     const players = selectedLayout ? effectiveLayoutPlayers : (ACTIVE_PLAYERS[selectedCount] as PlayerIndex[]);
     const playerSet = new Set<PlayerIndex>(players);
     const filterByPlayers = <T,>(obj: Partial<Record<PlayerIndex, T>>): Partial<Record<PlayerIndex, T>> =>
