@@ -13,6 +13,7 @@ import { useLayoutStore } from '@/store/layoutStore';
 import { useHexChessStore } from '@/store/hexChessStore';
 import type { HexChessConfig } from '@/game/hexchess';
 import { ColorPicker } from '@/components/ui/ColorPicker';
+import { HowToPlayHexChess } from '@/components/hexchess/HowToPlayHexChess';
 import { areTooSimilar } from '@/game/colors';
 import { validateLayout } from '@/game/layoutValidation';
 import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
@@ -101,6 +102,7 @@ export default function PlayPage() {
   const [gameMode, setGameMode] = useState<'sternhalma' | 'hexchess'>('sternhalma');
   const [customPlayerCount, setCustomPlayerCount] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<PlayerIndex | null>(null);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   const layoutKeyRef = useRef('');
 
@@ -626,6 +628,15 @@ export default function PlayPage() {
               Hex Chess
             </button>
           </div>
+          {gameMode === 'hexchess' && (
+            <button
+              type="button"
+              className="mt-2 text-sm text-blue-600 hover:underline"
+              onClick={() => setShowHowToPlay(true)}
+            >
+              How to play
+            </button>
+          )}
         </div>
 
         {/* Board selector */}
@@ -867,6 +878,8 @@ export default function PlayPage() {
           </p>
         </div>
       </div>
+
+      <HowToPlayHexChess open={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
     </div>
   );
 }
