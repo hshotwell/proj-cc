@@ -2,9 +2,10 @@ import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
 import { isOnBoard, pieceAt } from './board';
-import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
+import type { HexChessState, HexMove, HexPiece, HexPlayerIndex, HexPieceType } from './state';
 import { isCheckmate, isStalemate, isThreefoldRepetition, isInsufficientMaterial } from './check';
 import { hashState } from './zobrist';
+import { promotionCellsForPlayer } from './starting';
 
 export function slidingMoves(
   state: HexChessState,
@@ -179,13 +180,26 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
     .filter(p => move.capture === null || p.id !== move.capture!.pieceId)
     .map(p => p.id === move.pieceId ? { ...p, cell: move.to, hasMoved: true } : p);
 
-  // TODO(Task 23): detect promotion — soldier/pawn arriving on the opposing arm
-  // and set pendingPromotion accordingly.
-  const pendingPromotion = null;
+  // Shared reference: the piece that is moving (pre-move state).
+  const movingPiece = state.pieces.find(p => p.id === move.pieceId);
+
+  // Detect promotion: soldier or pawn arriving on the opposing arm.
+  const isPromotingType =
+    movingPiece?.type === 'soldier' || movingPiece?.type === 'pawn';
+  const isPromotionCell =
+    isPromotingType &&
+    movingPiece !== undefined &&
+    promotionCellsForPlayer(movingPiece.player).has(coordKey(move.to));
+  const pendingPromotion = isPromotionCell && movingPiece !== undefined
+    ? {
+        pieceId: move.pieceId,
+        targetCell: move.to,
+        options: ['queen', 'rook', 'bishop', 'knight'] as HexPieceType[],
+      }
+    : null;
 
   // Set enPassantTarget when a pawn does a double-step, or a soldier does a forward-diagonal non-capture move.
   let enPassantTarget: HexChessState['enPassantTarget'] = null;
-  const movingPiece = state.pieces.find(p => p.id === move.pieceId);
   // turnNumber hasn't advanced yet — the next state will have turnNumber+1,
   // so availableUntilTurn must equal the NEXT turnNumber.
   const nextTurnNumber = state.turnNumber + 1;

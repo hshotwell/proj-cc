@@ -1,4 +1,5 @@
 import type { CubeCoord } from '@/types/game';
+import { coordKey } from '@/game/coordinates';
 import type {
   HexChessConfig,
   HexChessState,
@@ -6,6 +7,7 @@ import type {
   HexPlayerIndex,
   HexPieceType,
 } from './state';
+import { otherPlayer } from './board';
 
 /**
  * Returns the set of cells (as coordKey strings) where pawns start for the given player.
@@ -35,6 +37,15 @@ export function pawnStartingCellsForPlayer(_player: HexPlayerIndex): Set<string>
 //   player 0: { q: 4-k+j, r: -8+k }
 //   player 1: { q: -4+j, r:  8-k }
 // ---------------------------------------------------------------------------
+
+/**
+ * Returns the set of cell coordKeys that are promotion cells for `player`.
+ * A soldier or pawn belonging to `player` that reaches any of these cells
+ * must promote. These are the cells in the opponent's arm.
+ */
+export function promotionCellsForPlayer(player: HexPlayerIndex): Set<string> {
+  return new Set(armCellsForPlayer(otherPlayer(player)).map(coordKey));
+}
 
 export function armCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
   const cells: CubeCoord[] = [];
