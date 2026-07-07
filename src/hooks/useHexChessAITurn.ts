@@ -43,8 +43,13 @@ export function useHexChessAITurn(enabled: boolean = true) {
         if (result.move === null) return;
         store.selectPiece(result.move.pieceId);
         const applied = store.attemptMove(result.move.to);
-        if (applied && store.state?.pendingPromotion) {
-          store.confirmPromotion(result.move.promotion ?? 'queen');
+        if (applied) {
+          // Read fresh state after the mutation — store is a stale snapshot
+          // captured before attemptMove ran.
+          const freshState = useHexChessStore.getState().state;
+          if (freshState?.pendingPromotion) {
+            useHexChessStore.getState().confirmPromotion(result.move.promotion ?? 'queen');
+          }
         }
       })
       .catch((err) => {
