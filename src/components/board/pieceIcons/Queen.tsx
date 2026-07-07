@@ -7,7 +7,7 @@ interface PieceIconProps {
 }
 
 // Queen: crown of 5 points on top, tapered body, wide base.
-export function QueenIcon({ size, fill, className }: PieceIconProps): JSX.Element {
+export function QueenIcon({ size, fill, className }: PieceIconProps){
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <path

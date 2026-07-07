@@ -7,7 +7,7 @@ interface PieceIconProps {
 }
 
 // King: small cross on top, wide crown base with 3 points, tapered body, flat base.
-export function KingIcon({ size, fill, className }: PieceIconProps): JSX.Element {
+export function KingIcon({ size, fill, className }: PieceIconProps){
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <path

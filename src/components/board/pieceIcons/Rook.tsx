@@ -7,7 +7,7 @@ interface PieceIconProps {
 }
 
 // Rook: castle turret with 3 crenellations, straight body, wide base.
-export function RookIcon({ size, fill, className }: PieceIconProps): JSX.Element {
+export function RookIcon({ size, fill, className }: PieceIconProps){
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <path

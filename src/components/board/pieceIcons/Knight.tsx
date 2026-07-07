@@ -7,7 +7,7 @@ interface PieceIconProps {
 }
 
 // Knight: horse head silhouette in profile view facing left, on a base.
-export function KnightIcon({ size, fill, className }: PieceIconProps): JSX.Element {
+export function KnightIcon({ size, fill, className }: PieceIconProps){
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <path

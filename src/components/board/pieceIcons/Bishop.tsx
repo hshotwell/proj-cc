@@ -7,7 +7,7 @@ interface PieceIconProps {
 }
 
 // Bishop: mitre-shaped top with a slit, tapered body, small collar, wide base.
-export function BishopIcon({ size, fill, className }: PieceIconProps): JSX.Element {
+export function BishopIcon({ size, fill, className }: PieceIconProps){
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <path

@@ -21,7 +21,7 @@ export function PromotionPicker({
   playerColor,
   onChoose,
   onCancel,
-}: PromotionPickerProps): JSX.Element {
+}: PromotionPickerProps){
   const fill = getCSSColor(playerColor);
 
   return (
