@@ -139,7 +139,7 @@ describe('selectHexChessBoardView', () => {
       const matching = view!.highlights.filter(
         h => h.kind === expectedKind && coordKey(h.cell) === coordKey(target.to)
       );
-      expect(matching.length).toBeGreaterThanOrEqual(1);
+      expect(matching.length).toBe(1);
     }
   });
 
