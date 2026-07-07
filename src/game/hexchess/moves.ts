@@ -1,5 +1,5 @@
 import type { CubeCoord } from '@/types/game';
-import { cubeAdd } from '@/game/coordinates';
+import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
 import { isOnBoard, pieceAt } from './board';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
@@ -91,15 +91,33 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
 export interface PawnPseudoMove {
   to: CubeCoord;
   isCapture: boolean;
+  isDoubleStep?: boolean;
 }
 
-export function pawnMoves(state: HexChessState, piece: HexPiece): PawnPseudoMove[] {
+export interface PawnMovesOptions {
+  pawnStartingCells?: Set<string>;
+}
+
+export function pawnMoves(
+  state: HexChessState,
+  piece: HexPiece,
+  options?: PawnMovesOptions,
+): PawnPseudoMove[] {
+  const startingCells = options?.pawnStartingCells ?? new Set<string>();
+  const onStart = startingCells.has(coordKey(piece.cell));
   const out: PawnPseudoMove[] = [];
-  // Move: forward edges (2), only if empty
+  // Move: forward edges (2), only if empty. If on starting cell and next-next also empty, add double-step.
   for (const e of forwardEdges(piece.player)) {
-    const cell = cubeAdd(piece.cell, e);
-    if (!isOnBoard(cell)) continue;
-    if (pieceAt(state, cell) === null) out.push({ to: cell, isCapture: false });
+    const cell1 = cubeAdd(piece.cell, e);
+    if (!isOnBoard(cell1)) continue;
+    if (pieceAt(state, cell1) !== null) continue;
+    out.push({ to: cell1, isCapture: false });
+    if (onStart) {
+      const cell2 = cubeAdd(cell1, e);
+      if (isOnBoard(cell2) && pieceAt(state, cell2) === null) {
+        out.push({ to: cell2, isCapture: false, isDoubleStep: true });
+      }
+    }
   }
   // Capture: forward diagonal (1), only if enemy
   const diagCell = cubeAdd(piece.cell, forwardDiagonal(piece.player));
@@ -177,7 +195,7 @@ export function applyMove(state: HexChessState, move: HexMove): HexChessState {
 }
 
 export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexMove[] {
-  let rawTargets: { to: CubeCoord; isCapture?: boolean }[] = [];
+  let rawTargets: { to: CubeCoord; isCapture?: boolean; isDoubleStep?: boolean }[] = [];
   switch (piece.type) {
     case 'king':    rawTargets = kingMoves(state, piece).map(to => ({ to })); break;
     case 'queen':   rawTargets = queenMoves(state, piece).map(to => ({ to })); break;
@@ -187,7 +205,7 @@ export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexM
     case 'soldier': rawTargets = soldierMoves(state, piece); break;
     case 'pawn':    rawTargets = pawnMoves(state, piece); break;
   }
-  return rawTargets.map(({ to, isCapture }) => {
+  return rawTargets.map(({ to, isCapture, isDoubleStep }) => {
     let capture: HexMove['capture'] = null;
     if (isCapture || (isCapture === undefined && pieceAt(state, to)?.player !== piece.player && pieceAt(state, to) !== null)) {
       const enemy = pieceAt(state, to);
@@ -200,7 +218,7 @@ export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexM
       capture,
       promotion: null,
       isEnPassant: false,
-      isDoubleStep: false,
+      isDoubleStep: isDoubleStep ?? false,
       player: piece.player,
       turnNumber: state.turnNumber,
     };
