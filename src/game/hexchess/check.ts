@@ -4,6 +4,7 @@ import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, fo
 import { isOnBoard, pieceAt, kingOf, otherPlayer } from './board';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
 import { applyMoveCore, pseudoMovesForPiece } from './moves';
+import { hashState } from './zobrist';
 
 /**
  * Compute all cells attacked (defended/threatened) by a sliding piece.
@@ -146,4 +147,62 @@ export function isCheckmate(state: HexChessState): boolean {
  */
 export function isStalemate(state: HexChessState): boolean {
   return legalMoves(state).length === 0 && !isInCheck(state, state.currentPlayer);
+}
+
+/**
+ * Returns true if the current position has appeared three or more times
+ * (tracked via Zobrist hashes in `state.positionHashes`).
+ */
+export function isThreefoldRepetition(state: HexChessState): boolean {
+  const hash = hashState(state);
+  return (state.positionHashes[hash] ?? 0) >= 3;
+}
+
+/**
+ * Hex color of a cell: `(q + 2*r) mod 3` — one of 0, 1, 2.
+ * Used for bishop same-color detection (mod result is taken as unsigned).
+ */
+function hexColor(q: number, r: number): number {
+  return ((q + 2 * r) % 3 + 3) % 3;
+}
+
+/**
+ * Returns true if the position has insufficient material for either side to
+ * force checkmate. Recognized patterns (symmetric):
+ *   - K vs K
+ *   - K+B vs K
+ *   - K+N vs K
+ *   - K+B vs K+B where both bishops occupy cells of the same hex color
+ */
+export function isInsufficientMaterial(state: HexChessState): boolean {
+  // Partition pieces by player, ignoring kings
+  const extras0 = state.pieces.filter(p => p.player === 0 && p.type !== 'king');
+  const extras1 = state.pieces.filter(p => p.player === 1 && p.type !== 'king');
+
+  // Mating material check: only pieces that cannot force mate are bishop/knight
+  const isMatingType = (type: HexPiece['type']): boolean =>
+    type !== 'bishop' && type !== 'knight';
+
+  // If either side has any mating piece (queen, rook, soldier, pawn), material is sufficient
+  if (extras0.some(p => isMatingType(p.type))) return false;
+  if (extras1.some(p => isMatingType(p.type))) return false;
+
+  // K vs K
+  if (extras0.length === 0 && extras1.length === 0) return true;
+
+  // K+minor vs K
+  if (extras0.length === 1 && extras1.length === 0) return true;
+  if (extras0.length === 0 && extras1.length === 1) return true;
+
+  // K+B vs K+B: only insufficient if bishops share the same hex color
+  if (
+    extras0.length === 1 && extras0[0].type === 'bishop' &&
+    extras1.length === 1 && extras1[0].type === 'bishop'
+  ) {
+    const c0 = hexColor(extras0[0].cell.q, extras0[0].cell.r);
+    const c1 = hexColor(extras1[0].cell.q, extras1[0].cell.r);
+    return c0 === c1;
+  }
+
+  return false;
 }

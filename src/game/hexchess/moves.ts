@@ -3,7 +3,8 @@ import { cubeAdd } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
 import { isOnBoard, pieceAt } from './board';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
-import { isCheckmate, isStalemate } from './check';
+import { isCheckmate, isStalemate, isThreefoldRepetition, isInsufficientMaterial } from './check';
+import { hashState } from './zobrist';
 
 export function slidingMoves(
   state: HexChessState,
@@ -141,12 +142,22 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
 }
 
 /**
- * Full move application: calls applyMoveCore, then detects checkmate/stalemate
- * and populates next.result accordingly.
+ * Full move application: calls applyMoveCore, then:
+ *  1. Updates positionHashes with the new state's Zobrist hash.
+ *  2. Detects checkmate/stalemate.
+ *  3. Detects draw by threefold repetition or insufficient material.
  */
 export function applyMove(state: HexChessState, move: HexMove): HexChessState {
   const mover = state.currentPlayer;
   let next = applyMoveCore(state, move);
+
+  // Step 1: update positionHashes with this position's Zobrist hash.
+  const hash = hashState(next);
+  const prevCount = next.positionHashes[hash] ?? 0;
+  next = {
+    ...next,
+    positionHashes: { ...next.positionHashes, [hash]: prevCount + 1 },
+  };
 
   // TODO(Task 23): when pendingPromotion !== null, turn is not yet advanced —
   // skip result detection until the promotion is resolved.
@@ -155,6 +166,10 @@ export function applyMove(state: HexChessState, move: HexMove): HexChessState {
       next = { ...next, result: { winner: mover, reason: 'checkmate' } };
     } else if (isStalemate(next)) {
       next = { ...next, result: { winner: 'draw', reason: 'stalemate' } };
+    } else if (isThreefoldRepetition(next)) {
+      next = { ...next, result: { winner: 'draw', reason: 'repetition' } };
+    } else if (isInsufficientMaterial(next)) {
+      next = { ...next, result: { winner: 'draw', reason: 'insufficient-material' } };
     }
   }
 
