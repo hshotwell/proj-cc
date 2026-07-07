@@ -734,59 +734,63 @@ export default function PlayPage() {
           </div>
         ) : null}
 
-        {/* Game mode */}
-        <div className="bg-white rounded-xl shadow p-4 mb-4">
-          <div className="font-medium text-gray-900 mb-1">Game Mode</div>
-          <div className="text-sm text-gray-500 mb-3">Sets the movement style for all players&apos; pieces</div>
-          <div className="flex gap-2 flex-wrap">
-            {([
-              { value: 'normal', label: 'Normal',   desc: 'Classic hop over adjacent piece' },
-              { value: 'turbo',  label: 'Turbo',    desc: 'Hop any distance, land same distance away — smaller pieces' },
-              { value: 'ghost',  label: 'Spectral', desc: 'Hop through a row of pieces, land after the run — translucent pieces' },
-              { value: 'big',    label: 'Blockade', desc: 'Opponents cannot jump over your pieces' },
-            ] as { value: PieceVariant; label: string; desc: string }[]).map(({ value, label, desc }) => (
-              <button
-                key={value}
-                onClick={() => setPieceVariant(value)}
-                title={desc}
-                className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
-                  pieceVariant === value
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {pieceVariant !== 'normal' && (
-            <p className="mt-2 text-xs text-gray-500">
-              {pieceVariant === 'turbo'
-                ? 'Pieces scan past empty cells and hop over the first piece/wall they find, landing the same distance on the other side.'
-                : pieceVariant === 'ghost'
-                ? 'Pieces hop over the entire adjacent run of pieces/walls in one direction, landing in the first open cell after the run.'
-                : 'Opponents cannot jump over your pieces — only you or your teammates can.'}
-            </p>
+        {/* Variant Rules */}
+        <div className="bg-white rounded-xl shadow p-4 mb-8">
+          <div className="font-medium text-gray-900 mb-1">Variant Rules</div>
+          {gameMode === 'sternhalma' ? (
+            <>
+              <div className="text-sm text-gray-500 mb-3">Sets the movement style for all players&apos; pieces</div>
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  { value: 'normal', label: 'Normal',   desc: 'Classic hop over adjacent piece' },
+                  { value: 'turbo',  label: 'Turbo',    desc: 'Hop any distance, land same distance away — smaller pieces' },
+                  { value: 'ghost',  label: 'Spectral', desc: 'Hop through a row of pieces, land after the run — translucent pieces' },
+                  { value: 'big',    label: 'Blockade', desc: 'Opponents cannot jump over your pieces' },
+                ] as { value: PieceVariant; label: string; desc: string }[]).map(({ value, label, desc }) => (
+                  <button
+                    key={value}
+                    onClick={() => setPieceVariant(value)}
+                    title={desc}
+                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
+                      pieceVariant === value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {pieceVariant !== 'normal' && (
+                <p className="mt-2 text-xs text-gray-500">
+                  {pieceVariant === 'turbo'
+                    ? 'Pieces scan past empty cells and hop over the first piece/wall they find, landing the same distance on the other side.'
+                    : pieceVariant === 'ghost'
+                    ? 'Pieces hop over the entire adjacent run of pieces/walls in one direction, landing in the first open cell after the run.'
+                    : 'Opponents cannot jump over your pieces — only you or your teammates can.'}
+                </p>
+              )}
+              {(configPlayers.length === 4 || configPlayers.length === 6) && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={teamMode}
+                      onChange={(e) => setTeamMode(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">Team Mode</div>
+                      <div className="text-sm text-gray-500">Opposite players are teammates — both must finish to win</div>
+                    </div>
+                  </label>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 italic">No variants available yet for Hex Chess.</p>
           )}
         </div>
-
-        {/* Team mode */}
-        {(configPlayers.length === 4 || configPlayers.length === 6) && (
-          <div className="bg-white rounded-xl shadow p-4 mb-8">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={teamMode}
-                onChange={(e) => setTeamMode(e.target.checked)}
-                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <div>
-                <div className="font-medium text-gray-900">Team Mode</div>
-                <div className="text-sm text-gray-500">Opposite players are teammates — both must finish to win</div>
-              </div>
-            </label>
-          </div>
-        )}
 
         {/* Players */}
         <div className="bg-white rounded-xl shadow p-6 mb-8">
