@@ -1575,6 +1575,65 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         );
       })()}
 
+      {/* Layer 3c: BoardView highlights — legalMoveEmpty, legalMoveCapture, check */}
+      {renderHighlights.length > 0 && (() => {
+        const pieceRadius = HEX_SIZE * 0.45;
+        const newKindHighlights = renderHighlights.filter(
+          h => h.kind === 'legalMoveEmpty' || h.kind === 'legalMoveCapture' || h.kind === 'check'
+        );
+        if (newKindHighlights.length === 0) return null;
+        return (
+          <g style={{ pointerEvents: 'none' }}>
+            {newKindHighlights.map((h, i) => {
+              const { x: px, y: py } = cubeToPixel(h.cell, HEX_SIZE);
+              switch (h.kind) {
+                case 'legalMoveEmpty':
+                  return (
+                    <circle
+                      key={i}
+                      cx={px}
+                      cy={py}
+                      r={6}
+                      fill="#22c55e"
+                      opacity={0.7}
+                      pointerEvents="none"
+                    />
+                  );
+                case 'legalMoveCapture':
+                  return (
+                    <circle
+                      key={i}
+                      cx={px}
+                      cy={py}
+                      r={pieceRadius + 3}
+                      fill="none"
+                      stroke="#ef4444"
+                      strokeWidth={2.5}
+                      pointerEvents="none"
+                    />
+                  );
+                case 'check':
+                  return (
+                    <circle
+                      key={i}
+                      cx={px}
+                      cy={py}
+                      r={pieceRadius + 4}
+                      fill="none"
+                      stroke="#dc2626"
+                      strokeWidth={3}
+                      className="check-pulse"
+                      pointerEvents="none"
+                    />
+                  );
+                default:
+                  return null;
+              }
+            })}
+          </g>
+        );
+      })()}
+
       {/* Layer 4: Hop particle effects */}
       {hopParticles.length > 0 && <HopParticles particles={hopParticles} />}
       </g>
