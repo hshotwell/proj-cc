@@ -15,7 +15,7 @@ import { cubeEquals, parseCoordKey } from '@/game/coordinates';
 import { getDefaultBoardCells } from '@/game/defaultLayout';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
 import { kingOf, otherPlayer } from '@/game/hexchess/board';
-import { saveHexChessGame } from '@/game/hexchess/persistence';
+import { saveHexChessGame, loadHexChessGame } from '@/game/hexchess/persistence';
 
 /** Duration (ms) the captured piece overlay persists for the fade-out animation. */
 const CAPTURE_ANIM_DURATION_MS = 400;
@@ -180,7 +180,11 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       animatingCapture: null,
       captureTimeoutId: null,
     });
-    saveHexChessGame(savedConfig, savedState);
+    // Only persist if this game isn't already in localStorage — avoid bumping
+    // updatedAt (and reordering the replay list) on every page mount.
+    if (loadHexChessGame(id) === null) {
+      saveHexChessGame(savedConfig, savedState);
+    }
   },
 
   clearGame() {
