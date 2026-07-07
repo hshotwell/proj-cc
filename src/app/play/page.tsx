@@ -95,7 +95,8 @@ export default function PlayPage() {
   const [playerNames, setPlayerNames] = useState<PlayerNameMapping>({});
   const [aiConfig, setAiConfig] = useState<AIPlayerMap>({});
   const [teamMode, setTeamMode] = useState(false);
-  const [gameMode, setGameMode] = useState<PieceVariant>('normal');
+  const [pieceVariant, setPieceVariant] = useState<PieceVariant>('normal');
+  const [gameMode, setGameMode] = useState<'sternhalma' | 'hexchess'>('sternhalma');
   const [customPlayerCount, setCustomPlayerCount] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<PlayerIndex | null>(null);
 
@@ -194,8 +195,8 @@ export default function PlayPage() {
     const hasAI = Object.keys(filteredAI).length > 0;
     const effectivePlayerCount = players.length;
     const effectiveTeamMode = teamMode && (effectivePlayerCount === 4 || effectivePlayerCount === 6) ? true : undefined;
-    const effectivePieceTypes = gameMode !== 'normal'
-      ? Object.fromEntries(players.map(p => [p, gameMode])) as Partial<Record<PlayerIndex, PieceVariant>>
+    const effectivePieceTypes = pieceVariant !== 'normal'
+      ? Object.fromEntries(players.map(p => [p, pieceVariant])) as Partial<Record<PlayerIndex, PieceVariant>>
       : undefined;
 
     let gameId: string;
@@ -682,10 +683,10 @@ export default function PlayPage() {
             ] as { value: PieceVariant; label: string; desc: string }[]).map(({ value, label, desc }) => (
               <button
                 key={value}
-                onClick={() => setGameMode(value)}
+                onClick={() => setPieceVariant(value)}
                 title={desc}
                 className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
-                  gameMode === value
+                  pieceVariant === value
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                 }`}
@@ -694,11 +695,11 @@ export default function PlayPage() {
               </button>
             ))}
           </div>
-          {gameMode !== 'normal' && (
+          {pieceVariant !== 'normal' && (
             <p className="mt-2 text-xs text-gray-500">
-              {gameMode === 'turbo'
+              {pieceVariant === 'turbo'
                 ? 'Pieces scan past empty cells and hop over the first piece/wall they find, landing the same distance on the other side.'
-                : gameMode === 'ghost'
+                : pieceVariant === 'ghost'
                 ? 'Pieces hop over the entire adjacent run of pieces/walls in one direction, landing in the first open cell after the run.'
                 : 'Opponents cannot jump over your pieces — only you or your teammates can.'}
             </p>
