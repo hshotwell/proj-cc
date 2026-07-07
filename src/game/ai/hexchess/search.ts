@@ -1,7 +1,10 @@
 import type { HexChessState, HexMove } from '@/game/hexchess';
 import { legalMoves, applyMove, confirmPromotion } from '@/game/hexchess';
+import { hashState } from '@/game/hexchess/zobrist';
 import { evaluate } from './evaluate';
 import { orderMoves } from './moveOrdering';
+import { TranspositionTable } from './transposition';
+import type { TTFlag } from './transposition';
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -18,6 +21,12 @@ export interface SearchResult {
   depth: number;
   nodes: number;
 }
+
+// ---------------------------------------------------------------------------
+// Module-level transposition table — reset per search call
+// ---------------------------------------------------------------------------
+
+let tt = new TranspositionTable(65536);
 
 // ---------------------------------------------------------------------------
 // Quiescence search — extends leaf nodes by searching captures only
@@ -96,6 +105,16 @@ function minimax(
     return { score: quiescence(state, alpha, beta, maximizing, QUIESCENCE_DEPTH), move: null };
   }
 
+  // Transposition table lookup
+  const hash = hashState(state);
+  const alphaOriginal = alpha;
+  const ttEntry = tt.get(hash);
+  if (ttEntry !== null && ttEntry.depth >= depth) {
+    if (ttEntry.flag === 'exact') return { score: ttEntry.evalCp, move: ttEntry.bestMove };
+    if (ttEntry.flag === 'lower' && ttEntry.evalCp >= beta) return { score: ttEntry.evalCp, move: ttEntry.bestMove };
+    if (ttEntry.flag === 'upper' && ttEntry.evalCp <= alpha) return { score: ttEntry.evalCp, move: ttEntry.bestMove };
+  }
+
   const moves = legalMoves(state);
   if (moves.length === 0) {
     return { score: evaluate(state), move: null };
@@ -119,6 +138,8 @@ function minimax(
       alpha = Math.max(alpha, best);
       if (alpha >= beta) break;
     }
+    const flag: TTFlag = best <= alphaOriginal ? 'upper' : (best >= beta ? 'lower' : 'exact');
+    tt.set(hash, { depth, evalCp: best, flag, bestMove });
     return { score: best, move: bestMove };
   } else {
     let best = Infinity;
@@ -135,6 +156,8 @@ function minimax(
       beta = Math.min(beta, best);
       if (alpha >= beta) break;
     }
+    const flag: TTFlag = best <= alphaOriginal ? 'upper' : (best >= beta ? 'lower' : 'exact');
+    tt.set(hash, { depth, evalCp: best, flag, bestMove });
     return { score: best, move: bestMove };
   }
 }
@@ -147,6 +170,9 @@ export function searchBestMove(
   state: HexChessState,
   options: SearchOptions,
 ): SearchResult {
+  // Reset transposition table at the start of each new search
+  tt = new TranspositionTable(65536);
+
   const startedAt = Date.now();
   const rootMaximizing = state.currentPlayer === 0;
 
