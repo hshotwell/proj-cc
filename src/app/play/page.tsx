@@ -551,6 +551,42 @@ export default function PlayPage() {
           <p className="text-gray-600">Choose your game setup</p>
         </div>
 
+        {/* Game Mode segmented control */}
+        <div className="mb-4">
+          <div className="font-medium text-gray-900 mb-1">Game Mode</div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setGameMode('sternhalma');
+                setPieceVariant('normal');
+              }}
+              className={`px-4 py-2 rounded border ${
+                gameMode === 'sternhalma'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Chinese Checkers
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGameMode('hexchess');
+                setPieceVariant('normal');
+                setTeamMode(false);
+              }}
+              className={`px-4 py-2 rounded border ${
+                gameMode === 'hexchess'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Hex Chess
+            </button>
+          </div>
+        </div>
+
         {/* Board selector */}
         <div className="bg-white rounded-xl shadow p-4 mb-6">
           <div className="flex items-center gap-4">
