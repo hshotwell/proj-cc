@@ -11,8 +11,10 @@ import { HexMoveIndicator } from '@/components/hexchess/HexMoveIndicator';
 import { HexGameOverDialog } from '@/components/hexchess/HexGameOverDialog';
 import type { CubeCoord } from '@/types/game';
 import { cubeEquals } from '@/game/coordinates';
+import { useHexChessAITurn } from '@/hooks/useHexChessAITurn';
 
 export function HexGameContainer() {
+  useHexChessAITurn();
   const store = useHexChessStore();
   const view = selectHexChessBoardView(store);
 
