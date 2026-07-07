@@ -29,10 +29,13 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+const MASK32 = BigInt(0xffffffff);
+const SHIFT32 = BigInt(32);
+
 function rand64(next: () => number): bigint {
-  const lo = BigInt(next()) & 0xffffffffn;
-  const hi = BigInt(next()) & 0xffffffffn;
-  return (hi << 32n) | lo;
+  const lo = BigInt(next()) & MASK32;
+  const hi = BigInt(next()) & MASK32;
+  return (hi << SHIFT32) | lo;
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +116,7 @@ export interface HashDelta {
  */
 export function hashState(state: HexChessState): string {
   const tbl = getTable();
-  let h = 0n;
+  let h = BigInt(0);
 
   for (const piece of state.pieces) {
     const typeIdx = PIECE_TYPE_INDEX[piece.type];
@@ -136,8 +139,9 @@ export function hashState(state: HexChessState): string {
     }
   }
 
-  // Mask to 64 bits and format
-  h = h & 0xffffffffffffffffn;
+  // Mask to 64 bits and format (BigInt() constructor avoids ES2020 literal requirement)
+  const MASK64 = (BigInt(0xffffffff) << BigInt(32)) | BigInt(0xffffffff);
+  h = h & MASK64;
   return h.toString(16).padStart(16, '0');
 }
 

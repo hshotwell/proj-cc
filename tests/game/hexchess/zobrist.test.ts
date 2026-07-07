@@ -1,18 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { hashState, updateHash } from '@/game/hexchess/zobrist';
 import { createInitialState } from '@/game/hexchess/starting';
-import { applyMove } from '@/game/hexchess/moves';
-import { pseudoMovesForPiece } from '@/game/hexchess/moves';
-import type { HexChessState } from '@/game/hexchess/state';
+import { applyMove, pseudoMovesForPiece } from '@/game/hexchess/moves';
+import type { HexChessState, HexChessConfig } from '@/game/hexchess/state';
 
-const defaultConfig = {
+const defaultConfig: HexChessConfig = {
   id: 'test',
   players: [
-    { color: '#ff0000' as const, name: 'P0', isAI: false },
-    { color: '#0000ff' as const, name: 'P1', isAI: false },
-  ] as [typeof import('@/game/hexchess/state').HexChessPlayerConfig, typeof import('@/game/hexchess/state').HexChessPlayerConfig],
-  layoutPreset: 'v1-default' as const,
-  soldierVariant: 'soldier' as const,
+    { color: '#ff0000', name: 'P0', isAI: false },
+    { color: '#0000ff', name: 'P1', isAI: false },
+  ],
+  layoutPreset: 'v1-default',
+  soldierVariant: 'soldier',
   ai: null,
 };
 
