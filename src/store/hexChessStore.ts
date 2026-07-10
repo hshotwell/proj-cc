@@ -16,6 +16,7 @@ import { getDefaultBoardCells } from '@/game/defaultLayout';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
 import { kingOf, otherPlayer } from '@/game/hexchess/board';
 import { saveHexChessGame, loadHexChessGame } from '@/game/hexchess/persistence';
+import { playStep, playCapture, playCheck, playCheckmate } from '@/audio/soundEffects';
 
 /** Duration (ms) the captured piece overlay persists for the fade-out animation. */
 const CAPTURE_ANIM_DURATION_MS = 400;
@@ -142,6 +143,19 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     });
     const { config: currentConfig } = get();
     if (currentConfig) saveHexChessGame(currentConfig, nextState);
+
+    // Sound effects. Order matters: base move sound first, then check/mate escalations
+    // if the mover just delivered them.
+    if (move.capture !== null) {
+      playCapture(currentConfig?.players[move.player]?.color);
+    } else {
+      playStep();
+    }
+    if (nextState.result?.reason === 'checkmate') {
+      playCheckmate();
+    } else if (nextState.result === null && isInCheck(nextState, nextState.currentPlayer)) {
+      playCheck();
+    }
     return true;
   },
 
@@ -278,6 +292,26 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     }
   }
 
+  // Hex chess rotation. Player 0's arm is at the top (straight up in pixel
+  // coords), so 180° brings it to the bottom. Player 1's arm is at the bottom
+  // naturally (0°). Pick the initial rotation to face the first human seat.
+  const rotationForPlayer = (p: 0 | 1): number => (p === 0 ? 180 : 0);
+  const p0Human = !config.ai || !config.ai[0];
+  const p1Human = !config.ai || !config.ai[1];
+  const initialFocusPlayer: 0 | 1 = p0Human ? 0 : (p1Human ? 1 : 0);
+  const activeRotation = rotationForPlayer(state.currentPlayer);
+  const initialRotation = rotationForPlayer(initialFocusPlayer);
+
+  // Expose the currently-fading captured piece as a burst signal for particles.
+  const captureBurst = animatingCapture
+    ? {
+        cell: animatingCapture.piece.cell,
+        color: config.players[animatingCapture.piece.player].color,
+        // key is stable per capture (piece id + timestamp) so Board can dedupe
+        key: `${animatingCapture.piece.id}-${animatingCapture.startedAt}`,
+      }
+    : null;
+
   return {
     cells,
     homeZones,
@@ -287,5 +321,8 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     rotation: 0,
     activePlayerIndex: state.currentPlayer as PlayerIndex,
     activePlayerColor: config.players[state.currentPlayer].color,
+    initialRotation,
+    activeRotation,
+    captureBurst,
   };
 }

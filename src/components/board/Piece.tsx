@@ -38,6 +38,9 @@ interface PieceProps {
   pieceType?: BoardPieceType;
   // When true, fade the piece out (used for capture animation overlay)
   faded?: boolean;
+  // When true, apply a CSS transition to smoothly animate coordinate changes
+  // (used by hex chess to slide pieces when animateMoves is enabled).
+  smoothSlide?: boolean;
 }
 
 // Metallic colors that get special shiny treatment
@@ -401,6 +404,7 @@ export function Piece({
   showActivePlayerRing = false,
   pieceType,
   faded = false,
+  smoothSlide = false,
 }: PieceProps) {
   // Start the global sheen sync loop (idempotent)
   useEffect(() => { startSheenSync(); }, []);
@@ -420,13 +424,22 @@ export function Piece({
     const cssColor = pieceColor.startsWith('#') || pieceColor.startsWith('rgb')
       ? pieceColor
       : pieceColor; // sentinel colors ('rainbow', etc.) — treated as-is; getCSSColor lives in constants
+    // Use CSS transform (via style) instead of the SVG transform attribute so
+    // browsers can transition position changes. The SVG attribute doesn't
+    // animate reliably across engines.
+    const transitions: string[] = [];
+    if (smoothSlide) transitions.push('transform 250ms ease-out');
+    if (faded) transitions.push('opacity 180ms ease-out');
+    const transitionStr = transitions.length > 0 ? transitions.join(', ') : undefined;
     return (
       <g
         onClick={onClick}
-        transform={`translate(${x}, ${y}) rotate(${-boardRotation})`}
         style={{
           cursor: 'pointer',
-          transition: faded ? 'opacity 180ms ease-out' : undefined,
+          transform: `translate(${x}px, ${y}px) rotate(${-boardRotation}deg)`,
+          transformOrigin: '0 0',
+          transformBox: 'fill-box',
+          transition: transitionStr,
           opacity: faded ? 0 : (isSelected ? 1 : (isLastMoved ? 0.95 : 1)),
         }}
       >
@@ -439,6 +452,15 @@ export function Piece({
             stroke={cssColor}
             strokeWidth={2.5}
             opacity={0.9}
+          />
+        )}
+        {isLastMoved && (
+          <circle
+            cx={0}
+            cy={0}
+            r={size * 0.55}
+            fill={cssColor}
+            opacity={0.18}
           />
         )}
         <svg

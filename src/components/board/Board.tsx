@@ -113,6 +113,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
 
   // Hop particle effect state
   const [hopParticles, setHopParticles] = useState<HopParticle[]>([]);
+  const lastCaptureKeyRef = useRef<string | null>(null);
 
   // Refs for SVG-level touch forgiveness
   const svgRef = useRef<SVGSVGElement>(null);
@@ -173,6 +174,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
   // Initialize synchronously from the game store so the board is already at the correct
   // angle on first paint — prevents the startup spin from 0° to the target angle.
   const [cumulativeRotation, setCumulativeRotation] = useState(() => {
+    // Hex chess (viewProp) path: use the view's initialRotation directly.
+    if (viewProp && typeof viewProp.initialRotation === 'number') {
+      return viewProp.initialRotation;
+    }
     const gs = useGameStore.getState().gameState;
     if (!gs || gs.activePlayers.length <= 1) return 0;
     // Start facing the first human player, not necessarily the first player in turn order
@@ -246,6 +251,47 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
 
     prevPlayerRef.current = displayCurrentPlayer;
   }, [displayCurrentPlayer, rotateBoard, gameState?.aiPlayers, isReplayActive, fixedRotationPlayer, animatingPiece, animateMoves]);
+
+  // Hex chess (viewProp) capture burst → hop particles at the captured cell.
+  useEffect(() => {
+    if (!viewProp?.captureBurst) return;
+    if (!hopEffect) return;
+    const burst = viewProp.captureBurst;
+    if (lastCaptureKeyRef.current === burst.key) return;
+    lastCaptureKeyRef.current = burst.key;
+    const pos = cubeToPixel(burst.cell, HEX_SIZE);
+    setHopParticles((prev) => [
+      ...prev,
+      {
+        id: `hexcap-${burst.key}`,
+        x: pos.x,
+        y: pos.y,
+        color: burst.color,
+        isFinal: true,
+        isGoalEntry: false,
+        createdAt: Date.now(),
+      },
+    ]);
+  }, [viewProp?.captureBurst, hopEffect]);
+
+  // Hex chess (viewProp) rotation: when rotateBoard is on and the active player
+  // changes, rotate to face them. Otherwise stay at the initial rotation.
+  useEffect(() => {
+    if (isReplayActive) return;
+    if (!viewProp) return;
+    if (!rotationInitialized) {
+      setRotationInitialized(true);
+      return;
+    }
+    if (!rotateBoard) return;
+    if (typeof viewProp.activeRotation !== 'number') return;
+    const target = viewProp.activeRotation;
+    setCumulativeRotation((prev) => {
+      let delta = target - (prev % 360);
+      delta = ((delta + 540) % 360) - 180;
+      return prev + delta;
+    });
+  }, [viewProp?.activePlayerIndex, viewProp?.activeRotation, rotateBoard, viewProp, isReplayActive, rotationInitialized]);
 
   // Reset rotation when entering/leaving replay mode
   useEffect(() => {
@@ -1539,7 +1585,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 displayCoord={displayCoord}
                 isAnimating={isThisAnimating}
                 animationDuration={pieceAnimDuration}
-                isLastMoved={isLastMoved}
+                isLastMoved={
+                  viewProp
+                    ? (showLastMoves && viewProp.highlights.some(h => h.kind === 'lastMoveTo' && cubeEquals(h.cell, coord)))
+                    : isLastMoved
+                }
                 darkMode={darkMode}
                 glassPieces={glassPieces}
                 hexCells={hexCells}
@@ -1548,6 +1598,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 showActivePlayerRing={activePlayerRing}
                 pieceType={piecePieceType}
                 faded={pieceFaded}
+                smoothSlide={!!viewProp && animateMoves}
               />
             </g>
           );
@@ -1613,7 +1664,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         const activeColor = viewProp?.activePlayerColor ?? '#22c55e';
         const captureColor = viewProp?.activePlayerColor ?? '#ef4444';
         const newKindHighlights = renderHighlights.filter(
-          h => h.kind === 'legalMoveEmpty' || h.kind === 'legalMoveCapture' || h.kind === 'check'
+          h => h.kind === 'legalMoveEmpty' || h.kind === 'legalMoveCapture' || h.kind === 'check' ||
+               (h.kind === 'lastMoveFrom' && showLastMoves)
         );
         if (newKindHighlights.length === 0) return null;
         return (
@@ -1658,6 +1710,18 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                       stroke="#dc2626"
                       strokeWidth={3}
                       className="check-pulse"
+                      pointerEvents="none"
+                    />
+                  );
+                case 'lastMoveFrom':
+                  return (
+                    <circle
+                      key={stableKey}
+                      cx={px}
+                      cy={py}
+                      r={pieceRadius * 0.9}
+                      fill="#eab308"
+                      opacity={0.16}
                       pointerEvents="none"
                     />
                   );

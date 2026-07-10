@@ -52,4 +52,10 @@ export interface BoardView {
   activePlayerIndex: PlayerIndex;
   /** CSS color of the active player. Used to color legal-move dots. */
   activePlayerColor?: string;
+  /** Rotation angle (deg) to use on initial mount. */
+  initialRotation?: number;
+  /** Rotation angle (deg) to use when rotateBoard is on and the active player changes. */
+  activeRotation?: number;
+  /** Fires once per capture — cell + color of the captured piece for particle burst. */
+  captureBurst?: { cell: CubeCoord; color: string; key: string } | null;
 }
