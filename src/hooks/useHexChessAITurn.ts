@@ -3,11 +3,21 @@ import { useEffect, useRef, useState } from 'react';
 import { useHexChessStore } from '@/store/hexChessStore';
 import { createHexChessWorker, analyzeWithWorker } from '@/game/ai/hexchess/workerClient';
 import type { HexChessDifficulty } from '@/game/hexchess';
+import { legalMoves } from '@/game/hexchess';
 
-const DIFFICULTY_BUDGET: Record<HexChessDifficulty, { budgetMs: number; maxDepth: number }> = {
-  easy: { budgetMs: 300, maxDepth: 2 },
-  medium: { budgetMs: 2000, maxDepth: 4 },
-  hard: { budgetMs: 8000, maxDepth: 6 },
+interface DifficultyProfile {
+  budgetMs: number;
+  maxDepth: number;
+  // Probability that the AI plays a random legal move instead of the engine's
+  // best move. Zero for hard, tiny for medium, meaningful for easy so the
+  // player can actually beat easy.
+  blunderChance: number;
+}
+
+const DIFFICULTY_BUDGET: Record<HexChessDifficulty, DifficultyProfile> = {
+  easy:   { budgetMs: 200, maxDepth: 1, blunderChance: 0.40 },
+  medium: { budgetMs: 1200, maxDepth: 3, blunderChance: 0.10 },
+  hard:   { budgetMs: 6000, maxDepth: 5, blunderChance: 0 },
 };
 
 export { DIFFICULTY_BUDGET };
@@ -67,8 +77,20 @@ export function useHexChessAITurn(enabled: boolean = true) {
           console.debug(`[hexchess AI] no move returned for player ${currentPlayer}`);
           return;
         }
-        store.selectPiece(result.move.pieceId);
-        const applied = store.attemptMove(result.move.to);
+        // Blunder chance: at easier tiers the AI occasionally picks a random
+        // legal move instead of the engine's best move so the player can win.
+        let chosenMove = result.move;
+        const blunderChance = DIFFICULTY_BUDGET[difficultyForTurn].blunderChance;
+        if (blunderChance > 0 && Math.random() < blunderChance && store.state) {
+          const legals = legalMoves(store.state);
+          if (legals.length > 0) {
+            const random = legals[Math.floor(Math.random() * legals.length)];
+            console.debug(`[hexchess AI] blunder — player ${currentPlayer} played random move instead of best`);
+            chosenMove = random;
+          }
+        }
+        store.selectPiece(chosenMove.pieceId);
+        const applied = store.attemptMove(chosenMove.to);
         if (applied) {
           const freshState = useHexChessStore.getState().state;
           if (freshState?.pendingPromotion) {

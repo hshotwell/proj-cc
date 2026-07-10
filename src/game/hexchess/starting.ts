@@ -41,10 +41,12 @@ export function pawnStartingCellsForPlayer(_player: HexPlayerIndex): Set<string>
 /**
  * Returns the set of cell coordKeys that are promotion cells for `player`.
  * A soldier or pawn belonging to `player` that reaches any of these cells
- * must promote. These are the cells in the opponent's arm.
+ * must promote. The zone covers the opponent's arm PLUS the opponent's
+ * row-5 extension — the enemy's entire starting territory. This helps
+ * balance soldiers, which are otherwise very slow to reach promotion.
  */
 export function promotionCellsForPlayer(player: HexPlayerIndex): Set<string> {
-  return new Set(armCellsForPlayer(otherPlayer(player)).map(coordKey));
+  return new Set(startingCellsForPlayer(otherPlayer(player)).map(coordKey));
 }
 
 export function armCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {

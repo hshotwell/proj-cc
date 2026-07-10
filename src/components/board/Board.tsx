@@ -1283,10 +1283,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         ))}
       </g>
 
-      {/* Layer 2: Valid move indicators (hidden on AI turns and replay; visible during
-          animation so the player can queue the next hop without waiting for the piece
-          to finish sliding). */}
-      {!isReplayActive && !isAITurn && (
+      {/* Layer 2: Valid move indicators — Sternhalma only. Hex chess handles its
+          own move highlights via BoardView.highlights, so we skip this layer
+          when a viewProp is present (otherwise stale gameStore state from a
+          previous Sternhalma game bleeds into the hex chess board). */}
+      {!viewProp && !isReplayActive && !isAITurn && (
         <g>
           {displayedMoves.map(({ coord, isJump, isSwap }) => (
             <MoveIndicator
@@ -1304,8 +1305,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         </g>
       )}
 
-      {/* Layer 2c: Queued pre-move destinations */}
-      {preMovesAllowed && preMoves.length > 0 && localPlayer !== undefined && gameState && (
+      {/* Layer 2c: Queued pre-move destinations — Sternhalma only. */}
+      {!viewProp && preMovesAllowed && preMoves.length > 0 && localPlayer !== undefined && gameState && (
         <g>
           {preMoves.map((pm, i) => (
             <MoveIndicator
