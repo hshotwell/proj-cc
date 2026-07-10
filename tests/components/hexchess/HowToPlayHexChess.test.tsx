@@ -61,8 +61,8 @@ describe('HowToPlayHexChess', () => {
     expect(html).toContain('Bishop');
   });
 
-  it('setup section mentions Soldier', () => {
+  it('setup section mentions Peon', () => {
     const html = render(true);
-    expect(html).toContain('Soldier');
+    expect(html).toContain('Peon');
   });
 });

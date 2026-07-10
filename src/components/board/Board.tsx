@@ -1525,9 +1525,13 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 player={player}
                 isCurrentPlayer={!viewProp && !isReplayActive && !isAITurn && !animatingPiece && isLocalPlayerTurn !== false && player === displayCurrentPlayer && (isLocalPlayerTurn === undefined || player === fixedRotationPlayer)}
                 isSelected={
-                  (!isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)) ||
-                  (highlightCoord != null && cubeEquals(highlightCoord, coord)) ||
-                  (!!preMovesAllowed && preMoveSelectedFrom != null && cubeEquals(preMoveSelectedFrom, coord))
+                  viewProp
+                    ? viewProp.highlights.some(h => h.kind === 'selection' && cubeEquals(h.cell, coord))
+                    : (
+                        (!isReplayActive && !isAITurn && selectedPiece !== null && cubeEquals(selectedPiece, coord)) ||
+                        (highlightCoord != null && cubeEquals(highlightCoord, coord)) ||
+                        (!!preMovesAllowed && preMoveSelectedFrom != null && cubeEquals(preMoveSelectedFrom, coord))
+                      )
                 }
                 onClick={() => handlePieceClick(coord)}
                 size={HEX_SIZE}
@@ -1604,6 +1608,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       {/* Layer 3c: BoardView highlights — legalMoveEmpty, legalMoveCapture, check */}
       {renderHighlights.length > 0 && (() => {
         const pieceRadius = HEX_SIZE * 0.45;
+        // Prefer the view's active-player color when available (hex chess); fall back
+        // to green/red pair when not (Sternhalma or unknown mode).
+        const activeColor = viewProp?.activePlayerColor ?? '#22c55e';
+        const captureColor = viewProp?.activePlayerColor ?? '#ef4444';
         const newKindHighlights = renderHighlights.filter(
           h => h.kind === 'legalMoveEmpty' || h.kind === 'legalMoveCapture' || h.kind === 'check'
         );
@@ -1621,7 +1629,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                       cx={px}
                       cy={py}
                       r={6}
-                      fill="#22c55e"
+                      fill={activeColor}
                       opacity={0.7}
                       pointerEvents="none"
                     />
@@ -1634,7 +1642,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                       cy={py}
                       r={pieceRadius + 3}
                       fill="none"
-                      stroke="#ef4444"
+                      stroke={captureColor}
                       strokeWidth={2.5}
                       pointerEvents="none"
                     />

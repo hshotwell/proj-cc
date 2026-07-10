@@ -4,8 +4,10 @@ import { QueenIcon } from './Queen';
 import { RookIcon } from './Rook';
 import { BishopIcon } from './Bishop';
 import { KnightIcon } from './Knight';
+import { PeonIcon } from './Peon';
+import { PawnIcon } from './Pawn';
 
-export { KingIcon, QueenIcon, RookIcon, BishopIcon, KnightIcon };
+export { KingIcon, QueenIcon, RookIcon, BishopIcon, KnightIcon, PeonIcon, PawnIcon };
 
 export function pieceIconFor(type: BoardPieceType) {
   switch (type) {
@@ -14,6 +16,8 @@ export function pieceIconFor(type: BoardPieceType) {
     case 'rook': return RookIcon;
     case 'bishop': return BishopIcon;
     case 'knight': return KnightIcon;
-    default: return null; // soldier, pawn, marble have no glyph
+    case 'soldier': return PeonIcon;   // Hex Chess "Soldier" is displayed as "Peon"
+    case 'pawn': return PawnIcon;
+    default: return null;              // marble has no glyph
   }
 }

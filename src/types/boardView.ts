@@ -50,4 +50,6 @@ export interface BoardView {
   animatingMove: BoardMoveAnimation | null;
   rotation: number;
   activePlayerIndex: PlayerIndex;
+  /** CSS color of the active player. Used to color legal-move dots. */
+  activePlayerColor?: string;
 }

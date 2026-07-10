@@ -28,7 +28,7 @@ export function HowToPlayHexChess({ open, onClose }: HowToPlayHexChessProps) {
         </section>
         <section className="mb-4">
           <h3 className="font-medium mb-2">Setup</h3>
-          <p className="text-sm text-gray-700">Each player starts with 10 pieces on their arm of the star board: 1 King, 1 Queen, 2 Rooks, 2 Bishops, and 4 Soldiers. Kings sit at the apex; Soldiers form the front row facing the center.</p>
+          <p className="text-sm text-gray-700">Each player starts with 10 pieces on their arm of the star board: 1 King, 1 Queen, 2 Rooks, 2 Bishops, and 4 Peons. Kings sit at the apex; Peons form the front row facing the center.</p>
         </section>
         <section className="mb-4">
           <h3 className="font-medium mb-2">Pieces</h3>
@@ -38,16 +38,16 @@ export function HowToPlayHexChess({ open, onClose }: HowToPlayHexChessProps) {
             <li><strong>Rook</strong>: any distance along 6 edge directions.</li>
             <li><strong>Bishop</strong>: any distance along 6 diagonal directions (2-hex steps).</li>
             <li><strong>Knight</strong>: leaps to the 12 nearest cells not reachable by a Queen in one step.</li>
-            <li><strong>Soldier</strong>: moves 1 diagonal forward, captures 1 edge forward on either side.</li>
+            <li><strong>Peon</strong>: moves 1 diagonal forward, captures 1 edge forward on either side.</li>
           </ul>
         </section>
         <section className="mb-4">
           <h3 className="font-medium mb-2">Promotion</h3>
-          <p className="text-sm text-gray-700">Soldiers that reach any cell of the opposing arm promote to a Queen, Rook, Bishop, or Knight — your choice.</p>
+          <p className="text-sm text-gray-700">Peons that reach any cell of the opposing arm promote to a Queen, Rook, Bishop, or Knight — your choice.</p>
         </section>
         <section className="mb-4">
           <h3 className="font-medium mb-2">En passant</h3>
-          <p className="text-sm text-gray-700">When your Soldier advances two cells (via its normal 1-diagonal step) and lands next to an enemy Soldier, that enemy may capture your Soldier immediately by moving forward-diagonally to the passed-through cell. Only available on the immediately following turn.</p>
+          <p className="text-sm text-gray-700">When your Peon advances two cells (via its normal 1-diagonal step) and lands next to an enemy Peon, that enemy may capture your Peon immediately by moving forward-diagonally to the passed-through cell. Only available on the immediately following turn.</p>
         </section>
         <section className="mb-4">
           <h3 className="font-medium mb-2">Draws</h3>

@@ -286,5 +286,6 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     animatingMove: null,
     rotation: 0,
     activePlayerIndex: state.currentPlayer as PlayerIndex,
+    activePlayerColor: config.players[state.currentPlayer].color,
   };
 }

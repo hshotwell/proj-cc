@@ -408,6 +408,52 @@ export function Piece({
   // Use displayPx first (arc animation), then displayCoord, then coord
   const renderCoord = displayCoord ?? coord;
   const { x, y } = displayPx ?? cubeToPixel(renderCoord, size);
+
+  // Hex Chess pieces render as pure icon silhouettes in the player's color —
+  // no marble, no gradient, no shadow. The icon IS the piece.
+  const isHexChessPiece = pieceType && pieceType !== 'marble';
+  if (isHexChessPiece) {
+    const IconComponent = pieceIconFor(pieceType!);
+    if (!IconComponent) return null;
+    const iconSize = size * 1.75;
+    const pieceColor = getPlayerColor(player, customColors);
+    const cssColor = pieceColor.startsWith('#') || pieceColor.startsWith('rgb')
+      ? pieceColor
+      : pieceColor; // sentinel colors ('rainbow', etc.) — treated as-is; getCSSColor lives in constants
+    return (
+      <g
+        onClick={onClick}
+        transform={`translate(${x}, ${y}) rotate(${-boardRotation})`}
+        style={{
+          cursor: 'pointer',
+          transition: faded ? 'opacity 180ms ease-out' : undefined,
+          opacity: faded ? 0 : (isSelected ? 1 : (isLastMoved ? 0.95 : 1)),
+        }}
+      >
+        {isSelected && (
+          <circle
+            cx={0}
+            cy={0}
+            r={size * 0.7}
+            fill="none"
+            stroke={cssColor}
+            strokeWidth={2.5}
+            opacity={0.9}
+          />
+        )}
+        <svg
+          x={-iconSize / 2}
+          y={-iconSize / 2}
+          width={iconSize}
+          height={iconSize}
+          style={{ pointerEvents: 'none' }}
+        >
+          <IconComponent size={iconSize} fill={cssColor} />
+        </svg>
+      </g>
+    );
+  }
+
   const baseColor = getPlayerColor(player, customColors);
   const isRainbowPiece = baseColor === 'rainbow';
   const isOpalPiece = baseColor === 'opal';
