@@ -452,8 +452,11 @@ export function Piece({
   if (isHexChessPiece) {
     const IconComponent = pieceIconFor(pieceType!);
     if (!IconComponent) return null;
-    const iconSize = size * 1.75;
-    const pieceRadiusChess = size * 0.7;
+    // Icons sized to fit inside the hex tile. Peons and pawns render smaller
+    // than the other pieces so the hierarchy reads at a glance.
+    const isSmallPiece = pieceType === 'soldier' || pieceType === 'pawn';
+    const iconSize = size * (isSmallPiece ? 1.15 : 1.45);
+    const pieceRadiusChess = size * 0.62;
     const pieceColor = getPlayerColor(player, customColors);
     const captureColor = captureTargetColor ?? pieceColor;
     const cssColor = pieceColor;

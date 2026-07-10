@@ -8,13 +8,12 @@ import {
   applyMove,
   legalMoves,
   confirmPromotion as applyConfirmPromotion,
-  armCellsForPlayer,
   isInCheck,
 } from '@/game/hexchess';
 import { cubeEquals, parseCoordKey } from '@/game/coordinates';
 import { getDefaultBoardCells } from '@/game/defaultLayout';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
-import { kingOf, otherPlayer } from '@/game/hexchess/board';
+import { kingOf } from '@/game/hexchess/board';
 import { saveHexChessGame, loadHexChessGame } from '@/game/hexchess/persistence';
 import { playStep, playCapture, playCheck, playCheckmate } from '@/audio/soundEffects';
 
@@ -232,11 +231,10 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
   const defaultCells = getDefaultBoardCells();
   const cells: CubeCoord[] = Array.from(defaultCells).map(parseCoordKey);
 
-  // Build homeZones: each player's homeZone is the OPPONENT's arm cells (promotion zone)
+  // No home-zone tinting on the star points — the 3-shade beige/brown board
+  // pattern already indicates position clearly, and the arms are visually
+  // distinct via their star shape.
   const homeZones = new Map<PlayerIndex, CubeCoord[]>();
-  for (const player of [0, 1] as const) {
-    homeZones.set(player as PlayerIndex, armCellsForPlayer(otherPlayer(player)));
-  }
 
   // Build pieces list from active pieces in state
   const pieces: BoardPiece[] = state.pieces.map(piece => ({

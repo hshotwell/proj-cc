@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { selectHexChessBoardView } from '@/store/hexChessStore';
-import { createInitialState, armCellsForPlayer } from '@/game/hexchess';
+import { createInitialState } from '@/game/hexchess';
 import { applyMove, legalMoves } from '@/game/hexchess';
 import { coordKey } from '@/game/coordinates';
 import type { HexChessConfig } from '@/game/hexchess';
@@ -29,7 +29,7 @@ describe('selectHexChessBoardView', () => {
     expect(result).toBeNull();
   });
 
-  it('Test 2: initial state produces view with 30 pieces each with pieceType set', () => {
+  it('Test 2: initial state produces view with 26 pieces each with pieceType set', () => {
     const state = createInitialState(DEFAULT_CONFIG);
     const view = selectHexChessBoardView({
       state,
@@ -41,7 +41,7 @@ describe('selectHexChessBoardView', () => {
     } as never);
 
     expect(view).not.toBeNull();
-    expect(view!.pieces).toHaveLength(30);
+    expect(view!.pieces).toHaveLength(26);
     for (const piece of view!.pieces) {
       expect(piece.pieceType).toBeDefined();
       expect(piece.pieceType).not.toBe('marble');
@@ -54,10 +54,10 @@ describe('selectHexChessBoardView', () => {
     expect(types.filter(t => t === 'rook')).toHaveLength(4);
     expect(types.filter(t => t === 'bishop')).toHaveLength(4);
     expect(types.filter(t => t === 'knight')).toHaveLength(4);
-    expect(types.filter(t => t === 'soldier')).toHaveLength(14);
+    expect(types.filter(t => t === 'soldier')).toHaveLength(10);
   });
 
-  it('Test 3: both players opponent arm cells appear as homeZones entries', () => {
+  it('Test 3: homeZones is empty in hex chess (no arm-cell tinting)', () => {
     const state = createInitialState(DEFAULT_CONFIG);
     const view = selectHexChessBoardView({
       state,
@@ -69,25 +69,9 @@ describe('selectHexChessBoardView', () => {
     } as never);
 
     expect(view).not.toBeNull();
-    // homeZones[0] = opponent(0) = player 1's arm cells
-    const zone0 = view!.homeZones.get(0);
-    const zone1 = view!.homeZones.get(1);
-    expect(zone0).toBeDefined();
-    expect(zone1).toBeDefined();
-    expect(zone0!.length).toBe(10);
-    expect(zone1!.length).toBe(10);
-
-    // Verify zone for player 0 contains opponent (player 1) arm cells
-    const player1ArmKeys = new Set(armCellsForPlayer(1).map(coordKey));
-    for (const cell of zone0!) {
-      expect(player1ArmKeys.has(coordKey(cell))).toBe(true);
-    }
-
-    // Verify zone for player 1 contains opponent (player 0) arm cells
-    const player0ArmKeys = new Set(armCellsForPlayer(0).map(coordKey));
-    for (const cell of zone1!) {
-      expect(player0ArmKeys.has(coordKey(cell))).toBe(true);
-    }
+    // Hex chess relies on the 3-shade beige/brown tile pattern for orientation
+    // and does not tint arm cells with player colors.
+    expect(view!.homeZones.size).toBe(0);
   });
 
   it('Test 4: selection highlight added when a piece is selected', () => {

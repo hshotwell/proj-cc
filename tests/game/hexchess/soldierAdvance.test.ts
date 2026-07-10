@@ -22,9 +22,10 @@ describe('soldier advance from v1 starting position', () => {
     const s = createInitialState(config);
     for (const player of [0, 1] as const) {
       const soldiers = s.pieces.filter((p) => p.player === player && p.type === 'soldier');
-      // v1 extended layout: 4 soldiers on row 4 + 3 soldiers on row 5 = 7 total.
-      expect(soldiers).toHaveLength(7);
-      // At least the row-5 soldiers (front-most) have forward moves available.
+      // v1 layout: 2 soldiers on row 4 (between the knights) + 3 soldiers in
+      // the middle of row 5 = 5 total.
+      expect(soldiers).toHaveLength(5);
+      // The row-5 soldiers (front-most) have forward moves available.
       const advancing = soldiers.filter((soldier) => soldierMoves(s, soldier).length > 0);
       expect(advancing.length).toBeGreaterThan(0);
     }

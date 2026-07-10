@@ -211,10 +211,13 @@ export function BoardCell({
 
     let hexContent: React.ReactNode;
     if (glassPieces) {
-      // Glass mode: hexagonal gradient via concentric polygons in zone-base color
-      const zoneColor = homeIsActive && effectiveHomeColor
-        ? desaturateColor(effectiveHomeColor, 0.65)
-        : (zoneExists ? inactiveZoneColor : baseColor);
+      // Glass mode: hexagonal gradient via concentric polygons in zone-base color.
+      // Hex Chess tileTintColor overrides — the 3-shade pattern must remain visible.
+      const zoneColor = tileTintColor !== undefined
+        ? tileTintColor
+        : (homeIsActive && effectiveHomeColor
+            ? desaturateColor(effectiveHomeColor, 0.65)
+            : (zoneExists ? inactiveZoneColor : baseColor));
       hexContent = (
         <g>
           {HEX_GRAD_STOPS.map(([frac, adj], idx) => (

@@ -14,13 +14,13 @@ const config: HexChessConfig = {
 };
 
 describe('createInitialState', () => {
-  it('places 15 pieces per side, 30 total (v1 extended layout)', () => {
+  it('places 13 pieces per side, 26 total (v1 extended layout)', () => {
     const s = createInitialState(config);
-    expect(s.pieces.filter((p) => p.player === 0)).toHaveLength(15);
-    expect(s.pieces.filter((p) => p.player === 1)).toHaveLength(15);
+    expect(s.pieces.filter((p) => p.player === 0)).toHaveLength(13);
+    expect(s.pieces.filter((p) => p.player === 1)).toHaveLength(13);
   });
 
-  it('correct roster: 1K, 1Q, 2R, 2B, 2N, 7 Soldiers per side', () => {
+  it('correct roster: 1K, 1Q, 2R, 2B, 2N, 5 Soldiers per side', () => {
     const s = createInitialState(config);
     for (const player of [0, 1] as const) {
       const mine = s.pieces.filter((p) => p.player === player);
@@ -28,8 +28,8 @@ describe('createInitialState', () => {
         acc[p.type] = (acc[p.type] ?? 0) + 1;
         return acc;
       }, {});
-      // Row 4 (4 soldiers) + Row 5 (3 soldiers) = 7 soldiers per side.
-      expect(counts).toEqual({ king: 1, queen: 1, rook: 2, bishop: 2, knight: 2, soldier: 7 });
+      // Row 4 has 2 soldiers between flanking knights + Row 5 has 3 middle soldiers = 5 total.
+      expect(counts).toEqual({ king: 1, queen: 1, rook: 2, bishop: 2, knight: 2, soldier: 5 });
     }
   });
 

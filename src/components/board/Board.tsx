@@ -1804,10 +1804,10 @@ function homeZonePlayerFor(cell: CubeCoord, homeZones: BoardView['homeZones']): 
 }
 
 // Hex Chess board: 3-color the tiles using (q + 2r) mod 3 so no two adjacent
-// hex cells share the same color. Light / medium / dark beige-brown pattern,
-// with slightly darker variants when the app is in dark mode.
-const HEX_CHESS_TILE_COLORS_LIGHT: [string, string, string] = ['#efdcbb', '#dcc39a', '#c9a97b'];
-const HEX_CHESS_TILE_COLORS_DARK:  [string, string, string] = ['#6b543a', '#5a442f', '#493627'];
+// hex cells share the same color. Ordered darkest → medium → lightest so the
+// center cell (0,0) → index 0 → darkest, and neighbors fan out lighter.
+const HEX_CHESS_TILE_COLORS_LIGHT: [string, string, string] = ['#c9a97b', '#dcc39a', '#efdcbb'];
+const HEX_CHESS_TILE_COLORS_DARK:  [string, string, string] = ['#493627', '#5a442f', '#6b543a'];
 function hexChessTileColor(cell: CubeCoord, darkMode: boolean): string {
   const palette = darkMode ? HEX_CHESS_TILE_COLORS_DARK : HEX_CHESS_TILE_COLORS_LIGHT;
   const idx = ((cell.q + 2 * cell.r) % 3 + 3) % 3;

@@ -98,14 +98,14 @@ export function startingCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
 
 // ---------------------------------------------------------------------------
 // V1 default layout — pieces ordered to match startingCellsForPlayer indices
-//   index 0:    king           (row 1, apex)
-//   index 1-2:  bishop x2      (row 2)
-//   index 3-5:  rook, queen, rook  (row 3)
-//   index 6-9:  knight, soldier x2, knight  (row 4, base — knights on the flanks)
-//   index 10-14: soldier x5    (row 5, into central hex — full front line of peons)
+//   index 0:     king                     (row 1, apex)
+//   index 1-2:   bishop x2                (row 2)
+//   index 3-5:   rook, queen, rook        (row 3)
+//   index 6-9:   knight, soldier x2, knight  (row 4, knights on the flanks)
+//   index 10-14: empty, soldier x3, empty (row 5, 3 peons in the middle)
 // ---------------------------------------------------------------------------
 
-const V1_LAYOUT: HexPieceType[] = [
+const V1_LAYOUT: (HexPieceType | null)[] = [
   // row 1 — apex
   'king',
   // row 2 — bishops
@@ -114,8 +114,8 @@ const V1_LAYOUT: HexPieceType[] = [
   'rook', 'queen', 'rook',
   // row 4 — knights on the outer flanks, two peons in the middle
   'knight', 'soldier', 'soldier', 'knight',
-  // row 5 — five peons across the front
-  'soldier', 'soldier', 'soldier', 'soldier', 'soldier',
+  // row 5 — three peons in the middle; outer cells stay empty
+  null, 'soldier', 'soldier', 'soldier', null,
 ];
 
 export function createInitialState(config: HexChessConfig): HexChessState {
@@ -125,10 +125,12 @@ export function createInitialState(config: HexChessConfig): HexChessState {
     const cells = startingCellsForPlayer(player);
 
     for (let i = 0; i < V1_LAYOUT.length; i++) {
+      const type = V1_LAYOUT[i];
+      if (type === null) continue;   // empty starting cell
       pieces.push({
-        id: `${player}-${V1_LAYOUT[i]}-${i}`,
+        id: `${player}-${type}-${i}`,
         player,
-        type: V1_LAYOUT[i],
+        type,
         cell: cells[i],
         hasMoved: false,
       });
