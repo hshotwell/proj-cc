@@ -439,7 +439,7 @@ export function Piece({
     // Cancel any in-flight animation from a previous move.
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     const startTime = performance.now();
-    const duration = 250;
+    const duration = 450;
     const sx = prev.x;
     const sy = prev.y;
     const dx = x - sx;

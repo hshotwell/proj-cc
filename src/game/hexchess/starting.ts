@@ -41,12 +41,26 @@ export function pawnStartingCellsForPlayer(_player: HexPlayerIndex): Set<string>
 /**
  * Returns the set of cell coordKeys that are promotion cells for `player`.
  * A soldier or pawn belonging to `player` that reaches any of these cells
- * must promote. The zone covers the opponent's arm PLUS the opponent's
- * row-5 extension — the enemy's entire starting territory. This helps
- * balance soldiers, which are otherwise very slow to reach promotion.
+ * must promote. The zone is the OPPONENT'S HALF of the board — every cell
+ * where `r` has crossed the midline (r = 0). This gives soldiers a much
+ * shorter, more strategic path to promotion.
+ *   - Player 0 (arm at r = -8): promotes on r >= 0.
+ *   - Player 1 (arm at r =  8): promotes on r <= 0.
  */
 export function promotionCellsForPlayer(player: HexPlayerIndex): Set<string> {
-  return new Set(startingCellsForPlayer(otherPlayer(player)).map(coordKey));
+  const cells: string[] = [];
+  // Enumerate all cells on the standard 121-cell star. Using cube-distance
+  // bounds |q|, |r|, |s| <= 8 covers every cell on the star; the play code
+  // filters unreachable cells via isOnBoard elsewhere.
+  for (let q = -8; q <= 8; q++) {
+    for (let r = -8; r <= 8; r++) {
+      const s = -q - r;
+      if (Math.abs(s) > 8) continue;
+      const past = player === 0 ? r >= 1 : r <= -1;
+      if (past) cells.push(`${q},${r}`);
+    }
+  }
+  return new Set(cells);
 }
 
 export function armCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {

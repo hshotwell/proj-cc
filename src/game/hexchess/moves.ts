@@ -93,7 +93,10 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
   const ep = state.enPassantTarget;
   if (ep && ep.availableUntilTurn === state.turnNumber) {
     const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
-    if (capturedPiece && capturedPiece.player !== piece.player && capturedPiece.type === 'soldier') {
+    // No type check on the captured piece — a peon that has already promoted
+    // to a queen/rook/bishop/knight can still be captured en passant if the
+    // enemy soldier had already committed to the double-step response.
+    if (capturedPiece && capturedPiece.player !== piece.player) {
       for (const targetCell of ep.targetCells) {
         if (forwardDiagCell.q === targetCell.q && forwardDiagCell.r === targetCell.r) {
           out.push({
@@ -153,9 +156,10 @@ export function pawnMoves(
   if (ep && ep.availableUntilTurn === state.turnNumber) {
     for (const targetCell of ep.targetCells) {
       if (diagCell.q === targetCell.q && diagCell.r === targetCell.r) {
-        // Verify the captured piece is actually a pawn
+        // No type check — a pawn that has since promoted is still an eligible
+        // en passant target (its identity, not its current type, is what matters).
         const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
-        if (capturedPiece && capturedPiece.player !== piece.player && capturedPiece.type === 'pawn') {
+        if (capturedPiece && capturedPiece.player !== piece.player) {
           out.push({
             to: diagCell,
             isCapture: true,

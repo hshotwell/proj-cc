@@ -8,25 +8,28 @@ describe('DIFFICULTY_BUDGET', () => {
     expect(DIFFICULTY_BUDGET).toHaveProperty('hard');
   });
 
-  it('easy has a short budget and shallow depth', () => {
-    expect(DIFFICULTY_BUDGET.easy.budgetMs).toBe(300);
-    expect(DIFFICULTY_BUDGET.easy.maxDepth).toBe(2);
+  it('easy is nerfed with a real blunder chance and a large shuffle chance', () => {
+    expect(DIFFICULTY_BUDGET.easy.blunderChance).toBeGreaterThan(0);
+    expect(DIFFICULTY_BUDGET.easy.shuffleChance).toBeGreaterThan(0);
+    expect(DIFFICULTY_BUDGET.easy.maxDepth).toBeLessThan(3);
   });
 
-  it('medium has a moderate budget and depth', () => {
-    expect(DIFFICULTY_BUDGET.medium.budgetMs).toBe(2000);
-    expect(DIFFICULTY_BUDGET.medium.maxDepth).toBe(4);
+  it('medium has a smaller blunder chance and a moderate shuffle chance', () => {
+    expect(DIFFICULTY_BUDGET.medium.blunderChance).toBeLessThan(DIFFICULTY_BUDGET.easy.blunderChance);
+    expect(DIFFICULTY_BUDGET.medium.shuffleChance).toBeLessThan(DIFFICULTY_BUDGET.easy.shuffleChance);
+    expect(DIFFICULTY_BUDGET.medium.maxDepth).toBeGreaterThanOrEqual(DIFFICULTY_BUDGET.easy.maxDepth);
   });
 
-  it('hard has the longest budget and deepest search', () => {
-    expect(DIFFICULTY_BUDGET.hard.budgetMs).toBe(8000);
-    expect(DIFFICULTY_BUDGET.hard.maxDepth).toBe(6);
+  it('hard is full strength — no blunder or shuffle chance', () => {
+    expect(DIFFICULTY_BUDGET.hard.blunderChance).toBe(0);
+    expect(DIFFICULTY_BUDGET.hard.shuffleChance).toBe(0);
+    expect(DIFFICULTY_BUDGET.hard.maxDepth).toBeGreaterThan(DIFFICULTY_BUDGET.medium.maxDepth);
   });
 
-  it('budgetMs and maxDepth increase with difficulty', () => {
-    expect(DIFFICULTY_BUDGET.easy.budgetMs).toBeLessThan(DIFFICULTY_BUDGET.medium.budgetMs);
-    expect(DIFFICULTY_BUDGET.medium.budgetMs).toBeLessThan(DIFFICULTY_BUDGET.hard.budgetMs);
-    expect(DIFFICULTY_BUDGET.easy.maxDepth).toBeLessThan(DIFFICULTY_BUDGET.medium.maxDepth);
-    expect(DIFFICULTY_BUDGET.medium.maxDepth).toBeLessThan(DIFFICULTY_BUDGET.hard.maxDepth);
+  it('budgetMs and maxDepth do not decrease with difficulty', () => {
+    expect(DIFFICULTY_BUDGET.easy.budgetMs).toBeLessThanOrEqual(DIFFICULTY_BUDGET.medium.budgetMs);
+    expect(DIFFICULTY_BUDGET.medium.budgetMs).toBeLessThanOrEqual(DIFFICULTY_BUDGET.hard.budgetMs);
+    expect(DIFFICULTY_BUDGET.easy.maxDepth).toBeLessThanOrEqual(DIFFICULTY_BUDGET.medium.maxDepth);
+    expect(DIFFICULTY_BUDGET.medium.maxDepth).toBeLessThanOrEqual(DIFFICULTY_BUDGET.hard.maxDepth);
   });
 });

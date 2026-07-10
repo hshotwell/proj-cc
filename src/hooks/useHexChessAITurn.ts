@@ -2,23 +2,50 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHexChessStore } from '@/store/hexChessStore';
 import { createHexChessWorker, analyzeWithWorker } from '@/game/ai/hexchess/workerClient';
-import type { HexChessDifficulty } from '@/game/hexchess';
-import { legalMoves } from '@/game/hexchess';
+import type { HexChessDifficulty, HexChessState, HexMove } from '@/game/hexchess';
+import { legalMoves, applyMove } from '@/game/hexchess';
+import { isCellAttacked } from '@/game/hexchess/check';
+import { otherPlayer } from '@/game/hexchess/board';
 
 interface DifficultyProfile {
   budgetMs: number;
   maxDepth: number;
-  // Probability that the AI plays a random legal move instead of the engine's
-  // best move. Zero for hard, tiny for medium, meaningful for easy so the
-  // player can actually beat easy.
+  // Probability that the AI plays an obviously losing move — one that
+  // parks a piece on a cell attacked by the enemy where no adequate
+  // defender exists ("hangs" a piece).
   blunderChance: number;
+  // Probability (in addition to blunder) that the AI plays a random legal
+  // move that is at least NOT a piece-hanger — an aimless "shuffle" that
+  // wastes a tempo but doesn't lose material outright.
+  shuffleChance: number;
 }
 
 const DIFFICULTY_BUDGET: Record<HexChessDifficulty, DifficultyProfile> = {
-  easy:   { budgetMs: 200, maxDepth: 1, blunderChance: 0.40 },
-  medium: { budgetMs: 1200, maxDepth: 3, blunderChance: 0.10 },
-  hard:   { budgetMs: 6000, maxDepth: 5, blunderChance: 0 },
+  easy:   { budgetMs: 200, maxDepth: 1, blunderChance: 0.20, shuffleChance: 0.60 },
+  medium: { budgetMs: 1200, maxDepth: 3, blunderChance: 0.05, shuffleChance: 0.30 },
+  hard:   { budgetMs: 6000, maxDepth: 5, blunderChance: 0,    shuffleChance: 0 },
 };
+
+/**
+ * True if the given move, if played, would leave the moving piece on a cell
+ * attacked by the opponent with no adequate defender — an obvious material
+ * blunder.
+ */
+function movePutsPieceEnPrise(state: HexChessState, move: HexMove): boolean {
+  const next = applyMove(state, move);
+  const mover = state.currentPlayer;
+  const opp = otherPlayer(mover);
+  // Find the piece at the destination (should be the moved piece).
+  const moved = next.pieces.find(p => p.player === mover && p.cell.q === move.to.q && p.cell.r === move.to.r);
+  if (!moved) return false;
+  const attacked = isCellAttacked(next, move.to, opp);
+  if (!attacked) return false;
+  // Count defenders of the destination cell (other than the moved piece).
+  const otherPieces = next.pieces.filter(p => p.id !== moved.id);
+  const stateWithoutMover: HexChessState = { ...next, pieces: otherPieces };
+  const defended = isCellAttacked(stateWithoutMover, move.to, mover);
+  return !defended;
+}
 
 export { DIFFICULTY_BUDGET };
 
@@ -77,16 +104,29 @@ export function useHexChessAITurn(enabled: boolean = true) {
           console.debug(`[hexchess AI] no move returned for player ${currentPlayer}`);
           return;
         }
-        // Blunder chance: at easier tiers the AI occasionally picks a random
-        // legal move instead of the engine's best move so the player can win.
+        // Handicap: at easier tiers the AI occasionally picks a suboptimal
+        // move. Two independent chances:
+        //   - blunderChance: pick a move that hangs the moved piece (drops it
+        //     onto an attacked cell with no adequate defender).
+        //   - shuffleChance: pick a random legal move that is at least NOT a
+        //     piece-hanger — wastes a tempo without giving material away.
         let chosenMove = result.move;
-        const blunderChance = DIFFICULTY_BUDGET[difficultyForTurn].blunderChance;
-        if (blunderChance > 0 && Math.random() < blunderChance && store.state) {
-          const legals = legalMoves(store.state);
-          if (legals.length > 0) {
-            const random = legals[Math.floor(Math.random() * legals.length)];
-            console.debug(`[hexchess AI] blunder — player ${currentPlayer} played random move instead of best`);
-            chosenMove = random;
+        const profile = DIFFICULTY_BUDGET[difficultyForTurn];
+        const roll = Math.random();
+        const currentState = store.state;
+        if (currentState && roll < profile.blunderChance) {
+          const legals = legalMoves(currentState);
+          const hangers = legals.filter(m => movePutsPieceEnPrise(currentState, m));
+          if (hangers.length > 0) {
+            chosenMove = hangers[Math.floor(Math.random() * hangers.length)];
+            console.debug(`[hexchess AI] BLUNDER — player ${currentPlayer} hangs a piece`);
+          }
+        } else if (currentState && roll < profile.blunderChance + profile.shuffleChance) {
+          const legals = legalMoves(currentState);
+          const safe = legals.filter(m => !movePutsPieceEnPrise(currentState, m));
+          if (safe.length > 0) {
+            chosenMove = safe[Math.floor(Math.random() * safe.length)];
+            console.debug(`[hexchess AI] shuffle — player ${currentPlayer} plays a random safe move`);
           }
         }
         store.selectPiece(chosenMove.pieceId);

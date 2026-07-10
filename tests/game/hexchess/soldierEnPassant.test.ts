@@ -48,7 +48,7 @@ describe('soldier en passant', () => {
     const [e1, e2] = forwardEdges(0);
     const diag = forwardDiagonal(0);
 
-    const soldierStart = cubeCoord(0, 0);
+    const soldierStart = cubeCoord(2, -4);
     const soldierDest = cubeAdd(soldierStart, diag);
 
     // Passed-through cells: from + e1 and from + e2 (which equal to - e2 and to - e1)
@@ -85,7 +85,7 @@ describe('soldier en passant', () => {
     const [e1] = forwardEdges(0);
     const diag0 = forwardDiagonal(0);
 
-    const soldierAStart = cubeCoord(0, 0);
+    const soldierAStart = cubeCoord(2, -4);
     const soldierADest = cubeAdd(soldierAStart, diag0);
     // passedCell1 = soldierAStart + e1
     const passedCell1 = cubeAdd(soldierAStart, e1);
@@ -142,7 +142,7 @@ describe('soldier en passant', () => {
     const [e1] = forwardEdges(0);
     const diag0 = forwardDiagonal(0);
 
-    const soldierAStart = cubeCoord(0, 0);
+    const soldierAStart = cubeCoord(2, -4);
     const soldierADest = cubeAdd(soldierAStart, diag0);
     const passedCell1 = cubeAdd(soldierAStart, e1);
 
@@ -184,7 +184,7 @@ describe('soldier en passant', () => {
     const diag0 = forwardDiagonal(0);
     const diag1 = forwardDiagonal(1);
 
-    const soldierAStart = cubeCoord(0, 0);
+    const soldierAStart = cubeCoord(2, -4);
     const soldierADest = cubeAdd(soldierAStart, diag0);
     const passedCell1 = cubeAdd(soldierAStart, e1);
 

@@ -408,17 +408,12 @@ export default function PlayPage() {
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
-              <option value="ricefish">Ricefish</option>
+              {/* Ricefish is Sternhalma-only. */}
+              {gameMode !== 'hexchess' && <option value="ricefish">Ricefish</option>}
             </select>
-            <select
-              value={aiConfig[playerIndex]!.personality}
-              onChange={(e) => setAiConfig(prev => ({ ...prev, [playerIndex]: { ...prev[playerIndex]!, personality: e.target.value as AIPersonality } }))}
-              className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white"
-            >
-              <option value="generalist">Generalist</option>
-              <option value="defensive">Defensive</option>
-              <option value="aggressive">Aggressive</option>
-            </select>
+            {/* Personality dropdown hidden for now — defensive/aggressive don't
+                move the needle in practice and hex chess ignores them entirely.
+                All games play as generalist. */}
           </div>
         )}
 

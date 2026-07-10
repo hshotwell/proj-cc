@@ -50,8 +50,9 @@ describe('pawn en passant', () => {
   it('sets enPassantTarget after pawn double-step', () => {
     const [e1] = forwardEdges(1); // player 1's forward edge
 
-    // Black pawn at some cell; will double-step in e1 direction.
-    const blackPawnStart = cubeCoord(0, 0);
+    // Black pawn at a cell deep enough on its own side that a double-step
+    // doesn't cross the midline (which would trigger promotion instead of EP).
+    const blackPawnStart = cubeCoord(-2, 6);
     const blackPawnMid = cubeAdd(blackPawnStart, e1);     // passed-through cell
     const blackPawnDest = cubeAdd(blackPawnMid, e1);      // destination after double-step
 
