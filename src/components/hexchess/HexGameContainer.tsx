@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useHexChessStore, selectHexChessBoardView } from '@/store/hexChessStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { Board } from '@/components/board/Board';
 import { SettingsButton } from '@/components/SettingsButton';
 import { SettingsPopup } from '@/components/SettingsPopup';
@@ -9,14 +11,43 @@ import { PromotionPicker } from '@/components/hexchess/PromotionPicker';
 import { HexTurnIndicator } from '@/components/hexchess/HexTurnIndicator';
 import { HexMoveIndicator } from '@/components/hexchess/HexMoveIndicator';
 import { HexGameOverDialog } from '@/components/hexchess/HexGameOverDialog';
+import { HexClearPreMovesButton } from '@/components/hexchess/HexClearPreMovesButton';
 import type { CubeCoord } from '@/types/game';
+import type { HexPlayerIndex } from '@/game/hexchess/state';
 import { cubeEquals } from '@/game/coordinates';
 import { useHexChessAITurn } from '@/hooks/useHexChessAITurn';
+import { useHexChessPreMoveFiring } from '@/hooks/useHexChessPreMoveFiring';
 
 export function HexGameContainer() {
   useHexChessAITurn();
   const store = useHexChessStore();
   const view = selectHexChessBoardView(store);
+  const preMovesSetting = useSettingsStore((s) => s.preMoves);
+
+  const humanPlayers = store.config
+    ? ([0, 1] as const).filter((p) => !store.config!.ai?.[p])
+    : [];
+  const localPlayer: HexPlayerIndex | undefined =
+    humanPlayers.length === 1 ? (humanPlayers[0] as HexPlayerIndex) : undefined;
+  const preMovesAllowed = !!(
+    preMovesSetting &&
+    localPlayer !== undefined &&
+    store.state &&
+    store.state.result === null &&
+    store.state.currentPlayer !== localPlayer &&
+    store.state.pendingPromotion === null
+  );
+
+  useHexChessPreMoveFiring(localPlayer, preMovesSetting && localPlayer !== undefined);
+
+  // Drop any queued pre-moves if the setting is turned off mid-game, or the
+  // game ends — stale queued highlights shouldn't linger over the game-over UI.
+  useEffect(() => {
+    if (!preMovesSetting) useHexChessStore.getState().clearAllPreMoves();
+  }, [preMovesSetting]);
+  useEffect(() => {
+    if (store.state?.result) useHexChessStore.getState().clearAllPreMoves();
+  }, [store.state?.result]);
 
   /**
    * Route board cell clicks to the hex chess store:
@@ -30,6 +61,20 @@ export function HexGameContainer() {
     const s = useHexChessStore.getState();
     const state = s.state;
     if (!state) return;
+
+    // Pre-move mode: divert clicks away from the normal move flow entirely,
+    // including the AI-turn guard below (pre-moves are queued precisely
+    // because it's the AI's turn).
+    if (preMovesAllowed) {
+      const virtualPieces = s.getVirtualPieces();
+      const hit = virtualPieces.find((p) => cubeEquals(p.cell, cell));
+      if (hit && localPlayer !== undefined && hit.player === localPlayer) {
+        s.selectPreMovePiece(hit.id);
+      } else if (s.preMoveSelectedPieceId !== null) {
+        s.queuePreMove(cell);
+      }
+      return;
+    }
 
     // Never let the human move on an AI player's turn. Prevents both accidental
     // input during the AI's think time and any lingering ability to nudge AI
@@ -61,6 +106,25 @@ export function HexGameContainer() {
 
     // Nothing actionable — clear selection.
     s.selectPiece(null);
+  };
+
+  const handleCellRightClick = (cell: CubeCoord) => {
+    if (!preMovesAllowed) return;
+    const s = useHexChessStore.getState();
+
+    const idx = s.preMoves.findIndex((pm) => cubeEquals(pm.to, cell));
+    if (idx >= 0) {
+      s.cancelPreMoveAt(idx);
+      return;
+    }
+
+    if (s.preMoveSelectedPieceId !== null) {
+      const virtualPieces = s.getVirtualPieces();
+      const selected = virtualPieces.find((p) => p.id === s.preMoveSelectedPieceId);
+      if (selected && cubeEquals(selected.cell, cell)) {
+        s.selectPreMovePiece(null);
+      }
+    }
   };
 
   const handlePromote = (choice: Parameters<typeof store.confirmPromotion>[0]) => {
@@ -114,6 +178,7 @@ export function HexGameContainer() {
             <Board
               view={view}
               onCellClick={handleCellClick}
+              onCellRightClick={handleCellRightClick}
             />
           )}
           {store.state.pendingPromotion && (
@@ -121,6 +186,14 @@ export function HexGameContainer() {
               pieceCell={store.state.pendingPromotion.targetCell}
               playerColor={currentColor}
               onChoose={handlePromote}
+            />
+          )}
+          {!store.state.pendingPromotion && store.pendingPreMovePromotion && localPlayer !== undefined && (
+            <PromotionPicker
+              pieceCell={store.pendingPreMovePromotion.to}
+              playerColor={store.config.players[localPlayer].color}
+              onChoose={(choice) => store.confirmPreMovePromotion(choice)}
+              onCancel={() => store.cancelPreMovePromotion()}
             />
           )}
         </div>
@@ -133,6 +206,8 @@ export function HexGameContainer() {
             onResign={handleResign}
           />
         </div>
+
+        {preMovesAllowed && <HexClearPreMovesButton localPlayer={localPlayer} />}
 
         {/* Turn indicator */}
         <div className="mt-2 sm:mt-3">

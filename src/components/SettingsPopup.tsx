@@ -184,7 +184,13 @@ export function SettingsPopup({ mode, onRestart }: SettingsPopupProps) {
               />
               <ToggleOption
                 label="Pre-moves"
-                description={preMoves ? 'Queue up to 6 moves while opponents take their turns' : 'Play only when it\'s your turn'}
+                description={
+                  preMoves
+                    ? (mode === 'hexchess'
+                        ? 'Queue up to 3 moves while your opponent thinks'
+                        : 'Queue up to 6 moves while opponents take their turns')
+                    : 'Play only when it\'s your turn'
+                }
                 checked={preMoves}
                 onChange={togglePreMoves}
               />
