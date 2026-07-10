@@ -156,4 +156,16 @@ describe('Board highlight rendering', () => {
     // check-pulse class should not appear
     expect(html).not.toContain('check-pulse');
   });
+
+  it('renders a dashed violet ring for preMoveFrom', () => {
+    const html = renderBoard(makeView([{ kind: 'preMoveFrom', cell }]));
+    expect(html).toMatch(/stroke="#8b5cf6"/);
+    expect(html).toContain('<circle');
+  });
+
+  it('renders a dashed violet dot for preMoveTo', () => {
+    const html = renderBoard(makeView([{ kind: 'preMoveTo', cell }]));
+    expect(html).toMatch(/stroke="#8b5cf6"/);
+    expect(html).toContain('<circle');
+  });
 });

@@ -56,6 +56,8 @@ interface BoardProps {
   isLocalPlayerTurn?: boolean;
   /** When provided, all cell/piece clicks call this instead of the game selectPiece flow. */
   onCellClick?: (coord: CubeCoord) => void;
+  /** When provided, right-clicks call this instead of the Chinese Checkers pre-move cancel flow. */
+  onCellRightClick?: (coord: CubeCoord) => void;
   /** When provided, render this cell with the selected-piece highlight style. */
   highlightCoord?: CubeCoord;
   /** When true, cell clicks are routed to the pre-move flow instead of the normal move flow. */
@@ -71,7 +73,7 @@ interface BoardProps {
   view?: BoardView;
 }
 
-export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, highlightCoord, preMovesAllowed, localPlayer, view: viewProp }: BoardProps = {}) {
+export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onCellRightClick, highlightCoord, preMovesAllowed, localPlayer, view: viewProp }: BoardProps = {}) {
   // Replay store
   const {
     isReplayActive,
@@ -1259,7 +1261,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
           <g
             key={coordKey(coord)}
             onClick={() => handleCellClick(coord)}
-            onContextMenu={preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined}
+            onContextMenu={
+              onCellRightClick
+                ? (e) => { e.preventDefault(); onCellRightClick(coord); }
+                : (preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined)
+            }
             onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
             onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
             style={{ cursor: isReplayActive ? 'default' : 'pointer' }}
@@ -1568,7 +1574,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
               key={`piece-${pieceKey}${pieceFaded ? '-faded' : ''}`}
               onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
               onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
-              onContextMenu={preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined}
+              onContextMenu={
+                onCellRightClick
+                  ? (e) => { e.preventDefault(); onCellRightClick(coord); }
+                  : (preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined)
+              }
               style={pieceFaded ? { opacity: 0, animation: 'fadeOut 0.4s ease-out forwards' } : undefined}
             >
               <Piece
@@ -1674,6 +1684,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         const captureColor = viewProp?.activePlayerColor ?? '#ef4444';
         const newKindHighlights = renderHighlights.filter(
           h => h.kind === 'legalMoveEmpty' || h.kind === 'check' ||
+               h.kind === 'preMoveFrom' || h.kind === 'preMoveTo' ||
                (h.kind === 'lastMoveFrom' && showLastMoves)
         );
         if (newKindHighlights.length === 0) return null;
@@ -1731,6 +1742,34 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                       r={pieceRadius * 0.9}
                       fill="#eab308"
                       opacity={0.16}
+                      pointerEvents="none"
+                    />
+                  );
+                case 'preMoveFrom':
+                  return (
+                    <circle
+                      key={stableKey}
+                      cx={px}
+                      cy={py}
+                      r={pieceRadius + 3}
+                      fill="none"
+                      stroke="#8b5cf6"
+                      strokeWidth={2.5}
+                      strokeDasharray="4 3"
+                      pointerEvents="none"
+                    />
+                  );
+                case 'preMoveTo':
+                  return (
+                    <circle
+                      key={stableKey}
+                      cx={px}
+                      cy={py}
+                      r={6}
+                      fill="none"
+                      stroke="#8b5cf6"
+                      strokeWidth={2.5}
+                      strokeDasharray="3 2"
                       pointerEvents="none"
                     />
                   );
