@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CubeCoord, PlayerIndex, ColorMapping, PieceVariant } from '@/types/game';
 import type { BoardPieceType } from '@/types/boardView';
 import { MOVE_ANIMATION_DURATION, RAINBOW_UI_COLORS } from '@/game/constants';
@@ -422,31 +422,48 @@ export function Piece({
   // Hex Chess pieces render as pure icon silhouettes in the player's color —
   // no marble, no gradient, no shadow. The icon IS the piece.
   const isHexChessPiece = pieceType && pieceType !== 'marble';
-  const animGroupRef = useRef<SVGGElement | null>(null);
   const prevPosRef = useRef({ x, y });
+  const rafRef = useRef<number | null>(null);
+  // renderX/renderY are what actually go into the SVG transform. They start at
+  // the destination and, while an animation is in flight, are set to the RAF-
+  // interpolated point between the previous position and the destination.
+  const [animPos, setAnimPos] = useState<{ x: number; y: number } | null>(null);
   useLayoutEffect(() => {
     if (!isHexChessPiece) return;
-    const g = animGroupRef.current;
     const prev = prevPosRef.current;
-    if (!g) { prevPosRef.current = { x, y }; return; }
     if (!smoothSlide || (prev.x === x && prev.y === y)) {
       prevPosRef.current = { x, y };
+      setAnimPos(null);
       return;
     }
-    // Animate the piece via a CSS transform on the inner group. The outer
-    // group's SVG transform attribute keeps final positioning accurate; the
-    // inner CSS transform slides from the previous position (delta) back to
-    // zero, creating the illusion of sliding into place.
-    const dx = prev.x - x;
-    const dy = prev.y - y;
-    g.animate(
-      [
-        { transform: `translate(${dx}px, ${dy}px)` },
-        { transform: 'translate(0px, 0px)' },
-      ],
-      { duration: 250, easing: 'ease-out', fill: 'forwards' }
-    );
+    // Cancel any in-flight animation from a previous move.
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    const startTime = performance.now();
+    const duration = 250;
+    const sx = prev.x;
+    const sy = prev.y;
+    const dx = x - sx;
+    const dy = y - sy;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setAnimPos({ x: sx + dx * eased, y: sy + dy * eased });
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        rafRef.current = null;
+        setAnimPos(null);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
     prevPosRef.current = { x, y };
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, [x, y, smoothSlide, isHexChessPiece]);
 
   if (isHexChessPiece) {
@@ -493,29 +510,32 @@ export function Piece({
     // brightness shift so it visually pops out from the other pieces of the
     // same color without needing an underlay ring.
     const lastMovedFilter = isLastMoved ? 'brightness(1.35) drop-shadow(0 0 1.5px rgba(255,255,255,0.4))' : undefined;
+    // While a slide animation is in flight, animPos is the interpolated point
+    // between the piece's previous cell and its destination. When the animation
+    // finishes, animPos is null and we render at the true (x, y).
+    const renderX = animPos?.x ?? x;
+    const renderY = animPos?.y ?? y;
     return (
       <g
         onClick={onClick}
-        transform={`translate(${x}, ${y}) rotate(${-boardRotation})`}
+        transform={`translate(${renderX}, ${renderY}) rotate(${-boardRotation})`}
         style={{
           cursor: 'pointer',
           transition: faded ? 'opacity 180ms ease-out' : undefined,
           opacity: faded ? 0 : 1,
         }}
       >
-        <g ref={animGroupRef}>
-          {isSelected && spikeRing(darkMode ? '#fff' : '#000')}
-          {isCaptureTarget && !isSelected && spikeRing(captureColor)}
-          <svg
-            x={-iconSize / 2}
-            y={-iconSize / 2}
-            width={iconSize}
-            height={iconSize}
-            style={{ pointerEvents: 'none', filter: lastMovedFilter }}
-          >
-            <IconComponent size={iconSize} fill={cssColor} />
-          </svg>
-        </g>
+        {isSelected && spikeRing(darkMode ? '#fff' : '#000')}
+        {isCaptureTarget && !isSelected && spikeRing(captureColor)}
+        <svg
+          x={-iconSize / 2}
+          y={-iconSize / 2}
+          width={iconSize}
+          height={iconSize}
+          style={{ pointerEvents: 'none', filter: lastMovedFilter }}
+        >
+          <IconComponent size={iconSize} fill={cssColor} />
+        </svg>
       </g>
     );
   }

@@ -131,11 +131,12 @@ describe('Board highlight rendering', () => {
     expect(html).toContain('<circle');
   });
 
-  it('renders a stroke-only ring for legalMoveCapture', () => {
+  it('does NOT render a standalone highlight for legalMoveCapture (now on the piece)', () => {
+    // legalMoveCapture is now rendered as a spike ring around the enemy piece
+    // (via Piece.isCaptureTarget), not as a separate hollow circle in the
+    // highlight layer. The board itself renders no capture-ring circle.
     const html = renderBoard(makeView([{ kind: 'legalMoveCapture', cell }]));
-    // The capture ring uses stroke="#ef4444" with fill="none"
-    expect(html).toMatch(/stroke="#ef4444"[^>]*>/);
-    expect(html).toContain('<circle');
+    expect(html).not.toMatch(/stroke="#ef4444"[^>]*>/);
   });
 
   it('renders a red pulsing ring for check', () => {

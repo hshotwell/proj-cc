@@ -133,7 +133,12 @@ export function BoardCell({
   let homeIsActive = false;
   let zoneExists = false; // true if cell belongs to any triangle
 
-  if (homeZonePlayer !== undefined) {
+  if (tileTintColor !== undefined) {
+    // Hex Chess: the 3-shade beige/brown pattern is the sole background.
+    // Skip all zone / goal / home detection so no player-colored borders or
+    // fills appear on the star arms.
+    // (goalColor, homeColor, homeIsActive, zoneExists all stay at defaults)
+  } else if (homeZonePlayer !== undefined) {
     // Prop-driven path: caller (Board.tsx via BoardView.homeZones) has already
     // resolved which player owns this goal zone.
     goalColor = getPlayerColor(homeZonePlayer, playerColors);

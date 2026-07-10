@@ -114,12 +114,12 @@ describe('pieceIconFor', () => {
     expect(pieceIconFor('knight')).toBe(KnightIcon);
   });
 
-  it('returns null for soldier', () => {
-    expect(pieceIconFor('soldier')).toBeNull();
+  it('returns a component for soldier (Peon icon)', () => {
+    expect(pieceIconFor('soldier')).not.toBeNull();
   });
 
-  it('returns null for pawn', () => {
-    expect(pieceIconFor('pawn')).toBeNull();
+  it('returns a component for pawn', () => {
+    expect(pieceIconFor('pawn')).not.toBeNull();
   });
 
   it('returns null for marble', () => {

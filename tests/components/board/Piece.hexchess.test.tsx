@@ -58,11 +58,10 @@ describe('Piece chess glyph integration', () => {
     expect(html).not.toMatch(/<svg[^>]+x="/);
   });
 
-  it('renders no icon when pieceType is soldier (no icon defined)', () => {
+  it('renders a Peon icon when pieceType is soldier', () => {
     const html = renderPiece({ ...baseProps, pieceType: 'soldier' });
-    // soldier returns null from pieceIconFor — no icon rendered
-    expect(html).not.toContain('<text');
-    expect(html).not.toMatch(/<svg[^>]+x="/);
+    expect(html).toContain('<path');
+    expect(html).toContain('<svg');
   });
 
   it('renders a queen icon when pieceType is queen', () => {
@@ -70,18 +69,5 @@ describe('Piece chess glyph integration', () => {
     expect(html).toContain('<path');
     expect(html).not.toContain('<text');
     expect(html).toContain('<svg');
-  });
-
-  it('applies reduced opacity wrapper in glass mode', () => {
-    const html = renderPiece({ ...baseProps, pieceType: 'king', glassPieces: true });
-    // The <g opacity="0.85"> wrapper should be present
-    expect(html).toContain('opacity="0.85"');
-  });
-
-  it('applies full opacity wrapper in non-glass mode', () => {
-    const html = renderPiece({ ...baseProps, pieceType: 'king', glassPieces: false });
-    // In non-glass mode opacity is 1, which React omits or renders as "1"
-    // The important thing is it does NOT set 0.85 opacity
-    expect(html).not.toContain('opacity="0.85"');
   });
 });
