@@ -9,8 +9,9 @@ import {
   legalMoves,
   confirmPromotion as applyConfirmPromotion,
   isInCheck,
+  promotionCellsForPlayer,
 } from '@/game/hexchess';
-import { cubeEquals, parseCoordKey } from '@/game/coordinates';
+import { cubeEquals, parseCoordKey, coordKey } from '@/game/coordinates';
 import { getDefaultBoardCells } from '@/game/defaultLayout';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
 import { kingOf } from '@/game/hexchess/board';
@@ -26,6 +27,14 @@ export interface AnimatingCapture {
   startedAt: number;
 }
 
+export interface QueuedHexPreMove {
+  pieceId: string;
+  to: CubeCoord;
+  promotion: HexPieceType | null;
+}
+
+export const HEX_MAX_PRE_MOVES = 3;
+
 interface HexChessStoreState {
   state: HexChessState | null;
   gameId: string | null;
@@ -35,6 +44,9 @@ interface HexChessStoreState {
   lastMove: HexMove | null;
   animatingCapture: AnimatingCapture | null;
   captureTimeoutId: ReturnType<typeof setTimeout> | null;
+  preMoves: QueuedHexPreMove[];
+  preMoveSelectedPieceId: string | null;
+  pendingPreMovePromotion: { pieceId: string; to: CubeCoord } | null;
 
   createGame: (config: HexChessConfig) => string;
   selectPiece: (pieceId: string | null) => void;
@@ -43,6 +55,13 @@ interface HexChessStoreState {
   resign: () => void;
   loadGame: (id: string, savedState: HexChessState, savedConfig: HexChessConfig) => void;
   clearGame: () => void;
+  selectPreMovePiece: (pieceId: string | null) => void;
+  queuePreMove: (to: CubeCoord) => void;
+  confirmPreMovePromotion: (choice: HexPieceType) => void;
+  cancelPreMovePromotion: () => void;
+  cancelPreMoveAt: (index: number) => void;
+  clearAllPreMoves: () => void;
+  getVirtualPieces: () => HexPiece[];
 }
 
 export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
@@ -54,6 +73,9 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
   lastMove: null,
   animatingCapture: null,
   captureTimeoutId: null,
+  preMoves: [],
+  preMoveSelectedPieceId: null,
+  pendingPreMovePromotion: null,
 
   createGame(config) {
     const { captureTimeoutId } = get();
@@ -68,6 +90,9 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       lastMove: null,
       animatingCapture: null,
       captureTimeoutId: null,
+      preMoves: [],
+      preMoveSelectedPieceId: null,
+      pendingPreMovePromotion: null,
     });
     saveHexChessGame(config, state);
     return config.id;
@@ -192,6 +217,9 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       lastMove: null,
       animatingCapture: null,
       captureTimeoutId: null,
+      preMoves: [],
+      preMoveSelectedPieceId: null,
+      pendingPreMovePromotion: null,
     });
     // Only persist if this game isn't already in localStorage — avoid bumping
     // updatedAt (and reordering the replay list) on every page mount.
@@ -212,7 +240,91 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
       lastMove: null,
       animatingCapture: null,
       captureTimeoutId: null,
+      preMoves: [],
+      preMoveSelectedPieceId: null,
+      pendingPreMovePromotion: null,
     });
+  },
+
+  // ---- Pre-moves ----
+
+  selectPreMovePiece(pieceId) {
+    const { preMoveSelectedPieceId } = get();
+    if (pieceId === null || preMoveSelectedPieceId === pieceId) {
+      set({ preMoveSelectedPieceId: null });
+      return;
+    }
+    set({ preMoveSelectedPieceId: pieceId });
+  },
+
+  queuePreMove(to) {
+    const { state, preMoveSelectedPieceId, preMoves } = get();
+    if (!state || preMoveSelectedPieceId === null) return;
+    if (preMoves.length >= HEX_MAX_PRE_MOVES) return;
+
+    const piece = state.pieces.find(p => p.id === preMoveSelectedPieceId);
+    if (!piece) {
+      set({ preMoveSelectedPieceId: null });
+      return;
+    }
+
+    const isPromotable = piece.type === 'soldier' || piece.type === 'pawn';
+    if (isPromotable && promotionCellsForPlayer(piece.player).has(coordKey(to))) {
+      set({
+        pendingPreMovePromotion: { pieceId: piece.id, to },
+        preMoveSelectedPieceId: null,
+      });
+      return;
+    }
+
+    set({
+      preMoves: [...preMoves, { pieceId: piece.id, to, promotion: null }],
+      preMoveSelectedPieceId: null,
+    });
+  },
+
+  confirmPreMovePromotion(choice) {
+    const { pendingPreMovePromotion, preMoves } = get();
+    if (!pendingPreMovePromotion) return;
+    set({
+      preMoves: [...preMoves, {
+        pieceId: pendingPreMovePromotion.pieceId,
+        to: pendingPreMovePromotion.to,
+        promotion: choice,
+      }],
+      pendingPreMovePromotion: null,
+    });
+  },
+
+  cancelPreMovePromotion() {
+    const { pendingPreMovePromotion } = get();
+    if (!pendingPreMovePromotion) return;
+    set({
+      preMoveSelectedPieceId: pendingPreMovePromotion.pieceId,
+      pendingPreMovePromotion: null,
+    });
+  },
+
+  cancelPreMoveAt(index) {
+    const { preMoves } = get();
+    if (index < 0 || index >= preMoves.length) return;
+    set({ preMoves: preMoves.slice(0, index) });
+  },
+
+  clearAllPreMoves() {
+    set({ preMoves: [], preMoveSelectedPieceId: null, pendingPreMovePromotion: null });
+  },
+
+  getVirtualPieces() {
+    const { state, preMoves } = get();
+    if (!state) return [];
+    let pieces = state.pieces.map(p => ({ ...p }));
+    for (const pm of preMoves) {
+      pieces = pieces
+        .filter(p => !(cubeEquals(p.cell, pm.to) && p.id !== pm.pieceId))
+        .map(p => (p.id === pm.pieceId ? { ...p, cell: pm.to } : p));
+    }
+    return pieces;
   },
 }));
 
