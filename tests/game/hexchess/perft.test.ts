@@ -51,7 +51,7 @@ describe('perft — starting position', () => {
     const s = createInitialState(config);
     const count = perft(s, 3);
     console.log('perft depth 3:', count);
-    expect(count).toBe(5790);
+    expect(count).toBe(4350);
   }, 30000);
 
   it.skip('depth 4 (too slow for CI)', () => {

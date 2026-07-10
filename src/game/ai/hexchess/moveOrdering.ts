@@ -4,7 +4,7 @@ import type { HexChessState, HexMove, HexPieceType } from '@/game/hexchess/state
 // Piece values for MVV-LVA ordering
 // ---------------------------------------------------------------------------
 
-const PIECE_VALUE: Record<HexPieceType, number> = {
+export const PIECE_VALUE: Record<HexPieceType, number> = {
   king:    10000,
   queen:    900,
   rook:     500,

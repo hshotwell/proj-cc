@@ -50,9 +50,9 @@ describe('selectHexChessBoardView', () => {
     // Check specific piece types exist in the initial state (2 players × 1 king each, etc.)
     const types = view!.pieces.map(p => p.pieceType);
     expect(types.filter(t => t === 'king')).toHaveLength(2);
-    expect(types.filter(t => t === 'queen')).toHaveLength(2);
+    expect(types.filter(t => t === 'queen')).toHaveLength(0);
     expect(types.filter(t => t === 'rook')).toHaveLength(4);
-    expect(types.filter(t => t === 'bishop')).toHaveLength(4);
+    expect(types.filter(t => t === 'bishop')).toHaveLength(6);
     expect(types.filter(t => t === 'knight')).toHaveLength(4);
     expect(types.filter(t => t === 'soldier')).toHaveLength(10);
   });

@@ -20,7 +20,7 @@ describe('createInitialState', () => {
     expect(s.pieces.filter((p) => p.player === 1)).toHaveLength(13);
   });
 
-  it('correct roster: 1K, 1Q, 2R, 2B, 2N, 5 Soldiers per side', () => {
+  it('correct roster: 1K, 2R, 3B, 2N, 5 Soldiers per side (no queen)', () => {
     const s = createInitialState(config);
     for (const player of [0, 1] as const) {
       const mine = s.pieces.filter((p) => p.player === player);
@@ -29,7 +29,7 @@ describe('createInitialState', () => {
         return acc;
       }, {});
       // Row 4 has 2 soldiers between flanking knights + Row 5 has 3 middle soldiers = 5 total.
-      expect(counts).toEqual({ king: 1, queen: 1, rook: 2, bishop: 2, knight: 2, soldier: 5 });
+      expect(counts).toEqual({ king: 1, rook: 2, bishop: 3, knight: 2, soldier: 5 });
     }
   });
 

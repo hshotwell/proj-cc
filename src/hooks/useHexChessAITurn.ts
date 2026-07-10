@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHexChessStore } from '@/store/hexChessStore';
 import { createHexChessWorker, analyzeWithWorker } from '@/game/ai/hexchess/workerClient';
-import type { HexChessDifficulty, HexChessState, HexMove } from '@/game/hexchess';
+import { PIECE_VALUE } from '@/game/ai/hexchess/moveOrdering';
+import type { HexChessDifficulty, HexChessState, HexMove, HexPlayerIndex } from '@/game/hexchess';
 import { legalMoves, applyMove } from '@/game/hexchess';
-import { isCellAttacked } from '@/game/hexchess/check';
+import { isCellAttacked, isCheckmate, isInCheck } from '@/game/hexchess/check';
 import { otherPlayer } from '@/game/hexchess/board';
 
 interface DifficultyProfile {
@@ -45,6 +46,53 @@ function movePutsPieceEnPrise(state: HexChessState, move: HexMove): boolean {
   const stateWithoutMover: HexChessState = { ...next, pieces: otherPieces };
   const defended = isCellAttacked(stateWithoutMover, move.to, mover);
   return !defended;
+}
+
+// A "check" opportunity is worth less than a real capture but still worth
+// protecting from a careless blunder/shuffle roll.
+const CHECK_TACTICAL_WEIGHT = 250;
+// Suppression scales linearly from 1 (nothing tactical happening) down to
+// this floor once tacticalWeight reaches a queen's value — a real chance
+// always keeps SOME weight so blunders remain possible, just much rarer.
+const MIN_SUPPRESSION = 0.05;
+const TACTICAL_SCALE = PIECE_VALUE.queen;
+
+/** Highest-value legal capture currently available to `player` (0 if none). */
+export function maxCaptureAvailable(state: HexChessState, legals: HexMove[]): number {
+  let max = 0;
+  for (const m of legals) {
+    if (!m.capture) continue;
+    const victim = state.pieces.find(p => p.id === m.capture!.pieceId);
+    if (victim) max = Math.max(max, PIECE_VALUE[victim.type]);
+  }
+  return max;
+}
+
+/** Highest value among `player`'s own pieces that are currently hanging (attacked, undefended). */
+export function maxHangingOwnValue(state: HexChessState, player: HexPlayerIndex): number {
+  const opp = otherPlayer(player);
+  let max = 0;
+  for (const piece of state.pieces) {
+    if (piece.player !== player) continue;
+    if (!isCellAttacked(state, piece.cell, opp)) continue;
+    const others = state.pieces.filter(p => p.id !== piece.id);
+    const stateWithoutPiece: HexChessState = { ...state, pieces: others };
+    if (!isCellAttacked(stateWithoutPiece, piece.cell, player)) {
+      max = Math.max(max, PIECE_VALUE[piece.type]);
+    }
+  }
+  return max;
+}
+
+/**
+ * How much the blunder/shuffle chances should be scaled down (1 = no
+ * suppression, MIN_SUPPRESSION = maximally suppressed) given the tactics on
+ * the board: a valuable capture sitting there for the taking, one of the
+ * AI's own pieces already hanging, or a move that gives check.
+ */
+export function tacticalSuppression(tacticalWeight: number): number {
+  const t = Math.min(1, tacticalWeight / TACTICAL_SCALE);
+  return 1 - t * (1 - MIN_SUPPRESSION);
 }
 
 export { DIFFICULTY_BUDGET };
@@ -112,21 +160,37 @@ export function useHexChessAITurn(enabled: boolean = true) {
         //     piece-hanger — wastes a tempo without giving material away.
         let chosenMove = result.move;
         const profile = DIFFICULTY_BUDGET[difficultyForTurn];
-        const roll = Math.random();
         const currentState = store.state;
-        if (currentState && roll < profile.blunderChance) {
+        if (currentState) {
           const legals = legalMoves(currentState);
-          const hangers = legals.filter(m => movePutsPieceEnPrise(currentState, m));
-          if (hangers.length > 0) {
-            chosenMove = hangers[Math.floor(Math.random() * hangers.length)];
-            console.debug(`[hexchess AI] BLUNDER — player ${currentPlayer} hangs a piece`);
-          }
-        } else if (currentState && roll < profile.blunderChance + profile.shuffleChance) {
-          const legals = legalMoves(currentState);
-          const safe = legals.filter(m => !movePutsPieceEnPrise(currentState, m));
-          if (safe.length > 0) {
-            chosenMove = safe[Math.floor(Math.random() * safe.length)];
-            console.debug(`[hexchess AI] shuffle — player ${currentPlayer} plays a random safe move`);
+          const nextState = applyMove(currentState, result.move);
+          const opp = otherPlayer(currentPlayer);
+          const givesCheckmate = isCheckmate(nextState);
+          if (!givesCheckmate) {
+            // Never let a found mate get thrown away by a blunder/shuffle roll.
+            const givesCheck = isInCheck(nextState, opp);
+            const tacticalWeight = Math.max(
+              maxCaptureAvailable(currentState, legals),
+              maxHangingOwnValue(currentState, currentPlayer),
+              givesCheck ? CHECK_TACTICAL_WEIGHT : 0,
+            );
+            const suppression = tacticalSuppression(tacticalWeight);
+            const effectiveBlunderChance = profile.blunderChance * suppression;
+            const effectiveShuffleChance = profile.shuffleChance * suppression;
+            const roll = Math.random();
+            if (roll < effectiveBlunderChance) {
+              const hangers = legals.filter(m => movePutsPieceEnPrise(currentState, m));
+              if (hangers.length > 0) {
+                chosenMove = hangers[Math.floor(Math.random() * hangers.length)];
+                console.debug(`[hexchess AI] BLUNDER — player ${currentPlayer} hangs a piece (suppression=${suppression.toFixed(2)})`);
+              }
+            } else if (roll < effectiveBlunderChance + effectiveShuffleChance) {
+              const safe = legals.filter(m => !movePutsPieceEnPrise(currentState, m));
+              if (safe.length > 0) {
+                chosenMove = safe[Math.floor(Math.random() * safe.length)];
+                console.debug(`[hexchess AI] shuffle — player ${currentPlayer} plays a random safe move (suppression=${suppression.toFixed(2)})`);
+              }
+            }
           }
         }
         store.selectPiece(chosenMove.pieceId);

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { evaluate } from '@/game/ai/hexchess/evaluate';
 import { createInitialState } from '@/game/hexchess/starting';
-import type { HexChessConfig, HexChessState } from '@/game/hexchess/state';
+import type { HexChessConfig, HexChessState, HexPiece } from '@/game/hexchess/state';
+import { cubeCoord } from '@/game/coordinates';
 
 const config: HexChessConfig = {
   id: 'test',
@@ -22,11 +23,21 @@ describe('evaluate', () => {
     expect(Math.abs(score)).toBeLessThan(50);
   });
 
+  // The default layout has no queen (it only appears via promotion), so these
+  // tests add a symmetric pair of queens far from center (distance > 3, so
+  // the PST bonus is 0 for both) and then remove one side's to isolate its
+  // material value in the eval.
+  function withSymmetricQueens(state: HexChessState): HexChessState {
+    const q0: HexPiece = { id: 'test-q0', player: 0, type: 'queen', cell: cubeCoord(5, -5), hasMoved: true };
+    const q1: HexPiece = { id: 'test-q1', player: 1, type: 'queen', cell: cubeCoord(-5, 5), hasMoved: true };
+    return { ...state, pieces: [...state.pieces, q0, q1] };
+  }
+
   it('removing player 1 queen evaluates to ~+900 for player 0', () => {
-    const state = createInitialState(config);
+    const state = withSymmetricQueens(createInitialState(config));
     const stateNoQ1: HexChessState = {
       ...state,
-      pieces: state.pieces.filter(p => !(p.player === 1 && p.type === 'queen')),
+      pieces: state.pieces.filter(p => p.id !== 'test-q1'),
     };
     const score = evaluate(stateNoQ1);
     expect(score).toBeGreaterThan(800);
@@ -34,10 +45,10 @@ describe('evaluate', () => {
   });
 
   it('removing player 0 queen evaluates to ~-900 for player 0', () => {
-    const state = createInitialState(config);
+    const state = withSymmetricQueens(createInitialState(config));
     const stateNoQ0: HexChessState = {
       ...state,
-      pieces: state.pieces.filter(p => !(p.player === 0 && p.type === 'queen')),
+      pieces: state.pieces.filter(p => p.id !== 'test-q0'),
     };
     const score = evaluate(stateNoQ0);
     expect(score).toBeLessThan(-800);
