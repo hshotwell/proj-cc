@@ -21,37 +21,37 @@ describe('applyMove', () => {
   // clear diagonal lines from its starting position.
   it('moves piece to target and sets hasMoved', () => {
     const s0 = createInitialState(config);
-    const bishop = s0.pieces.find(p => p.player === 0 && p.type === 'bishop')!;
-    const moves = pseudoMovesForPiece(s0, bishop).filter(m => m.capture === null);
+    const knight = s0.pieces.find(p => p.player === 0 && p.type === 'knight')!;
+    const moves = pseudoMovesForPiece(s0, knight).filter(m => m.capture === null);
     expect(moves.length).toBeGreaterThan(0);
     const s1 = applyMove(s0, moves[0]);
-    const movedBishop = s1.pieces.find(p => p.id === bishop.id)!;
-    expect(cubeEquals(movedBishop.cell, moves[0].to)).toBe(true);
-    expect(movedBishop.hasMoved).toBe(true);
+    const movedKnight = s1.pieces.find(p => p.id === knight.id)!;
+    expect(cubeEquals(movedKnight.cell, moves[0].to)).toBe(true);
+    expect(movedKnight.hasMoved).toBe(true);
   });
 
   it('does not mutate input state (immutability)', () => {
     const s0 = createInitialState(config);
-    const bishop = s0.pieces.find(p => p.player === 0 && p.type === 'bishop')!;
-    const originalCell = { ...bishop.cell };
-    const originalHasMoved = bishop.hasMoved;
+    const knight = s0.pieces.find(p => p.player === 0 && p.type === 'knight')!;
+    const originalCell = { ...knight.cell };
+    const originalHasMoved = knight.hasMoved;
     const originalMoveHistory = s0.moveHistory;
     const originalCurrentPlayer = s0.currentPlayer;
 
-    const move = pseudoMovesForPiece(s0, bishop).find(m => m.capture === null)!;
+    const move = pseudoMovesForPiece(s0, knight).find(m => m.capture === null)!;
     applyMove(s0, move);
 
     // Original state should be unchanged.
-    expect(cubeEquals(bishop.cell, originalCell)).toBe(true);
-    expect(bishop.hasMoved).toBe(originalHasMoved);
+    expect(cubeEquals(knight.cell, originalCell)).toBe(true);
+    expect(knight.hasMoved).toBe(originalHasMoved);
     expect(s0.moveHistory).toBe(originalMoveHistory);
     expect(s0.currentPlayer).toBe(originalCurrentPlayer);
   });
 
   it('advances turn: currentPlayer flips 0->1, turnNumber increments', () => {
     const s0 = createInitialState(config);
-    const bishop = s0.pieces.find(p => p.player === 0 && p.type === 'bishop')!;
-    const move = pseudoMovesForPiece(s0, bishop).find(m => m.capture === null)!;
+    const knight = s0.pieces.find(p => p.player === 0 && p.type === 'knight')!;
+    const move = pseudoMovesForPiece(s0, knight).find(m => m.capture === null)!;
     const s1 = applyMove(s0, move);
     expect(s1.currentPlayer).toBe(1);
     expect(s1.turnNumber).toBe(2);
@@ -59,8 +59,8 @@ describe('applyMove', () => {
 
   it('appends move to history', () => {
     const s0 = createInitialState(config);
-    const bishop = s0.pieces.find(p => p.player === 0 && p.type === 'bishop')!;
-    const move = pseudoMovesForPiece(s0, bishop).find(m => m.capture === null)!;
+    const knight = s0.pieces.find(p => p.player === 0 && p.type === 'knight')!;
+    const move = pseudoMovesForPiece(s0, knight).find(m => m.capture === null)!;
     const s1 = applyMove(s0, move);
     expect(s1.moveHistory).toHaveLength(1);
     expect(s1.moveHistory[0]).toEqual(move);
@@ -93,8 +93,8 @@ describe('applyMove', () => {
     const s0 = createInitialState(config);
     // Directly set an enPassantTarget on a synthetic state.
     const synth: HexChessState = { ...s0, enPassantTarget: { capturedPieceId: 'x', targetCells: [], availableUntilTurn: 999 } };
-    const bishop = synth.pieces.find(p => p.player === 0 && p.type === 'bishop')!;
-    const move = pseudoMovesForPiece(synth, bishop).find(m => m.capture === null)!;
+    const knight = synth.pieces.find(p => p.player === 0 && p.type === 'knight')!;
+    const move = pseudoMovesForPiece(synth, knight).find(m => m.capture === null)!;
     const next = applyMove(synth, move);
     expect(next.enPassantTarget).toBeNull();
   });

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useHexChessStore } from '@/store/hexChessStore';
 import { createHexChessWorker, analyzeWithWorker } from '@/game/ai/hexchess/workerClient';
 import type { HexChessDifficulty } from '@/game/hexchess';
@@ -16,18 +16,18 @@ export function useHexChessAITurn(enabled: boolean = true) {
   const state = useHexChessStore(s => s.state);
   const config = useHexChessStore(s => s.config);
   const workerRef = useRef<Worker | null>(null);
-  const busyRef = useRef(false);
+  // Use state (not ref) for busy so that changes trigger a re-render, which
+  // re-runs the effect and lets the NEXT AI seat pick up its turn without
+  // waiting for an unrelated dep to change.
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     workerRef.current = createHexChessWorker();
-    // Reset busy flag when we (re)mount. In React StrictMode dev double-mount, the
-    // previous worker is terminated in cleanup which aborts its .then/.finally chain
-    // and leaves busyRef stuck at true forever, blocking every subsequent AI turn.
-    busyRef.current = false;
+    setBusy(false);
     return () => {
       workerRef.current?.terminate();
       workerRef.current = null;
-      busyRef.current = false;
+      setBusy(false);
     };
   }, []);
 
@@ -43,8 +43,8 @@ export function useHexChessAITurn(enabled: boolean = true) {
       console.debug(`[hexchess AI] skipped: player ${state.currentPlayer} is human (config.ai=${JSON.stringify(config.ai)})`);
       return;
     }
-    if (busyRef.current) {
-      console.debug(`[hexchess AI] skipped: busyRef stuck (player ${state.currentPlayer}, turn ${state.turnNumber})`);
+    if (busy) {
+      console.debug(`[hexchess AI] skipped: another turn still in flight (player ${state.currentPlayer}, turn ${state.turnNumber})`);
       return;
     }
     if (!workerRef.current) {
@@ -53,15 +53,20 @@ export function useHexChessAITurn(enabled: boolean = true) {
     }
 
     console.debug(`[hexchess AI] firing for player ${state.currentPlayer}, difficulty ${difficultyForTurn}, turn ${state.turnNumber}`);
-    busyRef.current = true;
+    setBusy(true);
     const currentPlayer = state.currentPlayer;
     const opts = DIFFICULTY_BUDGET[difficultyForTurn];
     analyzeWithWorker(workerRef.current, state, opts)
       .then((result) => {
-        // Guard against race: re-check that it's still the same player's turn.
         const store = useHexChessStore.getState();
-        if (!store.state || store.state.result !== null || store.state.currentPlayer !== currentPlayer) return;
-        if (result.move === null) return;
+        if (!store.state || store.state.result !== null || store.state.currentPlayer !== currentPlayer) {
+          console.debug(`[hexchess AI] result discarded — turn advanced past player ${currentPlayer}`);
+          return;
+        }
+        if (result.move === null) {
+          console.debug(`[hexchess AI] no move returned for player ${currentPlayer}`);
+          return;
+        }
         store.selectPiece(result.move.pieceId);
         const applied = store.attemptMove(result.move.to);
         if (applied) {
@@ -72,10 +77,10 @@ export function useHexChessAITurn(enabled: boolean = true) {
         }
       })
       .catch((err) => {
-        console.error('Hex chess AI worker error:', err);
+        console.error('[hexchess AI] worker error:', err);
       })
       .finally(() => {
-        busyRef.current = false;
+        setBusy(false);
       });
-  }, [state?.currentPlayer, state?.turnNumber, state?.result, state?.pendingPromotion, config, enabled]);
+  }, [state?.currentPlayer, state?.turnNumber, state?.result, state?.pendingPromotion, config, enabled, busy]);
 }

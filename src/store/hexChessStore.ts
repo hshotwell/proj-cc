@@ -321,6 +321,7 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     rotation: 0,
     activePlayerIndex: state.currentPlayer as PlayerIndex,
     activePlayerColor: config.players[state.currentPlayer].color,
+    activePlayerIsAI: !!(config.ai && config.ai[state.currentPlayer]),
     initialRotation,
     activeRotation,
     captureBurst,

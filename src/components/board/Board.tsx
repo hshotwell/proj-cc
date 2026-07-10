@@ -274,8 +274,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
     ]);
   }, [viewProp?.captureBurst, hopEffect]);
 
-  // Hex chess (viewProp) rotation: when rotateBoard is on and the active player
-  // changes, rotate to face them. Otherwise stay at the initial rotation.
+  // Hex chess (viewProp) rotation: when rotateBoard is on and the active human
+  // player changes, rotate to face them. AI turns don't rotate the board
+  // (matches Sternhalma behavior). Rotation is smooth via CSS transition on
+  // the outer <g> (see line ~1032).
   useEffect(() => {
     if (isReplayActive) return;
     if (!viewProp) return;
@@ -284,6 +286,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       return;
     }
     if (!rotateBoard) return;
+    if (viewProp.activePlayerIsAI) return;
     if (typeof viewProp.activeRotation !== 'number') return;
     const target = viewProp.activeRotation;
     setCumulativeRotation((prev) => {
@@ -291,7 +294,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
       delta = ((delta + 540) % 360) - 180;
       return prev + delta;
     });
-  }, [viewProp?.activePlayerIndex, viewProp?.activeRotation, rotateBoard, viewProp, isReplayActive, rotationInitialized]);
+  }, [viewProp?.activePlayerIndex, viewProp?.activeRotation, viewProp?.activePlayerIsAI, rotateBoard, viewProp, isReplayActive, rotationInitialized]);
 
   // Reset rotation when entering/leaving replay mode
   useEffect(() => {
@@ -1029,7 +1032,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         style={{
           transform: isReplayActive ? undefined : `rotate(${cumulativeRotation}deg)`,
           transformOrigin: '0 0',
-          transition: rotationInitialized && !isReplayActive && rotateBoard && (gameState?.activePlayers.length ?? 0) > 1 ? `transform ${BOARD_ROTATION_DURATION}ms ease-in-out` : undefined,
+          transition: rotationInitialized && !isReplayActive && rotateBoard && ((gameState?.activePlayers.length ?? 0) > 1 || viewProp) ? `transform ${BOARD_ROTATION_DURATION}ms ease-in-out` : undefined,
         }}
       >
       {/* Layer -1: Wooden board background */}

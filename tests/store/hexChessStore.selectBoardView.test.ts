@@ -29,7 +29,7 @@ describe('selectHexChessBoardView', () => {
     expect(result).toBeNull();
   });
 
-  it('Test 2: initial state produces view with 20 pieces each with pieceType set', () => {
+  it('Test 2: initial state produces view with 30 pieces each with pieceType set', () => {
     const state = createInitialState(DEFAULT_CONFIG);
     const view = selectHexChessBoardView({
       state,
@@ -41,7 +41,7 @@ describe('selectHexChessBoardView', () => {
     } as never);
 
     expect(view).not.toBeNull();
-    expect(view!.pieces).toHaveLength(20);
+    expect(view!.pieces).toHaveLength(30);
     for (const piece of view!.pieces) {
       expect(piece.pieceType).toBeDefined();
       expect(piece.pieceType).not.toBe('marble');
@@ -53,7 +53,8 @@ describe('selectHexChessBoardView', () => {
     expect(types.filter(t => t === 'queen')).toHaveLength(2);
     expect(types.filter(t => t === 'rook')).toHaveLength(4);
     expect(types.filter(t => t === 'bishop')).toHaveLength(4);
-    expect(types.filter(t => t === 'soldier')).toHaveLength(8);
+    expect(types.filter(t => t === 'knight')).toHaveLength(4);
+    expect(types.filter(t => t === 'soldier')).toHaveLength(14);
   });
 
   it('Test 3: both players opponent arm cells appear as homeZones entries', () => {

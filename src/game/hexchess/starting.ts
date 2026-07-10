@@ -72,30 +72,57 @@ export function armCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
   return cells;
 }
 
+/**
+ * Returns the 5 cells of row 5 — the first row into the central hexagon,
+ * immediately in front of the arm's base row. Used for the extended v1
+ * starting layout (3 peons + 2 knights in the front).
+ */
+export function armExtensionCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
+  const cells: CubeCoord[] = [];
+  // Row 5, k=4, j=0..4
+  for (let j = 0; j < 5; j++) {
+    const q = player === 0 ? j : -4 + j;
+    const r = player === 0 ? -4 : 4;
+    cells.push({ q, r, s: -q - r });
+  }
+  return cells;
+}
+
+/**
+ * All 15 starting-position cells: the 10 arm cells + 5 extension cells.
+ * The extension cells are one row into the central hexagon.
+ */
+export function startingCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
+  return [...armCellsForPlayer(player), ...armExtensionCellsForPlayer(player)];
+}
+
 // ---------------------------------------------------------------------------
-// V1 default layout — pieces ordered to match armCellsForPlayer indices
-//   index 0:   king   (apex)
-//   index 1-2: rook, rook
-//   index 3-5: bishop, queen, bishop
-//   index 6-9: soldier x4  (base row)
+// V1 default layout — pieces ordered to match startingCellsForPlayer indices
+//   index 0:    king          (row 1, apex)
+//   index 1-2:  bishop, bishop         (row 2)
+//   index 3-5:  rook, queen, rook      (row 3)
+//   index 6-9:  soldier x4             (row 4, base)
+//   index 10-14: knight, soldier x3, knight  (row 5, into central hex)
 // ---------------------------------------------------------------------------
 
 const V1_LAYOUT: HexPieceType[] = [
   // row 1 — apex
   'king',
-  // row 2
-  'rook', 'rook',
-  // row 3
-  'bishop', 'queen', 'bishop',
-  // row 4 — base
+  // row 2 — bishops
+  'bishop', 'bishop',
+  // row 3 — rooks flanking the queen
+  'rook', 'queen', 'rook',
+  // row 4 — base peons
   'soldier', 'soldier', 'soldier', 'soldier',
+  // row 5 — knights on the flanks, three more peons in the middle
+  'knight', 'soldier', 'soldier', 'soldier', 'knight',
 ];
 
 export function createInitialState(config: HexChessConfig): HexChessState {
   const pieces: HexPiece[] = [];
 
   for (const player of [0, 1] as const) {
-    const cells = armCellsForPlayer(player);
+    const cells = startingCellsForPlayer(player);
 
     for (let i = 0; i < V1_LAYOUT.length; i++) {
       pieces.push({
