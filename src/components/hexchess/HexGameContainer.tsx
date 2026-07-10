@@ -48,6 +48,13 @@ export function HexGameContainer() {
   useEffect(() => {
     if (store.state?.result) useHexChessStore.getState().clearAllPreMoves();
   }, [store.state?.result]);
+  // If pre-moves stop being allowed (e.g. it becomes the local player's real
+  // turn) while the queue-time promotion picker is open, clear the underlying
+  // pendingPreMovePromotion state — not just hide the UI — so it doesn't get
+  // confirmed into the queue during what is now the player's actual turn.
+  useEffect(() => {
+    if (!preMovesAllowed) useHexChessStore.getState().cancelPreMovePromotion();
+  }, [preMovesAllowed]);
 
   /**
    * Route board cell clicks to the hex chess store:
@@ -188,7 +195,10 @@ export function HexGameContainer() {
               onChoose={handlePromote}
             />
           )}
-          {!store.state.pendingPromotion && store.pendingPreMovePromotion && localPlayer !== undefined && (
+          {!store.state.pendingPromotion &&
+            store.pendingPreMovePromotion &&
+            localPlayer !== undefined &&
+            preMovesAllowed && (
             <PromotionPicker
               pieceCell={store.pendingPreMovePromotion.to}
               playerColor={store.config.players[localPlayer].color}
