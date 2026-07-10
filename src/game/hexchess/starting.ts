@@ -115,19 +115,23 @@ export function startingCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
 // ---------------------------------------------------------------------------
 // V1 default layout — pieces ordered to match startingCellsForPlayer indices
 //   index 0:     king                     (row 1, apex)
-//   index 1-2:   bishop x2                (row 2)
-//   index 3-5:   rook, queen, rook        (row 3)
+//   index 1-2:   rook x2                  (row 2, second furthest back)
+//   index 3-5:   bishop x3                (row 3, all bishops middle)
 //   index 6-9:   knight, soldier x2, knight  (row 4, knights on the flanks)
 //   index 10-14: empty, soldier x3, empty (row 5, 3 peons in the middle)
 // ---------------------------------------------------------------------------
+//
+// No queen — with promotions happening at the midline, peons have a viable
+// path to becoming queens themselves. The third bishop keeps the bishop
+// diagonals well-covered given the 3-color hex board.
 
 const V1_LAYOUT: (HexPieceType | null)[] = [
   // row 1 — apex
   'king',
-  // row 2 — bishops
-  'bishop', 'bishop',
-  // row 3 — rooks flanking the queen
-  'rook', 'queen', 'rook',
+  // row 2 — rooks
+  'rook', 'rook',
+  // row 3 — three bishops across the middle
+  'bishop', 'bishop', 'bishop',
   // row 4 — knights on the outer flanks, two peons in the middle
   'knight', 'soldier', 'soldier', 'knight',
   // row 5 — three peons in the middle; outer cells stay empty

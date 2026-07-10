@@ -31,6 +31,13 @@ export function HexGameContainer() {
     const state = s.state;
     if (!state) return;
 
+    // Never let the human move on an AI player's turn. Prevents both accidental
+    // input during the AI's think time and any lingering ability to nudge AI
+    // pieces if the worker times out.
+    if (s.config?.ai && s.config.ai[state.currentPlayer]) {
+      return;
+    }
+
     // Legal move destination takes priority over re-selection.
     const isLegal = s.legalMoveTargets.some((m) => cubeEquals(m.to, cell));
     if (isLegal) {

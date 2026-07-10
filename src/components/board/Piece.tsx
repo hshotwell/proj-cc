@@ -506,10 +506,24 @@ export function Piece({
       );
     };
 
-    // Slightly shade the piece itself if it was the last one to move — a small
-    // brightness shift so it visually pops out from the other pieces of the
-    // same color without needing an underlay ring.
-    const lastMovedFilter = isLastMoved ? 'brightness(1.35) drop-shadow(0 0 1.5px rgba(255,255,255,0.4))' : undefined;
+    // Highlight the last-moved piece with a shade shift on the icon itself.
+    // Default: darken the piece considerably so it stands out from its
+    // same-color siblings. If the piece color is ALREADY very dark, darkening
+    // just makes it invisible against the tile — brighten those instead.
+    const luminanceOf = (hex: string): number | null => {
+      if (!hex.startsWith('#') || hex.length !== 7) return null;
+      const r = parseInt(hex.substring(1, 3), 16);
+      const g = parseInt(hex.substring(3, 5), 16);
+      const b = parseInt(hex.substring(5, 7), 16);
+      return 0.299 * r + 0.587 * g + 0.114 * b;
+    };
+    const lum = luminanceOf(cssColor);
+    const isDarkPiece = lum !== null && lum < 90;
+    const lastMovedFilter = isLastMoved
+      ? (isDarkPiece
+          ? 'brightness(1.6) drop-shadow(0 0 1.5px rgba(255,255,255,0.55))'
+          : 'brightness(0.55)')
+      : undefined;
     // While a slide animation is in flight, animPos is the interpolated point
     // between the piece's previous cell and its destination. When the animation
     // finishes, animPos is null and we render at the true (x, y).
