@@ -26,6 +26,12 @@ interface BoardCellProps {
    * Overrides the internal zone-detection logic when set.
    */
   homeZonePlayer?: PlayerIndex;
+  /**
+   * Force a specific hex-fill color for this tile (Hex Chess uses this for
+   * the 3-shade beige/brown chess-board pattern). When set, hex mode is
+   * forced on and this color overrides the zone-derived fill.
+   */
+  tileTintColor?: string;
 }
 
 function lightenColor(hex: string, amount: number): string {
@@ -110,7 +116,10 @@ export function BoardCell({
   hexCells = false,
   showTriangleLines = false,
   homeZonePlayer,
+  tileTintColor,
 }: BoardCellProps) {
+  // Hex Chess forces hex mode via tileTintColor.
+  const effectiveHexCells = hexCells || tileTintColor !== undefined;
   const { x, y } = cubeToPixel(coord, size);
   const coordKeyStr = `${coord.q},${coord.r}`;
 
@@ -191,7 +200,7 @@ export function BoardCell({
   const effectiveGoalColor = isSpecialGoal ? '#ff0000' : goalColor;
 
   // ── Hex cell rendering ────────────────────────────────────────────────────
-  if (hexCells) {
+  if (effectiveHexCells) {
     const hexR = size * 0.855;
     const pts = hexPoints(x, y, hexR);
     const lineWidth = showTriangleLines ? 2.2 : (goalColor ? 1.4 : 0.8);
@@ -223,7 +232,10 @@ export function BoardCell({
     } else {
       // Flat mode: solid fill based on zone
       let hexFill: string;
-      if (!zoneExists) {
+      if (tileTintColor !== undefined) {
+        // Hex Chess: use the tint directly; zones are indicated by border only.
+        hexFill = tileTintColor;
+      } else if (!zoneExists) {
         hexFill = baseColor;
       } else if (homeIsActive && effectiveHomeColor) {
         hexFill = desaturateColor(effectiveHomeColor, 0.65);

@@ -486,6 +486,10 @@ export function Piece({
       );
     };
 
+    // Slightly shade the piece itself if it was the last one to move — a small
+    // brightness shift so it visually pops out from the other pieces of the
+    // same color without needing an underlay ring.
+    const lastMovedFilter = isLastMoved ? 'brightness(1.35) drop-shadow(0 0 1.5px rgba(255,255,255,0.4))' : undefined;
     return (
       <g
         onClick={onClick}
@@ -493,27 +497,18 @@ export function Piece({
         style={{
           cursor: 'pointer',
           transition: faded ? 'opacity 180ms ease-out' : undefined,
-          opacity: faded ? 0 : (isSelected ? 1 : (isLastMoved ? 0.95 : 1)),
+          opacity: faded ? 0 : 1,
         }}
       >
         <g ref={animGroupRef}>
           {isSelected && spikeRing(darkMode ? '#fff' : '#000')}
           {isCaptureTarget && !isSelected && spikeRing(captureColor)}
-          {isLastMoved && (
-            <circle
-              cx={0}
-              cy={0}
-              r={size * 0.55}
-              fill={cssColor}
-              opacity={0.18}
-            />
-          )}
           <svg
             x={-iconSize / 2}
             y={-iconSize / 2}
             width={iconSize}
             height={iconSize}
-            style={{ pointerEvents: 'none' }}
+            style={{ pointerEvents: 'none', filter: lastMovedFilter }}
           >
             <IconComponent size={iconSize} fill={cssColor} />
           </svg>

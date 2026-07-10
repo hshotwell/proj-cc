@@ -98,11 +98,11 @@ export function startingCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
 
 // ---------------------------------------------------------------------------
 // V1 default layout — pieces ordered to match startingCellsForPlayer indices
-//   index 0:    king          (row 1, apex)
-//   index 1-2:  bishop, bishop         (row 2)
-//   index 3-5:  rook, queen, rook      (row 3)
-//   index 6-9:  soldier x4             (row 4, base)
-//   index 10-14: knight, soldier x3, knight  (row 5, into central hex)
+//   index 0:    king           (row 1, apex)
+//   index 1-2:  bishop x2      (row 2)
+//   index 3-5:  rook, queen, rook  (row 3)
+//   index 6-9:  knight, soldier x2, knight  (row 4, base — knights on the flanks)
+//   index 10-14: soldier x5    (row 5, into central hex — full front line of peons)
 // ---------------------------------------------------------------------------
 
 const V1_LAYOUT: HexPieceType[] = [
@@ -112,10 +112,10 @@ const V1_LAYOUT: HexPieceType[] = [
   'bishop', 'bishop',
   // row 3 — rooks flanking the queen
   'rook', 'queen', 'rook',
-  // row 4 — base peons
-  'soldier', 'soldier', 'soldier', 'soldier',
-  // row 5 — knights on the flanks, three more peons in the middle
-  'knight', 'soldier', 'soldier', 'soldier', 'knight',
+  // row 4 — knights on the outer flanks, two peons in the middle
+  'knight', 'soldier', 'soldier', 'knight',
+  // row 5 — five peons across the front
+  'soldier', 'soldier', 'soldier', 'soldier', 'soldier',
 ];
 
 export function createInitialState(config: HexChessConfig): HexChessState {

@@ -44,11 +44,12 @@ describe('createInitialState', () => {
   it('4 soldiers on the front (base) row of the arm', () => {
     const s = createInitialState(config);
     for (const player of [0, 1] as const) {
-      const armSoldiers = s.pieces.filter(
+      // Row 4 has 2 soldiers between the 2 knights on the flanks.
+      const row4Soldiers = s.pieces.filter(
         (p) => p.player === player && p.type === 'soldier'
               && armCellsForPlayer(player).slice(6, 10).some(c => c.q === p.cell.q && c.r === p.cell.r),
       );
-      expect(armSoldiers.length).toBe(4);
+      expect(row4Soldiers.length).toBe(2);
     }
   });
 
