@@ -199,25 +199,28 @@ export default function PlayPage() {
       const p0 = configPlayers[0] ?? (0 as PlayerIndex);
       const p1 = configPlayers[1] ?? (2 as PlayerIndex);
       const hexGameId = Math.random().toString(36).substring(2, 10);
+      const p0AI = aiConfig[p0];
+      const p1AI = aiConfig[p1];
+      const aiMap: Partial<Record<0 | 1, 'easy' | 'medium' | 'hard'>> = {};
+      if (p0AI) aiMap[0] = p0AI.difficulty ?? 'medium';
+      if (p1AI) aiMap[1] = p1AI.difficulty ?? 'medium';
       const hexConfig: HexChessConfig = {
         id: hexGameId,
         players: [
           {
             color: getEffectiveColor(p0),
             name: playerNames[p0] ?? getDefaultName(p0, configPlayers),
-            isAI: false,
+            isAI: p0AI != null,
           },
           {
             color: getEffectiveColor(p1),
             name: playerNames[p1] ?? getDefaultName(p1, configPlayers),
-            isAI: aiConfig[p1] != null,
+            isAI: p1AI != null,
           },
         ],
         layoutPreset: 'v1-default',
         soldierVariant: 'soldier',
-        ai: aiConfig[p1] != null
-          ? { forPlayer: 1, difficulty: aiConfig[p1]!.difficulty ?? 'medium' }
-          : null,
+        ai: Object.keys(aiMap).length > 0 ? aiMap : null,
       };
       useHexChessStore.getState().createGame(hexConfig);
       router.push(`/hexchess/${hexGameId}`);

@@ -27,7 +27,9 @@ export interface HexChessConfig {
   players: [HexChessPlayerConfig, HexChessPlayerConfig];
   layoutPreset: 'v1-default';
   soldierVariant: 'soldier' | 'pawn';
-  ai: null | { forPlayer: HexPlayerIndex; difficulty: HexChessDifficulty };
+  // ai maps HexPlayerIndex → difficulty. An empty object (or null) means no AI.
+  // If ai[0] is set, player 0 is AI. If ai[1] is set, player 1 is AI. Both = AI vs AI.
+  ai: null | Partial<Record<HexPlayerIndex, HexChessDifficulty>>;
 }
 
 export interface HexMove {

@@ -48,7 +48,7 @@ function makeConfig(id: string): HexChessConfig {
     ],
     layoutPreset: 'v1-default',
     soldierVariant: 'soldier',
-    ai: { forPlayer: 1, difficulty: 'medium' },
+    ai: { 1: 'medium' },
   };
 }
 

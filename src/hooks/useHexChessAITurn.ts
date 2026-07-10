@@ -30,22 +30,22 @@ export function useHexChessAITurn(enabled: boolean = true) {
     if (!enabled || !state || !config || state.result !== null) return;
     if (state.pendingPromotion !== null) return;
     if (config.ai === null) return;
-    if (state.currentPlayer !== config.ai.forPlayer) return;
+    const difficultyForTurn = config.ai[state.currentPlayer];
+    if (!difficultyForTurn) return;   // this seat is human
     if (busyRef.current || !workerRef.current) return;
 
     busyRef.current = true;
-    const opts = DIFFICULTY_BUDGET[config.ai.difficulty];
+    const currentPlayer = state.currentPlayer;
+    const opts = DIFFICULTY_BUDGET[difficultyForTurn];
     analyzeWithWorker(workerRef.current, state, opts)
       .then((result) => {
-        // Guard against race: re-check state matches.
+        // Guard against race: re-check that it's still the same player's turn.
         const store = useHexChessStore.getState();
-        if (!store.state || store.state.result !== null || store.state.currentPlayer !== config.ai!.forPlayer) return;
+        if (!store.state || store.state.result !== null || store.state.currentPlayer !== currentPlayer) return;
         if (result.move === null) return;
         store.selectPiece(result.move.pieceId);
         const applied = store.attemptMove(result.move.to);
         if (applied) {
-          // Read fresh state after the mutation — store is a stale snapshot
-          // captured before attemptMove ran.
           const freshState = useHexChessStore.getState().state;
           if (freshState?.pendingPromotion) {
             useHexChessStore.getState().confirmPromotion(result.move.promotion ?? 'queen');

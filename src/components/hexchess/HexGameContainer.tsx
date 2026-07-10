@@ -25,27 +25,30 @@ export function HexGameContainer() {
    * 3. Otherwise clear selection.
    */
   const handleCellClick = (cell: CubeCoord) => {
-    const { state, legalMoveTargets } = store;
+    // Always read the freshest store snapshot — the outer `store` closure captured
+    // at render time can be stale between rapid clicks in the same frame.
+    const s = useHexChessStore.getState();
+    const state = s.state;
     if (!state) return;
 
-    // Legal move destination takes priority over re-selection
-    const isLegal = legalMoveTargets.some((m) => cubeEquals(m.to, cell));
+    // Legal move destination takes priority over re-selection.
+    const isLegal = s.legalMoveTargets.some((m) => cubeEquals(m.to, cell));
     if (isLegal) {
-      store.attemptMove(cell);
+      s.attemptMove(cell);
       return;
     }
 
-    // Check if a piece belonging to the current player is on this cell
+    // Check if a piece belonging to the current player is on this cell.
     const piece = state.pieces.find(
       (p) => p.player === state.currentPlayer && cubeEquals(p.cell, cell),
     );
     if (piece) {
-      store.selectPiece(piece.id);
+      s.selectPiece(piece.id);
       return;
     }
 
-    // Nothing actionable — clear selection
-    store.selectPiece(null);
+    // Nothing actionable — clear selection.
+    s.selectPiece(null);
   };
 
   const handlePromote = (choice: Parameters<typeof store.confirmPromotion>[0]) => {
