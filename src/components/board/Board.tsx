@@ -1599,6 +1599,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
                 pieceType={piecePieceType}
                 faded={pieceFaded}
                 smoothSlide={!!viewProp && animateMoves}
+                isCaptureTarget={
+                  !!viewProp && viewProp.highlights.some(h => h.kind === 'legalMoveCapture' && cubeEquals(h.cell, coord))
+                }
+                captureTargetColor={viewProp?.activePlayerColor}
               />
             </g>
           );
@@ -1664,7 +1668,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, hig
         const activeColor = viewProp?.activePlayerColor ?? '#22c55e';
         const captureColor = viewProp?.activePlayerColor ?? '#ef4444';
         const newKindHighlights = renderHighlights.filter(
-          h => h.kind === 'legalMoveEmpty' || h.kind === 'legalMoveCapture' || h.kind === 'check' ||
+          h => h.kind === 'legalMoveEmpty' || h.kind === 'check' ||
                (h.kind === 'lastMoveFrom' && showLastMoves)
         );
         if (newKindHighlights.length === 0) return null;

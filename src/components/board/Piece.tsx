@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { CubeCoord, PlayerIndex, ColorMapping, PieceVariant } from '@/types/game';
 import type { BoardPieceType } from '@/types/boardView';
 import { MOVE_ANIMATION_DURATION, RAINBOW_UI_COLORS } from '@/game/constants';
@@ -41,6 +41,10 @@ interface PieceProps {
   // When true, apply a CSS transition to smoothly animate coordinate changes
   // (used by hex chess to slide pieces when animateMoves is enabled).
   smoothSlide?: boolean;
+  // Hex chess only: this enemy piece is a capture target — render a spike ring
+  // around it in the given color (typically the active player's color).
+  isCaptureTarget?: boolean;
+  captureTargetColor?: string;
 }
 
 // Metallic colors that get special shiny treatment
@@ -405,6 +409,8 @@ export function Piece({
   pieceType,
   faded = false,
   smoothSlide = false,
+  isCaptureTarget = false,
+  captureTargetColor,
 }: PieceProps) {
   // Start the global sheen sync loop (idempotent)
   useEffect(() => { startSheenSync(); }, []);
@@ -416,62 +422,102 @@ export function Piece({
   // Hex Chess pieces render as pure icon silhouettes in the player's color —
   // no marble, no gradient, no shadow. The icon IS the piece.
   const isHexChessPiece = pieceType && pieceType !== 'marble';
+  const animGroupRef = useRef<SVGGElement | null>(null);
+  const prevPosRef = useRef({ x, y });
+  useLayoutEffect(() => {
+    if (!isHexChessPiece) return;
+    const g = animGroupRef.current;
+    const prev = prevPosRef.current;
+    if (!g) { prevPosRef.current = { x, y }; return; }
+    if (!smoothSlide || (prev.x === x && prev.y === y)) {
+      prevPosRef.current = { x, y };
+      return;
+    }
+    // Animate the piece via a CSS transform on the inner group. The outer
+    // group's SVG transform attribute keeps final positioning accurate; the
+    // inner CSS transform slides from the previous position (delta) back to
+    // zero, creating the illusion of sliding into place.
+    const dx = prev.x - x;
+    const dy = prev.y - y;
+    g.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px)` },
+        { transform: 'translate(0px, 0px)' },
+      ],
+      { duration: 250, easing: 'ease-out', fill: 'forwards' }
+    );
+    prevPosRef.current = { x, y };
+  }, [x, y, smoothSlide, isHexChessPiece]);
+
   if (isHexChessPiece) {
     const IconComponent = pieceIconFor(pieceType!);
     if (!IconComponent) return null;
     const iconSize = size * 1.75;
+    const pieceRadiusChess = size * 0.7;
     const pieceColor = getPlayerColor(player, customColors);
-    const cssColor = pieceColor.startsWith('#') || pieceColor.startsWith('rgb')
-      ? pieceColor
-      : pieceColor; // sentinel colors ('rainbow', etc.) — treated as-is; getCSSColor lives in constants
-    // Use CSS transform (via style) instead of the SVG transform attribute so
-    // browsers can transition position changes. The SVG attribute doesn't
-    // animate reliably across engines.
-    const transitions: string[] = [];
-    if (smoothSlide) transitions.push('transform 250ms ease-out');
-    if (faded) transitions.push('opacity 180ms ease-out');
-    const transitionStr = transitions.length > 0 ? transitions.join(', ') : undefined;
+    const captureColor = captureTargetColor ?? pieceColor;
+    const cssColor = pieceColor;
+
+    // 12-triangle spike ring (matches Chinese Checkers selection style).
+    const spikeRing = (ringColor: string) => {
+      const spikeR = pieceRadiusChess + size * 0.18;
+      const innerR = pieceRadiusChess + size * 0.02;
+      const segments = 12;
+      const spikeAngle = (2 * Math.PI) / segments;
+      const baseHalfAngle = spikeAngle * 0.5;
+      const triangles: string[] = [];
+      for (let i = 0; i < segments; i++) {
+        const tipAngle = i * spikeAngle;
+        const x1 = Math.cos(tipAngle - baseHalfAngle) * innerR;
+        const y1 = Math.sin(tipAngle - baseHalfAngle) * innerR;
+        const tx = Math.cos(tipAngle) * spikeR;
+        const ty = Math.sin(tipAngle) * spikeR;
+        const x2 = Math.cos(tipAngle + baseHalfAngle) * innerR;
+        const y2 = Math.sin(tipAngle + baseHalfAngle) * innerR;
+        triangles.push(`M${x1},${y1} L${tx},${ty} L${x2},${y2} Z`);
+      }
+      return (
+        <path
+          d={triangles.join(' ')}
+          fill={ringColor}
+          className="selection-dash"
+          style={{ transformOrigin: '0px 0px' }}
+        />
+      );
+    };
+
     return (
       <g
         onClick={onClick}
+        transform={`translate(${x}, ${y}) rotate(${-boardRotation})`}
         style={{
           cursor: 'pointer',
-          transform: `translate(${x}px, ${y}px) rotate(${-boardRotation}deg)`,
-          transformOrigin: '0 0',
-          transformBox: 'fill-box',
-          transition: transitionStr,
+          transition: faded ? 'opacity 180ms ease-out' : undefined,
           opacity: faded ? 0 : (isSelected ? 1 : (isLastMoved ? 0.95 : 1)),
         }}
       >
-        {isSelected && (
-          <circle
-            cx={0}
-            cy={0}
-            r={size * 0.7}
-            fill="none"
-            stroke={cssColor}
-            strokeWidth={2.5}
-            opacity={0.9}
-          />
-        )}
-        {isLastMoved && (
-          <circle
-            cx={0}
-            cy={0}
-            r={size * 0.55}
-            fill={cssColor}
-            opacity={0.18}
-          />
-        )}
-        <svg
-          x={-iconSize / 2}
-          y={-iconSize / 2}
-          width={iconSize}
-          height={iconSize}
-          style={{ pointerEvents: 'none' }}
-        >
-          <IconComponent size={iconSize} fill={cssColor} />
-        </svg>
+        <g ref={animGroupRef}>
+          {isSelected && spikeRing(darkMode ? '#fff' : '#000')}
+          {isCaptureTarget && !isSelected && spikeRing(captureColor)}
+          {isLastMoved && (
+            <circle
+              cx={0}
+              cy={0}
+              r={size * 0.55}
+              fill={cssColor}
+              opacity={0.18}
+            />
+          )}
+          <svg
+            x={-iconSize / 2}
+            y={-iconSize / 2}
+            width={iconSize}
+            height={iconSize}
+            style={{ pointerEvents: 'none' }}
+          >
+            <IconComponent size={iconSize} fill={cssColor} />
+          </svg>
+        </g>
       </g>
     );
   }

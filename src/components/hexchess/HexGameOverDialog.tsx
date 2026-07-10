@@ -19,33 +19,33 @@ export function HexGameOverDialog({ state, config, onNewGame, onHome }: HexGameO
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed left-0 right-0 top-4 sm:top-8 z-50 flex justify-center pointer-events-none px-4"
       role="dialog"
       aria-modal="true"
     >
-      <div className="absolute inset-0 bg-black/40" />
-      <div className="relative bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-        <h2 className="text-xl font-semibold mb-2">
-          {isDraw ? 'Draw' : `${winnerConfig!.name} wins`}
-        </h2>
-        {!isDraw && winnerConfig && (
-          <div className="flex items-center gap-2 mb-3">
-            <ColorSwatch color={winnerConfig.color} className="w-6 h-6" />
-            <span className="font-medium">{winnerConfig.name}</span>
+      <div className="relative bg-white rounded-lg shadow-xl border border-gray-200 p-4 sm:p-5 max-w-sm w-full pointer-events-auto">
+        <div className="flex items-start gap-3">
+          {!isDraw && winnerConfig && (
+            <ColorSwatch color={winnerConfig.color} className="w-8 h-8 flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-semibold leading-tight">
+              {isDraw ? 'Draw' : `${winnerConfig!.name} wins`}
+            </h2>
+            <p className="text-sm text-gray-600">{reason}</p>
           </div>
-        )}
-        <p className="text-gray-700 mb-4">Result: {reason}</p>
-        <div className="flex gap-2 justify-end">
+        </div>
+        <div className="mt-3 flex gap-2 justify-end">
           <button
             type="button"
-            className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
+            className="px-3 py-1 text-sm rounded bg-gray-200 hover:bg-gray-300"
             onClick={onHome}
           >
             Home
           </button>
           <button
             type="button"
-            className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+            className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
             onClick={onNewGame}
           >
             New Game

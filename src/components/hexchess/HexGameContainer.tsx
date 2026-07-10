@@ -43,7 +43,12 @@ export function HexGameContainer() {
       (p) => p.player === state.currentPlayer && cubeEquals(p.cell, cell),
     );
     if (piece) {
-      s.selectPiece(piece.id);
+      // Clicking the already-selected piece deselects it (matches Chinese Checkers).
+      if (s.selectedPieceId === piece.id) {
+        s.selectPiece(null);
+      } else {
+        s.selectPiece(piece.id);
+      }
       return;
     }
 
