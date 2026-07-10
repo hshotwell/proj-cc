@@ -17,7 +17,9 @@ export type BoardHighlightKind =
   | 'legalMoveCapture'
   | 'lastMoveFrom'
   | 'lastMoveTo'
-  | 'check';
+  | 'check'
+  | 'preMoveFrom'
+  | 'preMoveTo';
 
 export interface BoardPiece {
   id: string;

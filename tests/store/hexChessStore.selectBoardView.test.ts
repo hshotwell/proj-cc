@@ -163,4 +163,67 @@ describe('selectHexChessBoardView', () => {
     expect(checkHighlights).toHaveLength(1);
     expect(coordKey(checkHighlights[0].cell)).toBe(coordKey({ q: 4, r: -8, s: 4 }));
   });
+
+  it('includes a preMoveFrom highlight for the currently selected (not yet queued) piece', () => {
+    const state = createInitialState(DEFAULT_CONFIG);
+    const mover = state.pieces.find(p => p.type === 'rook' && p.player === 0)!;
+    const view = selectHexChessBoardView({
+      state,
+      gameId: 'test-game',
+      config: DEFAULT_CONFIG,
+      selectedPieceId: null,
+      legalMoveTargets: [],
+      lastMove: null,
+      preMoves: [],
+      preMoveSelectedPieceId: mover.id,
+    } as never);
+
+    expect(view!.highlights).toContainEqual({ kind: 'preMoveFrom', cell: mover.cell });
+  });
+
+  it('includes preMoveFrom/preMoveTo highlights for a queued pre-move', () => {
+    const state = createInitialState(DEFAULT_CONFIG);
+    const mover = state.pieces.find(p => p.type === 'rook' && p.player === 0)!;
+    const destination = { q: 0, r: -6, s: 6 };
+    const view = selectHexChessBoardView({
+      state,
+      gameId: 'test-game',
+      config: DEFAULT_CONFIG,
+      selectedPieceId: null,
+      legalMoveTargets: [],
+      lastMove: null,
+      preMoves: [{ pieceId: mover.id, to: destination, promotion: null }],
+      preMoveSelectedPieceId: null,
+    } as never);
+
+    expect(view!.highlights).toContainEqual({ kind: 'preMoveFrom', cell: mover.cell });
+    expect(view!.highlights).toContainEqual({ kind: 'preMoveTo', cell: destination });
+  });
+
+  it('chains preMoveFrom/preMoveTo across multiple queued moves for the same piece', () => {
+    const state = createInitialState(DEFAULT_CONFIG);
+    const mover = state.pieces.find(p => p.type === 'rook' && p.player === 0)!;
+    const mid = { q: 0, r: -6, s: 6 };
+    const finalCell = { q: 0, r: -4, s: 4 };
+    const view = selectHexChessBoardView({
+      state,
+      gameId: 'test-game',
+      config: DEFAULT_CONFIG,
+      selectedPieceId: null,
+      legalMoveTargets: [],
+      lastMove: null,
+      preMoves: [
+        { pieceId: mover.id, to: mid, promotion: null },
+        { pieceId: mover.id, to: finalCell, promotion: null },
+      ],
+      preMoveSelectedPieceId: null,
+    } as never);
+
+    const froms = view!.highlights.filter(h => h.kind === 'preMoveFrom').map(h => h.cell);
+    const tos = view!.highlights.filter(h => h.kind === 'preMoveTo').map(h => h.cell);
+    expect(froms).toContainEqual(mover.cell);
+    expect(froms).toContainEqual(mid);
+    expect(tos).toContainEqual(mid);
+    expect(tos).toContainEqual(finalCell);
+  });
 });

@@ -334,8 +334,10 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
  */
 export function selectHexChessBoardView(store: HexChessStoreState): BoardView | null {
   const { state, config, selectedPieceId, legalMoveTargets, lastMove } = store;
-  // animatingCapture may be absent in legacy test snapshots (passed via `as never`)
+  // animatingCapture / pre-move fields may be absent in legacy test snapshots (passed via `as never`)
   const animatingCapture: AnimatingCapture | null = store.animatingCapture ?? null;
+  const preMoves: QueuedHexPreMove[] = store.preMoves ?? [];
+  const preMoveSelectedPieceId: string | null = store.preMoveSelectedPieceId ?? null;
 
   if (!state || !config) return null;
 
@@ -399,6 +401,24 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     const king = kingOf(state, state.currentPlayer);
     if (king) {
       highlights.push({ kind: 'check', cell: king.cell });
+    }
+  }
+
+  // Pre-move highlights: walk the queue in order, tracking each pre-moved
+  // piece's virtual cell so multi-hop plans for the same piece chain correctly.
+  if (preMoves.length > 0 || preMoveSelectedPieceId !== null) {
+    const virtualCellByPieceId = new Map<string, CubeCoord>(
+      state.pieces.map(p => [p.id, p.cell] as const)
+    );
+    for (const pm of preMoves) {
+      const fromCell = virtualCellByPieceId.get(pm.pieceId);
+      if (fromCell) highlights.push({ kind: 'preMoveFrom', cell: fromCell });
+      highlights.push({ kind: 'preMoveTo', cell: pm.to });
+      virtualCellByPieceId.set(pm.pieceId, pm.to);
+    }
+    if (preMoveSelectedPieceId !== null) {
+      const cell = virtualCellByPieceId.get(preMoveSelectedPieceId);
+      if (cell) highlights.push({ kind: 'preMoveFrom', cell });
     }
   }
 
