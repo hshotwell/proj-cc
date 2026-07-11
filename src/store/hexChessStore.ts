@@ -455,5 +455,7 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     initialRotation,
     activeRotation,
     captureBurst,
+    playerColors: { 0: config.players[0].color, 1: config.players[1].color },
+    gameId: config.id,
   };
 }

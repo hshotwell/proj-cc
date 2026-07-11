@@ -62,4 +62,11 @@ export interface BoardView {
   activePlayerIsAI?: boolean;
   /** Fires once per capture — cell + color of the captured piece for particle burst. */
   captureBurst?: { cell: CubeCoord; color: string; key: string } | null;
+  /** Maps every player index in the game to their CSS color. Used to resolve
+   * a *specific* player's color (e.g. the local human's) independent of
+   * whose turn it currently is. */
+  playerColors?: Record<number, string>;
+  /** Stable identity for the current game/replay, used to reset local-only
+   * UI state (e.g. board annotations) when it changes. */
+  gameId?: string;
 }

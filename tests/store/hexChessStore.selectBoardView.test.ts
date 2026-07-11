@@ -226,4 +226,32 @@ describe('selectHexChessBoardView', () => {
     expect(tos).toContainEqual(mid);
     expect(tos).toContainEqual(finalCell);
   });
+
+  it('includes a playerColors map keyed by player index', () => {
+    const state = createInitialState(DEFAULT_CONFIG);
+    const view = selectHexChessBoardView({
+      state,
+      gameId: 'test-game',
+      config: DEFAULT_CONFIG,
+      selectedPieceId: null,
+      legalMoveTargets: [],
+      lastMove: null,
+    } as never);
+
+    expect(view!.playerColors).toEqual({ 0: '#ff0000', 1: '#0000ff' });
+  });
+
+  it('includes gameId from the config', () => {
+    const state = createInitialState(DEFAULT_CONFIG);
+    const view = selectHexChessBoardView({
+      state,
+      gameId: 'test-game',
+      config: DEFAULT_CONFIG,
+      selectedPieceId: null,
+      legalMoveTargets: [],
+      lastMove: null,
+    } as never);
+
+    expect(view!.gameId).toBe('test-game');
+  });
 });
