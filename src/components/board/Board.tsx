@@ -12,7 +12,7 @@ import { useGameStore, selectBoardView } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useReplayStore } from '@/store/replayStore';
 import { useAnnotationStore } from '@/store/annotationStore';
-import { computeCheckersArrowPath, computeHexKnightArrowPath } from '@/game/annotations';
+import { computeCheckersArrowPath, computeHexKnightArrowPath, resolveAnnotationDrag } from '@/game/annotations';
 import type { BoardView, BoardHighlight } from '@/types/boardView';
 import { BoardCell } from './BoardCell';
 import { Piece } from './Piece';
@@ -88,6 +88,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
   } = useReplayStore();
 
       const {
+      gameId,
       gameState: liveGameState,
       selectedPiece: liveSelectedPiece,
       validMovesForSelected: liveValidMoves,
@@ -127,6 +128,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
   // Set to true by child click handlers when they call makeMove, so the SVG-level
   // handler knows not to double-fire.
   const moveHandledRef = useRef(false);
+  // Tracks the cell a right-button press started on, for the annotation
+  // circle-vs-arrow decision made on release. Cleared on every mouseup.
+  const annotationDragOriginRef = useRef<CubeCoord | null>(null);
 
   // Replay piece animation state.
   // prevState = board state before the move; piece = move.from (where the piece lives in prevState).
@@ -353,6 +357,13 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     }, stepDuration);
     return () => clearTimeout(timer);
   }, [replayAnim]);
+
+  // Clear annotations when the underlying game/replay identity changes.
+  // Not keyed by gameId (no per-game accumulation) — just reset on change.
+  const annotationIdentity = viewProp ? viewProp.gameId : gameId;
+  useEffect(() => {
+    useAnnotationStore.getState().clearAll();
+  }, [annotationIdentity]);
 
   // --- Swap arc animation ---
   // Both pieces orbit each other along quadratic bezier arcs (each curving right relative
@@ -787,12 +798,50 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     // Otherwise no-op
   };
 
-  const handlePreMoveRightClick = (coord: CubeCoord) => {
-    // Cancel any queued pre-move whose destination is this coord (and everything after it).
-    const idx = preMoves.findIndex((pm) => cubeEquals(pm.to, coord));
-    if (idx >= 0) {
-      cancelPreMoveAt(idx);
-      moveHandledRef.current = true;
+  // Resolves the color to draw a new annotation in. If there's exactly one
+  // human seat (localPlayer defined), always use that player's fixed color,
+  // even during the AI's turn. Otherwise (hotseat 2+ humans, or replay,
+  // which has no seat concept) use whoever's turn it currently is.
+  const resolveAnnotationColor = (): string => {
+    if (viewProp) {
+      const idx = localPlayer ?? viewProp.activePlayerIndex;
+      const raw = viewProp.playerColors?.[idx] ?? viewProp.activePlayerColor;
+      return raw ?? '#888888';
+    }
+    const idx = localPlayer ?? gameState?.currentPlayer;
+    return idx !== undefined ? getPlayerColorFromState(idx, gameState) : '#888888';
+  };
+
+  const handleAnnotationMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 2) return;
+    const origin = annotationDragOriginRef.current;
+    annotationDragOriginRef.current = null;
+    if (!origin) return;
+
+    const release = hoveredCell;
+
+    // Pre-move-cancel priority, click-only: origin === release means this was
+    // a plain right-click (no drag). A drag that merely ends on a queued
+    // pre-move destination draws an arrow there instead.
+    if (release && cubeEquals(origin, release)) {
+      if (viewProp) {
+        if (onCellRightClick?.(release)) return;
+      } else if (preMovesAllowed) {
+        const idx = preMoves.findIndex((pm) => cubeEquals(pm.to, release));
+        if (idx >= 0) {
+          cancelPreMoveAt(idx);
+          return;
+        }
+      }
+    }
+
+    const result = resolveAnnotationDrag(origin, release);
+    if (result.type === 'none') return;
+    const color = resolveAnnotationColor();
+    if (result.type === 'circle') {
+      useAnnotationStore.getState().toggleCircle(result.cell, color);
+    } else {
+      useAnnotationStore.getState().toggleArrow(result.from, result.to, color);
     }
   };
 
@@ -937,6 +986,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
   // click handlers haven't already handled the event (moveHandledRef guards this).
   // Only applies on touch devices (not PC/mouse users).
   const handleSVGClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    useAnnotationStore.getState().clearAll();
     // If a child handler already called makeMove, skip and reset the flag.
     if (moveHandledRef.current) {
       moveHandledRef.current = false;
@@ -1029,11 +1079,8 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
       style={{ aspectRatio: aspectRatio }}
       preserveAspectRatio="xMidYMid meet"
       onClick={handleSVGClick}
-      onContextMenu={(e) => {
-        // Only intercept right-click when pre-move mode is active
-        if (!preMovesAllowed) return;
-        e.preventDefault();
-      }}
+      onMouseUp={handleAnnotationMouseUp}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <g
         style={{
@@ -1265,14 +1312,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
         {boardPositions.map((coord) => (
           <g
             key={coordKey(coord)}
+            onMouseDown={(e) => { if (e.button === 2) annotationDragOriginRef.current = coord; }}
             onClick={() => handleCellClick(coord)}
-            onContextMenu={
-              onCellRightClick
-                ? (e) => { e.preventDefault(); onCellRightClick(coord); }
-                : (preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined)
-            }
-            onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
-            onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
+            onContextMenu={(e) => e.preventDefault()}
+            onMouseEnter={() => setHoveredCell(coord)}
+            onMouseLeave={() => setHoveredCell(null)}
             style={{ cursor: isReplayActive ? 'default' : 'pointer' }}
           >
             <BoardCell
@@ -1577,14 +1621,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
           return (
             <g
               key={`piece-${pieceKey}${pieceFaded ? '-faded' : ''}`}
-              onMouseEnter={showCoordinates ? () => setHoveredCell(coord) : undefined}
-              onMouseLeave={showCoordinates ? () => setHoveredCell(null) : undefined}
-              onContextMenu={
-                onCellRightClick
-                  ? (e) => { e.preventDefault(); onCellRightClick(coord); }
-                  : (preMovesAllowed ? (e) => { e.preventDefault(); handlePreMoveRightClick(coord); } : undefined)
-              }
+              onMouseEnter={() => setHoveredCell(coord)}
+              onMouseLeave={() => setHoveredCell(null)}
+              onContextMenu={(e) => e.preventDefault()}
               style={pieceFaded ? { opacity: 0, animation: 'fadeOut 0.4s ease-out forwards' } : undefined}
+              onMouseDown={(e) => { if (e.button === 2) annotationDragOriginRef.current = coord; }}
             >
               <Piece
                 coord={coord}
