@@ -115,14 +115,14 @@ export function HexGameContainer() {
     s.selectPiece(null);
   };
 
-  const handleCellRightClick = (cell: CubeCoord) => {
-    if (!preMovesAllowed) return;
+  const handleCellRightClick = (cell: CubeCoord): boolean => {
+    if (!preMovesAllowed) return false;
     const s = useHexChessStore.getState();
 
     const idx = s.preMoves.findIndex((pm) => cubeEquals(pm.to, cell));
     if (idx >= 0) {
       s.cancelPreMoveAt(idx);
-      return;
+      return true;
     }
 
     if (s.preMoveSelectedPieceId !== null) {
@@ -130,8 +130,11 @@ export function HexGameContainer() {
       const selected = virtualPieces.find((p) => p.id === s.preMoveSelectedPieceId);
       if (selected && cubeEquals(selected.cell, cell)) {
         s.selectPreMovePiece(null);
+        return true;
       }
     }
+
+    return false;
   };
 
   const handlePromote = (choice: Parameters<typeof store.confirmPromotion>[0]) => {
@@ -186,6 +189,7 @@ export function HexGameContainer() {
               view={view}
               onCellClick={handleCellClick}
               onCellRightClick={handleCellRightClick}
+              localPlayer={localPlayer}
             />
           )}
           {store.state.pendingPromotion && (

@@ -56,8 +56,10 @@ interface BoardProps {
   isLocalPlayerTurn?: boolean;
   /** When provided, all cell/piece clicks call this instead of the game selectPiece flow. */
   onCellClick?: (coord: CubeCoord) => void;
-  /** When provided, right-clicks call this instead of the Chinese Checkers pre-move cancel flow. */
-  onCellRightClick?: (coord: CubeCoord) => void;
+  /** When provided, right-clicks call this instead of the Chinese Checkers pre-move cancel flow.
+   * Returns true if the click was consumed (e.g. cancelled a queued pre-move) — the caller should
+   * not also treat the click as annotation input. Returns false/undefined if not consumed. */
+  onCellRightClick?: (coord: CubeCoord) => boolean;
   /** When provided, render this cell with the selected-piece highlight style. */
   highlightCoord?: CubeCoord;
   /** When true, cell clicks are routed to the pre-move flow instead of the normal move flow. */
