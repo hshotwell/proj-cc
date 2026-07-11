@@ -11,6 +11,8 @@ import { isGameFullyOver } from '@/game/state';
 import { useGameStore, selectBoardView } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useReplayStore } from '@/store/replayStore';
+import { useAnnotationStore } from '@/store/annotationStore';
+import { computeCheckersArrowPath, computeHexKnightArrowPath } from '@/game/annotations';
 import type { BoardView, BoardHighlight } from '@/types/boardView';
 import { BoardCell } from './BoardCell';
 import { Piece } from './Piece';
@@ -111,6 +113,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
       getVirtualBoard,
     } = useGameStore();
   const { showAllMoves, animateMoves, rotateBoard, showTriangleLines, showLastMoves, showCoordinates, darkMode, woodenBoard, glassPieces, hopEffect, hexCells, activePlayerRing } = useSettingsStore();
+  const { circles: annotationCircles, arrows: annotationArrows } = useAnnotationStore();
 
   // Track hovered cell for coordinate display
   const [hoveredCell, setHoveredCell] = useState<CubeCoord | null>(null);
@@ -1785,6 +1788,73 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
 
       {/* Layer 4: Hop particle effects */}
       {hopParticles.length > 0 && <HopParticles particles={hopParticles} />}
+
+      {/* Layer 5: Board annotations (circles/arrows) — local-only, never synced */}
+      {(annotationCircles.size > 0 || annotationArrows.size > 0) && (() => {
+        const pieceRadius = HEX_SIZE * 0.45;
+
+        function arrowheadPoints(from: { x: number; y: number }, to: { x: number; y: number }): string {
+          const angle = Math.atan2(to.y - from.y, to.x - from.x);
+          const size = 12;
+          const spread = Math.PI / 7;
+          const p1 = {
+            x: to.x + size * Math.cos(angle + Math.PI - spread),
+            y: to.y + size * Math.sin(angle + Math.PI - spread),
+          };
+          const p2 = {
+            x: to.x + size * Math.cos(angle + Math.PI + spread),
+            y: to.y + size * Math.sin(angle + Math.PI + spread),
+          };
+          return `${to.x},${to.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`;
+        }
+
+        return (
+          <g style={{ pointerEvents: 'none' }}>
+            {Array.from(annotationCircles.values()).map((c) => {
+              const { x, y } = cubeToPixel(c.cell, HEX_SIZE);
+              return (
+                <circle
+                  key={`annotation-circle-${coordKey(c.cell)}`}
+                  className="annotation-circle"
+                  cx={x}
+                  cy={y}
+                  r={pieceRadius + 4}
+                  fill="none"
+                  stroke={c.color}
+                  strokeWidth={3}
+                  opacity={0.85}
+                />
+              );
+            })}
+            {Array.from(annotationArrows.values()).map((a) => {
+              const waypoints = viewProp
+                ? computeHexKnightArrowPath(viewProp.pieces, a.from, a.to)
+                : (gameState ? computeCheckersArrowPath(gameState, a.from, a.to) : [a.from, a.to]);
+              const pixelPoints = waypoints.map((w) => cubeToPixel(w, HEX_SIZE));
+              const pointsAttr = pixelPoints.map((p) => `${p.x},${p.y}`).join(' ');
+              const last = pixelPoints[pixelPoints.length - 1];
+              const secondLast = pixelPoints[pixelPoints.length - 2];
+              return (
+                <g key={`annotation-arrow-${a.id}`} className="annotation-arrow">
+                  <polyline
+                    points={pointsAttr}
+                    fill="none"
+                    stroke={a.color}
+                    strokeWidth={4}
+                    opacity={0.85}
+                  />
+                  <polygon
+                    className="annotation-arrowhead"
+                    points={arrowheadPoints(secondLast, last)}
+                    fill={a.color}
+                    opacity={0.85}
+                  />
+                </g>
+              );
+            })}
+          </g>
+        );
+      })()}
       </g>
 
       {/* Coordinate tooltip - outside rotation group so text stays upright */}
