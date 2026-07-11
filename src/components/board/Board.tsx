@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CubeCoord, PlayerIndex, Move, GameState } from '@/types/game';
-import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION, TRIANGLE_ASSIGNMENTS, RAINBOW_UI_COLORS } from '@/game/constants';
+import { HEX_SIZE, BOARD_PADDING, MOVE_ANIMATION_DURATION, ROTATION_FOR_PLAYER, BOARD_ROTATION_DURATION, TRIANGLE_ASSIGNMENTS, RAINBOW_UI_COLORS, getCSSColor } from '@/game/constants';
 import { generateBoardPositions, getTriangleForPosition } from '@/game/board';
 import { cubeToPixel, coordKey, cubeEquals, parseCoordKey, getMovePath, cubeDistance } from '@/game/coordinates';
 import { getPlayerColorFromState, hexToRgba, blendColorsRgba, lightenHex } from '@/game/colors';
@@ -85,6 +85,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     states: replayStates,
     currentStep: replayStep,
     moves: replayMoves,
+    gameSummary,
   } = useReplayStore();
 
       const {
@@ -360,7 +361,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
 
   // Clear annotations when the underlying game/replay identity changes.
   // Not keyed by gameId (no per-game accumulation) — just reset on change.
-  const annotationIdentity = viewProp ? viewProp.gameId : gameId;
+  const annotationIdentity = viewProp
+    ? viewProp.gameId
+    : (isReplayActive ? gameSummary?.id : gameId);
   useEffect(() => {
     useAnnotationStore.getState().clearAll();
   }, [annotationIdentity]);
@@ -806,10 +809,10 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     if (viewProp) {
       const idx = localPlayer ?? viewProp.activePlayerIndex;
       const raw = viewProp.playerColors?.[idx] ?? viewProp.activePlayerColor;
-      return raw ?? '#888888';
+      return getCSSColor(raw ?? '#888888');
     }
     const idx = localPlayer ?? gameState?.currentPlayer;
-    return idx !== undefined ? getPlayerColorFromState(idx, gameState) : '#888888';
+    return getCSSColor(idx !== undefined ? getPlayerColorFromState(idx, gameState) : '#888888');
   };
 
   const handleAnnotationMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
