@@ -1751,7 +1751,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
                       cy={py}
                       r={6}
                       fill={activeColor}
-                      opacity={0.7}
+                      opacity={0.5}
                       pointerEvents="none"
                     />
                   );
@@ -1837,19 +1837,36 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
       {(annotationCircles.size > 0 || annotationArrows.size > 0) && (() => {
         const pieceRadius = HEX_SIZE * 0.45;
 
-        function arrowheadPoints(from: { x: number; y: number }, to: { x: number; y: number }): string {
+        // Arrowhead is pushed slightly forward of the true endpoint (past `to`),
+        // and the line is pulled back by the same amount the head extends
+        // behind its tip — otherwise the line's stroke pokes through the
+        // solid triangle and the two visibly overlap.
+        function computeArrowGeometry(from: { x: number; y: number }, to: { x: number; y: number }) {
           const angle = Math.atan2(to.y - from.y, to.x - from.x);
-          const size = 12;
+          const headSize = 16;
           const spread = Math.PI / 7;
+          const forwardPush = 4;
+          const lineShorten = headSize - forwardPush;
+          const tip = {
+            x: to.x + forwardPush * Math.cos(angle),
+            y: to.y + forwardPush * Math.sin(angle),
+          };
           const p1 = {
-            x: to.x + size * Math.cos(angle + Math.PI - spread),
-            y: to.y + size * Math.sin(angle + Math.PI - spread),
+            x: tip.x + headSize * Math.cos(angle + Math.PI - spread),
+            y: tip.y + headSize * Math.sin(angle + Math.PI - spread),
           };
           const p2 = {
-            x: to.x + size * Math.cos(angle + Math.PI + spread),
-            y: to.y + size * Math.sin(angle + Math.PI + spread),
+            x: tip.x + headSize * Math.cos(angle + Math.PI + spread),
+            y: tip.y + headSize * Math.sin(angle + Math.PI + spread),
           };
-          return `${to.x},${to.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`;
+          const lineEnd = {
+            x: to.x - lineShorten * Math.cos(angle),
+            y: to.y - lineShorten * Math.sin(angle),
+          };
+          return {
+            headPoints: `${tip.x},${tip.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`,
+            lineEnd,
+          };
         }
 
         return (
@@ -1866,7 +1883,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
                   fill="none"
                   stroke={c.color}
                   strokeWidth={3}
-                  opacity={0.85}
+                  opacity={0.7}
                 />
               );
             })}
@@ -1875,23 +1892,26 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
                 ? computeHexKnightArrowPath(viewProp.pieces, a.from, a.to)
                 : (gameState ? computeCheckersArrowPath(gameState, a.from, a.to) : [a.from, a.to]);
               const pixelPoints = waypoints.map((w) => cubeToPixel(w, HEX_SIZE));
-              const pointsAttr = pixelPoints.map((p) => `${p.x},${p.y}`).join(' ');
               const last = pixelPoints[pixelPoints.length - 1];
               const secondLast = pixelPoints[pixelPoints.length - 2];
+              const { headPoints, lineEnd } = computeArrowGeometry(secondLast, last);
+              const linePointsAttr = [...pixelPoints.slice(0, -1), lineEnd]
+                .map((p) => `${p.x},${p.y}`)
+                .join(' ');
               return (
                 <g key={`annotation-arrow-${a.id}`} className="annotation-arrow">
                   <polyline
-                    points={pointsAttr}
+                    points={linePointsAttr}
                     fill="none"
                     stroke={a.color}
                     strokeWidth={4}
-                    opacity={0.85}
+                    opacity={0.7}
                   />
                   <polygon
                     className="annotation-arrowhead"
-                    points={arrowheadPoints(secondLast, last)}
+                    points={headPoints}
                     fill={a.color}
-                    opacity={0.85}
+                    opacity={0.7}
                   />
                 </g>
               );
