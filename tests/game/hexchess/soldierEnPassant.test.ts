@@ -78,10 +78,12 @@ describe('soldier en passant', () => {
   });
 
   /**
-   * Test 2: enemy soldier B positioned such that its forward-diagonal lands on
-   * one of the passed-through cells. An en passant move should be available.
+   * Test 2: enemy soldier B positioned such that one of its forward-EDGE
+   * (capture-direction) cells lands on a passed-through cell. An en passant
+   * move should be available — EP uses the soldier's capture move, not its
+   * forward-diagonal movement.
    */
-  it('enemy soldier can perform en passant when its forward-diagonal lands on a passed-through cell', () => {
+  it('enemy soldier can perform en passant via its forward-edge capture direction', () => {
     const [e1] = forwardEdges(0);
     const diag0 = forwardDiagonal(0);
 
@@ -90,14 +92,13 @@ describe('soldier en passant', () => {
     // passedCell1 = soldierAStart + e1
     const passedCell1 = cubeAdd(soldierAStart, e1);
 
-    // Player 1 soldier B needs to be positioned so that its forward diagonal = forwardDiagonal(1) lands on passedCell1.
-    // B.cell + forwardDiagonal(1) = passedCell1
-    // B.cell = passedCell1 - forwardDiagonal(1)
-    const diag1 = forwardDiagonal(1);
+    // Player 1 soldier B captures along forwardEdges(1). Position B so that
+    // B.cell + e1p1 = passedCell1, i.e. B.cell = passedCell1 - e1p1.
+    const [e1p1] = forwardEdges(1);
     const soldierBCell = {
-      q: passedCell1.q - diag1.q,
-      r: passedCell1.r - diag1.r,
-      s: passedCell1.s - diag1.s,
+      q: passedCell1.q - e1p1.q,
+      r: passedCell1.r - e1p1.r,
+      s: passedCell1.s - e1p1.s,
     };
 
     const soldierA: HexPiece = {
@@ -132,6 +133,116 @@ describe('soldier en passant', () => {
     expect(epMoves[0].to.q).toBe(passedCell1.q);
     expect(epMoves[0].to.r).toBe(passedCell1.r);
     expect(epMoves[0].isCapture).toBe(true);
+    expect(epMoves[0].epCapturedCell).toEqual(soldierADest);
+  });
+
+  /**
+   * Test 2b: en passant must NOT be offered along the soldier's forward-diagonal
+   * movement direction — that was the original bug (peon "captured" by stepping
+   * straight forward).
+   */
+  it('does not offer en passant along the forward-diagonal movement direction', () => {
+    const [e1] = forwardEdges(0);
+    const diag0 = forwardDiagonal(0);
+
+    const soldierAStart = cubeCoord(2, -4);
+    const soldierADest = cubeAdd(soldierAStart, diag0);
+    const passedCell1 = cubeAdd(soldierAStart, e1);
+
+    // Position B so its forward DIAGONAL (movement, not capture) lands on passedCell1,
+    // and neither of its forward edges does.
+    const diag1 = forwardDiagonal(1);
+    const soldierBCell = {
+      q: passedCell1.q - diag1.q,
+      r: passedCell1.r - diag1.r,
+      s: passedCell1.s - diag1.s,
+    };
+
+    const soldierA: HexPiece = {
+      id: 'SA',
+      player: 0,
+      type: 'soldier',
+      cell: soldierADest,
+      hasMoved: true,
+    };
+    const soldierB: HexPiece = {
+      id: 'SB',
+      player: 1,
+      type: 'soldier',
+      cell: soldierBCell,
+      hasMoved: true,
+    };
+
+    const st = stateWith([soldierA, soldierB], {
+      currentPlayer: 1,
+      turnNumber: 2,
+      enPassantTarget: {
+        capturedPieceId: 'SA',
+        targetCells: [passedCell1],
+        availableUntilTurn: 2,
+      },
+    });
+
+    const moves = soldierMoves(st, soldierB);
+    expect(moves.filter(m => m.isEnPassant)).toHaveLength(0);
+  });
+
+  /**
+   * Test 2c: en passant must NOT be offered when the passed-through cell is
+   * occupied — landing there would stack two pieces on one cell.
+   */
+  it('does not offer en passant onto an occupied passed-through cell', () => {
+    const [e1] = forwardEdges(0);
+    const diag0 = forwardDiagonal(0);
+
+    const soldierAStart = cubeCoord(2, -4);
+    const soldierADest = cubeAdd(soldierAStart, diag0);
+    const passedCell1 = cubeAdd(soldierAStart, e1);
+
+    const [e1p1] = forwardEdges(1);
+    const soldierBCell = {
+      q: passedCell1.q - e1p1.q,
+      r: passedCell1.r - e1p1.r,
+      s: passedCell1.s - e1p1.s,
+    };
+
+    const soldierA: HexPiece = {
+      id: 'SA',
+      player: 0,
+      type: 'soldier',
+      cell: soldierADest,
+      hasMoved: true,
+    };
+    const soldierB: HexPiece = {
+      id: 'SB',
+      player: 1,
+      type: 'soldier',
+      cell: soldierBCell,
+      hasMoved: true,
+    };
+    // Friendly piece of B's own side already sits on the passed-through cell.
+    const blocker: HexPiece = {
+      id: 'BLK',
+      player: 1,
+      type: 'rook',
+      cell: passedCell1,
+      hasMoved: true,
+    };
+
+    const st = stateWith([soldierA, soldierB, blocker], {
+      currentPlayer: 1,
+      turnNumber: 2,
+      enPassantTarget: {
+        capturedPieceId: 'SA',
+        targetCells: [passedCell1],
+        availableUntilTurn: 2,
+      },
+    });
+
+    const moves = soldierMoves(st, soldierB);
+    expect(moves.filter(m => m.isEnPassant)).toHaveLength(0);
+    // And no move of any kind may land on the friendly-occupied cell.
+    expect(moves.filter(m => m.to.q === passedCell1.q && m.to.r === passedCell1.r)).toHaveLength(0);
   });
 
   /**
@@ -182,16 +293,16 @@ describe('soldier en passant', () => {
   it('applying en passant move removes the captured soldier', () => {
     const [e1] = forwardEdges(0);
     const diag0 = forwardDiagonal(0);
-    const diag1 = forwardDiagonal(1);
+    const [e1p1] = forwardEdges(1);
 
     const soldierAStart = cubeCoord(2, -4);
     const soldierADest = cubeAdd(soldierAStart, diag0);
     const passedCell1 = cubeAdd(soldierAStart, e1);
 
     const soldierBCell = {
-      q: passedCell1.q - diag1.q,
-      r: passedCell1.r - diag1.r,
-      s: passedCell1.s - diag1.s,
+      q: passedCell1.q - e1p1.q,
+      r: passedCell1.r - e1p1.r,
+      s: passedCell1.s - e1p1.s,
     };
 
     const soldierA: HexPiece = {

@@ -8,10 +8,11 @@ import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } 
 // nostril, mouth, ear detail, and a flared plinth.
 const HEAD_PATH = [
   // Head silhouette (facing left)
-  'M -3.4 -8.6',           // top of forelock
-  'C -2.6 -8.4 -1.6 -8.8 -0.8 -8.4', // forelock curve
-  'L 0.6 -7.4',             // ear back
-  'C 1.6 -7.8 2.4 -7.4 2.8 -6.4',    // ear/skull top
+  'M -3.0 -8.8',           // tip of front ear/forelock
+  'C -2.8 -8.7 -2.6 -8.7 -2.4 -8.5', // narrow pointed ear tip
+  'C -1.9 -7.9 -1.3 -7.2 -0.6 -7.0', // inner slope down to the ear valley
+  'C -0.1 -8.0 0.7 -8.3 1.0 -7.8',   // back ear: narrow pointed rise
+  'C 1.3 -7.2 2.0 -6.8 2.8 -6.4',    // ear base flowing into the skull
   'C 3.6 -4.8 4.2 -3.4 4.6 -1.6',    // back of skull down neck
   'C 5.0 0.4 5.6 2.4 5.4 4.4',       // arched neck to withers
   'L 5.4 5.6',
@@ -22,7 +23,7 @@ const HEAD_PATH = [
   'L -7.2 -3.2',            // muzzle tip
   'C -7.0 -4.2 -6.4 -4.6 -5.6 -4.8', // upper muzzle
   'L -4.8 -5.2',            // top of nose
-  'C -4.4 -6.2 -4.0 -7.4 -3.4 -8.6', // forehead back to forelock
+  'C -4.4 -6.2 -4.0 -7.4 -3.0 -8.8', // forehead back to ear tip
   'Z',
 ].join(' ');
 
@@ -64,8 +65,8 @@ export function KnightIcon({ size, fill, className, detailed }: PieceIconProps) 
       />
       {/* Cheek/jowl contour */}
       <path d="M -2.6 -1.6 C -1.8 -0.8 -1.6 0.2 -2.0 1.2" fill="none" stroke={dark} strokeWidth={0.32} strokeLinecap="round" opacity={0.4} />
-      {/* Ear inner line */}
-      <path d="M 1.2 -7.3 Q 1.9 -7.1 2.2 -6.5" fill="none" stroke={dark} strokeWidth={0.32} strokeLinecap="round" opacity={0.55} />
+      {/* Ear inner line (back ear) */}
+      <path d="M 0.2 -7.3 Q 0.5 -7.7 0.9 -7.3" fill="none" stroke={dark} strokeWidth={0.32} strokeLinecap="round" opacity={0.55} />
       {/* Mouth + nostril */}
       <path d="M -7.0 -2.6 C -6.6 -2.3 -6.1 -2.2 -5.7 -2.3" fill="none" stroke={dark} strokeWidth={0.3} strokeLinecap="round" opacity={0.6} />
       <circle cx={-6.3} cy={-3.5} r={0.32} fill={dark} opacity={0.7} />

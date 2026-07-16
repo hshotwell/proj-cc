@@ -469,10 +469,12 @@ export function Piece({
   if (isHexChessPiece) {
     const IconComponent = pieceIconFor(pieceType!);
     if (!IconComponent) return null;
-    // Icons sized to fit inside the hex tile. Peons and pawns render smaller
-    // than the other pieces so the hierarchy reads at a glance.
+    // Icons sized to fit inside the hex tile. Three tiers so the hierarchy
+    // reads at a glance: king/queen largest, rook/bishop/knight mid,
+    // peons and pawns smallest.
     const isSmallPiece = pieceType === 'soldier' || pieceType === 'pawn';
-    const iconSize = size * (isSmallPiece ? 1.15 : 1.45);
+    const isRoyalPiece = pieceType === 'king' || pieceType === 'queen';
+    const iconSize = size * (isSmallPiece ? 1.15 : isRoyalPiece ? 1.45 : 1.32);
     const pieceRadiusChess = size * 0.62;
     const pieceColor = getPlayerColor(player, customColors);
     const captureColor = captureTargetColor ?? pieceColor;

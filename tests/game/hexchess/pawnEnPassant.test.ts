@@ -128,6 +128,61 @@ describe('pawn en passant', () => {
     expect(epMoves[0].epCapturedCell).toEqual(blackPawnDest);
   });
 
+  it('does not offer en passant onto an occupied target cell', () => {
+    // A soldier's forward-diagonal move sets EP targetCells on the two cells it
+    // passed between — those cells may hold pieces. A pawn must not be offered
+    // an EP capture landing on an occupied cell.
+    const [e1] = forwardEdges(1);
+
+    const blackPawnStart = cubeCoord(0, 0);
+    const blackPawnMid = cubeAdd(blackPawnStart, e1);
+    const blackPawnDest = cubeAdd(blackPawnMid, e1);
+
+    const diagP0 = forwardDiagonal(0);
+    const whitePawnCell = {
+      q: blackPawnMid.q - diagP0.q,
+      r: blackPawnMid.r - diagP0.r,
+      s: blackPawnMid.s - diagP0.s,
+    };
+
+    const whitePawn: HexPiece = {
+      id: 'WP',
+      player: 0,
+      type: 'pawn',
+      cell: whitePawnCell,
+      hasMoved: true,
+    };
+    const blackPawn: HexPiece = {
+      id: 'BP',
+      player: 1,
+      type: 'pawn',
+      cell: blackPawnDest,
+      hasMoved: true,
+    };
+    // Friendly piece already sits on the EP target cell.
+    const blocker: HexPiece = {
+      id: 'BLK',
+      player: 0,
+      type: 'rook',
+      cell: blackPawnMid,
+      hasMoved: true,
+    };
+
+    const st = stateWith([whitePawn, blackPawn, blocker], {
+      currentPlayer: 0,
+      turnNumber: 2,
+      enPassantTarget: {
+        capturedPieceId: 'BP',
+        targetCells: [blackPawnMid],
+        availableUntilTurn: 2,
+      },
+    });
+
+    const moves = pawnMoves(st, whitePawn);
+    expect(moves.filter(m => m.isEnPassant)).toHaveLength(0);
+    expect(moves.filter(m => m.to.q === blackPawnMid.q && m.to.r === blackPawnMid.r)).toHaveLength(0);
+  });
+
   it('pseudoMovesForPiece includes en passant move with correct capture', () => {
     const [e1] = forwardEdges(1);
 

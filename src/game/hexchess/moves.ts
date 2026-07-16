@@ -88,8 +88,10 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
       out.push({ to: cell, isCapture: true });
     }
   }
-  // En passant: if there is an active soldier en passant target and this soldier's
-  // forward diagonal lands on one of the passed-through cells, add an EP move.
+  // En passant: like a normal capture, EP uses the soldier's forward-EDGE
+  // capture directions (not its forward-diagonal movement). If an active en
+  // passant target cell sits on one of those edge cells and the cell is empty,
+  // add an EP move landing there.
   const ep = state.enPassantTarget;
   if (ep && ep.availableUntilTurn === state.turnNumber) {
     const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
@@ -97,14 +99,22 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
     // to a queen/rook/bishop/knight can still be captured en passant if the
     // enemy soldier had already committed to the double-step response.
     if (capturedPiece && capturedPiece.player !== piece.player) {
-      for (const targetCell of ep.targetCells) {
-        if (forwardDiagCell.q === targetCell.q && forwardDiagCell.r === targetCell.r) {
-          out.push({
-            to: forwardDiagCell,
-            isCapture: true,
-            isEnPassant: true,
-            epCapturedCell: capturedPiece.cell,
-          });
+      for (const e of forwardEdges(piece.player)) {
+        const edgeCell = cubeAdd(piece.cell, e);
+        if (!isOnBoard(edgeCell)) continue;
+        // The EP landing cell must be empty — the passed-through cells of a
+        // soldier's diagonal move can hold pieces (the soldier moves between
+        // them). If an enemy sits there, the normal capture above covers it.
+        if (pieceAt(state, edgeCell) !== null) continue;
+        for (const targetCell of ep.targetCells) {
+          if (edgeCell.q === targetCell.q && edgeCell.r === targetCell.r) {
+            out.push({
+              to: edgeCell,
+              isCapture: true,
+              isEnPassant: true,
+              epCapturedCell: capturedPiece.cell,
+            });
+          }
         }
       }
     }
@@ -151,9 +161,13 @@ export function pawnMoves(
     const occ = pieceAt(state, diagCell);
     if (occ && occ.player !== piece.player) out.push({ to: diagCell, isCapture: true });
   }
-  // En passant capture: if the diagonal cell is an enPassantTarget, add an en passant move
+  // En passant capture: if the diagonal cell is an enPassantTarget AND empty,
+  // add an en passant move. A soldier-created target cell can hold a piece
+  // (the soldier passes between its two target cells); landing there would
+  // stack two pieces on one cell. An enemy occupant is handled by the normal
+  // diagonal capture above.
   const ep = state.enPassantTarget;
-  if (ep && ep.availableUntilTurn === state.turnNumber) {
+  if (ep && ep.availableUntilTurn === state.turnNumber && isOnBoard(diagCell) && pieceAt(state, diagCell) === null) {
     for (const targetCell of ep.targetCells) {
       if (diagCell.q === targetCell.q && diagCell.r === targetCell.r) {
         // No type check — a pawn that has since promoted is still an eligible
