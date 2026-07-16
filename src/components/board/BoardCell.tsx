@@ -206,7 +206,9 @@ export function BoardCell({
 
   // ── Hex cell rendering ────────────────────────────────────────────────────
   if (effectiveHexCells) {
-    const hexR = size * 0.855;
+    // Hex Chess tiles fill the full cell pitch so neighbors meet border to
+    // border (circumradius = size tiles perfectly); Sternhalma keeps a gap.
+    const hexR = tileTintColor !== undefined ? size : size * 0.855;
     const pts = hexPoints(x, y, hexR);
     const lineWidth = showTriangleLines ? 2.2 : (goalColor ? 1.4 : 0.8);
     const strokeColor = effectiveGoalColor

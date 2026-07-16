@@ -519,9 +519,14 @@ export function Piece({
     };
     const lum = luminanceOf(cssColor);
     const isDarkPiece = lum !== null && lum < 90;
+    // Light pieces (e.g. white) get a gentler darkening — the full tint reads
+    // as grey rather than highlighted.
+    const isLightPiece = lum !== null && lum > 190;
     const lastMovedFilter = isLastMoved
       ? (isDarkPiece
           ? 'brightness(1.6) drop-shadow(0 0 1.5px rgba(255,255,255,0.55))'
+          : isLightPiece
+          ? 'brightness(0.8)'
           : 'brightness(0.55)')
       : undefined;
     // Detailed pieces get a soft drop shadow to lift them off the tile.

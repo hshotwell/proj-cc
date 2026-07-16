@@ -1,5 +1,5 @@
 import React from 'react';
-import { type PieceIconProps, TurnedGradient, darken, svgIdFor } from './shading';
+import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } from './shading';
 
 // Pawn (classical): smaller round head, thin tapered body, narrower base than the Peon.
 // Detailed mode: smooth waisted body, collar roll, torus base roll, flared
@@ -25,7 +25,7 @@ export function PawnIcon({ size, fill, className, detailed }: PieceIconProps) {
       </svg>
     );
   }
-  const outline = darken(fill, 0.5);
+  const outline = outlineFor(fill);
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <defs><TurnedGradient id={gid} fill={fill} /></defs>

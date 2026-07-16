@@ -1,5 +1,5 @@
 import React from 'react';
-import { type PieceIconProps, TurnedGradient, darken, svgIdFor } from './shading';
+import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } from './shading';
 
 // Rook: castle turret with 3 crenellations, straight body, wide base.
 // Detailed mode: rounded merlons, cornice band, brickwork lines, torus base
@@ -26,8 +26,8 @@ export function RookIcon({ size, fill, className, detailed }: PieceIconProps){
       </svg>
     );
   }
-  const outline = darken(fill, 0.5);
-  const dark = darken(fill, 0.42);
+  const outline = outlineFor(fill);
+  const dark = detailFor(fill);
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <defs><TurnedGradient id={gid} fill={fill} /></defs>

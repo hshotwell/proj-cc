@@ -24,12 +24,8 @@ const METALLIC_COLORS_LIST = ROW3_DISPLAY_ORDER;
 const FLOWER_COLORS_LIST = ROW4_DISPLAY_ORDER;
 const EGG_COLORS_LIST = ROW5_DISPLAY_ORDER;
 
-// Marble-only skin colors (rows 2-5) — not selectable in Hex Chess mode.
-const SKIN_COLOR_SET = new Set(
-  [...ROW3_DISPLAY_ORDER, ...GEM_COLORS, ...ROW4_DISPLAY_ORDER, ...ROW5_DISPLAY_ORDER]
-    .filter((c): c is string => Boolean(c))
-    .map((c) => c.toLowerCase())
-);
+// Classic chess defaults for Hex Chess mode (white vs black from NEUTRAL_COLORS)
+const HEX_CHESS_DEFAULT_COLORS: [string, string] = ['#ffffff', '#1a1a1a'];
 
 const PLAYER_COUNT_OPTIONS: { count: PlayerCount; description: string }[] = [
   { count: 2, description: 'Head to head' },
@@ -117,20 +113,24 @@ export default function PlayPage() {
   useEffect(() => { loadLayouts(); }, [loadLayouts]);
 
   // When switching to Hex Chess, lock to standard board and 2 players.
-  // Marble skin colors (rows 2-5) don't apply to chess pieces — revert any
-  // selected skin back to the player's default color.
+  // Colors reset to classic chess defaults (white vs black) — favorite/skin
+  // colors don't apply to chess pieces. The Sternhalma color choices are
+  // stashed and restored when switching back.
+  const sternhalmaColorsRef = useRef<ColorMapping | null>(null);
   useEffect(() => {
     if (gameMode === 'hexchess') {
       setSelectedCount(2);
       setSelectedLayout(null);
       setShowBoardSelector(false);
       setCustomColors(prev => {
-        const entries = Object.entries(prev).filter(
-          ([, color]) => !color || !SKIN_COLOR_SET.has(color.toLowerCase())
-        );
-        if (entries.length === Object.keys(prev).length) return prev;
-        return Object.fromEntries(entries) as ColorMapping;
+        sternhalmaColorsRef.current = prev;
+        const [p0, p1] = ACTIVE_PLAYERS[2];
+        return { [p0]: HEX_CHESS_DEFAULT_COLORS[0], [p1]: HEX_CHESS_DEFAULT_COLORS[1] } as ColorMapping;
       });
+    } else if (sternhalmaColorsRef.current !== null) {
+      const restored = sternhalmaColorsRef.current;
+      sternhalmaColorsRef.current = null;
+      setCustomColors(restored);
     }
   }, [gameMode]);
 
@@ -362,7 +362,7 @@ export default function PlayPage() {
         <div className="flex items-center gap-3">
           {gameMode === 'hexchess' ? (
             <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center">
-              <PawnIcon size={40} fill={currentColor} className="drop-shadow-[0_0_1px_rgba(0,0,0,0.55)]" />
+              <PawnIcon size={44} fill={currentColor} detailed className="drop-shadow-[0_0_1px_rgba(0,0,0,0.4)]" />
             </div>
           ) : (
             <ColorSwatch color={currentColor} className="w-10 h-10 shadow flex-shrink-0" />
@@ -461,7 +461,7 @@ export default function PlayPage() {
                     }`}
                     title={title}
                   >
-                    <PawnIcon size={28} fill={color} className="drop-shadow-[0_0_1px_rgba(0,0,0,0.55)]" />
+                    <PawnIcon size={30} fill={color} detailed className="drop-shadow-[0_0_1px_rgba(0,0,0,0.4)]" />
                   </button>
                 </Fragment>
               );

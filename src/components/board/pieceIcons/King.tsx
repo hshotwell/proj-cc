@@ -1,5 +1,5 @@
 import React from 'react';
-import { type PieceIconProps, TurnedGradient, darken, svgIdFor } from './shading';
+import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } from './shading';
 
 // King: small cross on top, wide crown base with 3 points, tapered body, flat base.
 // Detailed mode: smooth-curved crown with pearl tips, waisted body, torus base
@@ -25,8 +25,8 @@ export function KingIcon({ size, fill, className, detailed }: PieceIconProps){
       </svg>
     );
   }
-  const outline = darken(fill, 0.5);
-  const dark = darken(fill, 0.42);
+  const outline = outlineFor(fill);
+  const dark = detailFor(fill);
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
       <defs><TurnedGradient id={gid} fill={fill} /></defs>
