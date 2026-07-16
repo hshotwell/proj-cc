@@ -1734,7 +1734,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
         const newKindHighlights = renderHighlights.filter(
           h => h.kind === 'legalMoveEmpty' || h.kind === 'check' ||
                h.kind === 'preMoveFrom' || h.kind === 'preMoveTo' ||
-               (h.kind === 'lastMoveFrom' && showLastMoves)
+               (h.kind === 'lastMoveFrom' && showLastMoves) ||
+               // Capture highlights on occupied cells ring the piece itself (via
+               // captureTargetColor); on an empty cell (en passant destination)
+               // draw the ring here instead.
+               (h.kind === 'legalMoveCapture' && !resolvedView?.pieces.some(p => cubeEquals(p.cell, h.cell)))
         );
         if (newKindHighlights.length === 0) return null;
         return (

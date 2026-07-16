@@ -3,7 +3,9 @@ import { soldierMoves, applyMoveCore, pseudoMovesForPiece } from '@/game/hexches
 import type { HexChessState, HexPiece, HexMove } from '@/game/hexchess/state';
 import { forwardDiagonal, forwardEdges } from '@/game/hexchess/directions';
 import { cubeAdd, cubeCoord } from '@/game/coordinates';
-import { pieceAt } from '@/game/hexchess/board';
+import { pieceAt, isOnBoard } from '@/game/hexchess/board';
+import { promotionCellsForPlayer } from '@/game/hexchess/starting';
+import { confirmPromotion } from '@/game/hexchess/promotion';
 
 function stateWith(pieces: HexPiece[], overrides?: Partial<HexChessState>): HexChessState {
   return {
@@ -69,12 +71,15 @@ describe('soldier en passant', () => {
 
     expect(next.enPassantTarget).not.toBeNull();
     expect(next.enPassantTarget!.capturedPieceId).toBe('SA');
-    expect(next.enPassantTarget!.targetCells).toHaveLength(2);
+    expect(next.enPassantTarget!.targetCells).toHaveLength(3);
     expect(next.enPassantTarget!.availableUntilTurn).toBe(next.turnNumber);
 
     const cellKeys = next.enPassantTarget!.targetCells.map(c => `${c.q},${c.r}`);
     expect(cellKeys).toContain(`${passedCell1.q},${passedCell1.r}`);
     expect(cellKeys).toContain(`${passedCell2.q},${passedCell2.r}`);
+    // The vacated departure cell is also a target: an enemy peon standing on
+    // a passed-through cell (brushed past) captures onto the cell the mover left.
+    expect(cellKeys).toContain(`${soldierStart.q},${soldierStart.r}`);
   });
 
   /**
@@ -243,6 +248,71 @@ describe('soldier en passant', () => {
     expect(moves.filter(m => m.isEnPassant)).toHaveLength(0);
     // And no move of any kind may land on the friendly-occupied cell.
     expect(moves.filter(m => m.to.q === passedCell1.q && m.to.r === passedCell1.r)).toHaveLength(0);
+  });
+
+  /**
+   * Test 2d: slide-past scenario — the enemy peon stands ON one of the two
+   * passed-through cells (the mover brushes right past it). That peon may
+   * capture en passant onto the VACATED departure cell, even when the mover
+   * promoted to a queen on arrival.
+   */
+  it('peon that was slid past captures onto the vacated cell, even after promotion', () => {
+    const diag0 = forwardDiagonal(0);
+    const [e1] = forwardEdges(0);
+
+    // Pick a promotion cell for player 0 whose approach cells are on board.
+    let from: ReturnType<typeof cubeCoord> | null = null;
+    let dest: ReturnType<typeof cubeCoord> | null = null;
+    for (const key of promotionCellsForPlayer(0)) {
+      const [q, r] = key.split(',').map(Number);
+      const t = cubeCoord(q, r);
+      const f = cubeCoord(t.q - diag0.q, t.r - diag0.r);
+      const p1 = cubeAdd(f, e1);
+      if (isOnBoard(f) && isOnBoard(p1)) {
+        from = f;
+        dest = t;
+        break;
+      }
+    }
+    expect(from).not.toBeNull();
+
+    const brushedCell = cubeAdd(from!, e1); // black peon stands here
+
+    const whiteSoldier: HexPiece = {
+      id: 'WS', player: 0, type: 'soldier', cell: from!, hasMoved: true,
+    };
+    const blackPeon: HexPiece = {
+      id: 'BS', player: 1, type: 'soldier', cell: brushedCell, hasMoved: true,
+    };
+
+    const st = stateWith([whiteSoldier, blackPeon], { currentPlayer: 0, turnNumber: 5 });
+
+    // White slides past the black peon onto the promotion cell.
+    const slide: HexMove = {
+      pieceId: 'WS', from: from!, to: dest!, capture: null, promotion: null,
+      isEnPassant: false, isDoubleStep: false, player: 0, turnNumber: 5,
+    };
+    let next = applyMoveCore(st, slide);
+    expect(next.pendingPromotion).not.toBeNull();
+    next = confirmPromotion(next, 'queen');
+
+    // It is now black's turn; the promoted queen is still EP-capturable.
+    expect(next.currentPlayer).toBe(1);
+    const moves = soldierMoves(next, next.pieces.find(p => p.id === 'BS')!);
+    const epMoves = moves.filter(m => m.isEnPassant);
+    expect(epMoves).toHaveLength(1);
+    expect(epMoves[0].to).toEqual(from);
+    expect(epMoves[0].epCapturedCell).toEqual(dest);
+
+    // Applying the EP move removes the queen.
+    const epMove: HexMove = {
+      pieceId: 'BS', from: brushedCell, to: from!,
+      capture: { pieceId: 'WS', cell: dest! }, promotion: null,
+      isEnPassant: true, isDoubleStep: false, player: 1, turnNumber: next.turnNumber,
+    };
+    const after = applyMoveCore(next, epMove);
+    expect(after.pieces.find(p => p.id === 'WS')).toBeUndefined();
+    expect(after.pieces.find(p => p.id === 'BS')!.cell).toEqual(from);
   });
 
   /**

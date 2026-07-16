@@ -97,6 +97,16 @@ export function HexGameContainer() {
       return;
     }
 
+    // En passant: the captured piece sits off the destination cell. Clicking
+    // that piece performs the capture (its cell is ringed as a capture target).
+    const epMove = s.legalMoveTargets.find(
+      (m) => m.capture !== null && cubeEquals(m.capture.cell, cell),
+    );
+    if (epMove) {
+      s.attemptMove(epMove.to);
+      return;
+    }
+
     // Check if a piece belonging to the current player is on this cell.
     const piece = state.pieces.find(
       (p) => p.player === state.currentPlayer && cubeEquals(p.cell, cell),

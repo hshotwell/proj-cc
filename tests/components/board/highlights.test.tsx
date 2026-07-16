@@ -131,12 +131,20 @@ describe('Board highlight rendering', () => {
     expect(html).toContain('<circle');
   });
 
-  it('does NOT render a standalone highlight for legalMoveCapture (now on the piece)', () => {
-    // legalMoveCapture is now rendered as a spike ring around the enemy piece
-    // (via Piece.isCaptureTarget), not as a separate hollow circle in the
-    // highlight layer. The board itself renders no capture-ring circle.
-    const html = renderBoard(makeView([{ kind: 'legalMoveCapture', cell }]));
+  it('does NOT render a standalone highlight for legalMoveCapture on an occupied cell', () => {
+    // On an occupied cell, legalMoveCapture is rendered as a spike ring around
+    // the enemy piece (via Piece.isCaptureTarget), not as a separate hollow
+    // circle in the highlight layer.
+    const view = makeView([{ kind: 'legalMoveCapture', cell }]);
+    view.pieces = [{ id: 'e1', cell, color: '#1a1a1a', pieceType: 'soldier', faded: false }];
+    const html = renderBoard(view);
     expect(html).not.toMatch(/stroke="#ef4444"[^>]*>/);
+  });
+
+  it('renders a hollow capture ring for legalMoveCapture on an EMPTY cell (en passant destination)', () => {
+    const html = renderBoard(makeView([{ kind: 'legalMoveCapture', cell }]));
+    expect(html).toMatch(/stroke="#ef4444"[^>]*>/);
+    expect(html).toMatch(/fill="none"/);
   });
 
   it('renders a red pulsing ring for check', () => {

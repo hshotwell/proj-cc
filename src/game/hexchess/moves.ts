@@ -236,12 +236,15 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
     // Soldier forward-diagonal non-capture: the passed-through cells are
     // the two edge-neighbors shared by move.from and move.to.
     // Since to = from + (e1 + e2), the two cells are from + e1 and from + e2.
+    // The vacated departure cell is also a target: the only enemy peons whose
+    // capture reaches it are the ones standing ON a passed-through cell — the
+    // mover slid right past them, and they may take it on the cell it left.
     const [e1, e2] = forwardEdges(movingPiece.player);
     const passedCell1 = cubeAdd(move.from, e1);
     const passedCell2 = cubeAdd(move.from, e2);
     enPassantTarget = {
       capturedPieceId: move.pieceId,
-      targetCells: [passedCell1, passedCell2],
+      targetCells: [passedCell1, passedCell2, move.from],
       availableUntilTurn: nextTurnNumber,
     };
   }

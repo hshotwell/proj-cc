@@ -47,7 +47,7 @@ export function HowToPlayHexChess({ open, onClose }: HowToPlayHexChessProps) {
         </section>
         <section className="mb-4">
           <h3 className="font-medium mb-2">En passant</h3>
-          <p className="text-sm text-gray-700">When your Peon advances two cells (via its normal 1-diagonal step) and lands next to an enemy Peon, that enemy may capture your Peon immediately using its normal diagonal capture onto the passed-through cell (if that cell is empty). Only available on the immediately following turn.</p>
+          <p className="text-sm text-gray-700">When your Peon advances two cells (via its normal 1-diagonal step) and lands next to an enemy Peon, that enemy may capture your Peon immediately using its normal diagonal capture onto the passed-through cell (if that cell is empty). If your Peon slides directly past an enemy Peon standing beside its path, that Peon may instead capture onto the cell yours just left. Both apply even if your Peon promoted on arrival, and only on the immediately following turn.</p>
         </section>
         <section className="mb-4">
           <h3 className="font-medium mb-2">Draws</h3>

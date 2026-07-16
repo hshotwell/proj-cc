@@ -388,6 +388,10 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
   for (const target of legalMoveTargets) {
     const kind = target.capture !== null ? 'legalMoveCapture' : 'legalMoveEmpty';
     highlights.push({ kind, cell: target.to });
+    // En passant: the captured piece is not on the destination cell — ring it too.
+    if (target.capture !== null && !cubeEquals(target.capture.cell, target.to)) {
+      highlights.push({ kind: 'legalMoveCapture', cell: target.capture.cell });
+    }
   }
 
   // Last move highlights
