@@ -4,13 +4,18 @@ import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } 
 // Pawn (classical): smaller round head, thin tapered body, narrower base than the Peon.
 // Detailed mode: smooth waisted body, collar roll, torus base roll, flared
 // plinth, cylindrical shading.
-export function PawnIcon({ size, fill, className, detailed }: PieceIconProps) {
+export function PawnIcon({ size, fill, className, detailed, outlined }: PieceIconProps) {
   const gid = svgIdFor('pw', fill);
   if (!detailed) {
     return (
       <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
         <path
           fill={fill}
+          // Swatch contexts sit on themed backgrounds the fill can vanish
+          // into (black pawn on a dark-mode card) — outline adaptively.
+          stroke={outlined ? outlineFor(fill) : undefined}
+          strokeWidth={outlined ? 0.6 : undefined}
+          strokeLinejoin="round"
           d={[
             // Round head — large relative to the short body so the piece
             // reads squat, matching the detailed variant's proportions

@@ -7,6 +7,9 @@ export interface PieceIconProps {
   // Fancy board rendering (smooth curves, shading, detail lines) — enabled on
   // the board when simplified pieces are off. Swatches and UI icons stay simple.
   detailed?: boolean;
+  // Simple mode only: stroke the silhouette in an adaptive contrast color so
+  // the piece stays visible on backgrounds close to its own fill.
+  outlined?: boolean;
 }
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;

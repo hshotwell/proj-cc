@@ -362,7 +362,7 @@ export default function PlayPage() {
         <div className="flex items-center gap-3">
           {gameMode === 'hexchess' ? (
             <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center">
-              <PawnIcon size={44} fill={currentColor} className="drop-shadow-[0_0_1px_rgba(0,0,0,0.4)]" />
+              <PawnIcon size={44} fill={currentColor} outlined className="drop-shadow-[0_0_1px_rgba(0,0,0,0.4)]" />
             </div>
           ) : (
             <ColorSwatch color={currentColor} className="w-10 h-10 shadow flex-shrink-0" />
@@ -461,7 +461,7 @@ export default function PlayPage() {
                     }`}
                     title={title}
                   >
-                    <PawnIcon size={30} fill={color} className="drop-shadow-[0_0_1px_rgba(0,0,0,0.4)]" />
+                    <PawnIcon size={30} fill={color} outlined className="drop-shadow-[0_0_1px_rgba(0,0,0,0.4)]" />
                   </button>
                 </Fragment>
               );
