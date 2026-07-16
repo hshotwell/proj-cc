@@ -524,6 +524,11 @@ export function Piece({
           ? 'brightness(1.6) drop-shadow(0 0 1.5px rgba(255,255,255,0.55))'
           : 'brightness(0.55)')
       : undefined;
+    // Detailed pieces get a soft drop shadow to lift them off the tile.
+    const iconFilter = [
+      glassPieces ? 'drop-shadow(0.4px 0.9px 0.7px rgba(0,0,0,0.4))' : undefined,
+      lastMovedFilter,
+    ].filter(Boolean).join(' ') || undefined;
     // While a slide animation is in flight, animPos is the interpolated point
     // between the piece's previous cell and its destination. When the animation
     // finishes, animPos is null and we render at the true (x, y).
@@ -546,9 +551,9 @@ export function Piece({
           y={-iconSize / 2}
           width={iconSize}
           height={iconSize}
-          style={{ pointerEvents: 'none', filter: lastMovedFilter }}
+          style={{ pointerEvents: 'none', filter: iconFilter }}
         >
-          <IconComponent size={iconSize} fill={cssColor} />
+          <IconComponent size={iconSize} fill={cssColor} detailed={glassPieces} />
         </svg>
       </g>
     );

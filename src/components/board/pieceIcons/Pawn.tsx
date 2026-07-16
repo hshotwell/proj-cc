@@ -1,28 +1,47 @@
 import React from 'react';
-
-interface PieceIconProps {
-  size: number;
-  fill: string;
-  className?: string;
-}
+import { type PieceIconProps, TurnedGradient, darken, svgIdFor } from './shading';
 
 // Pawn (classical): smaller round head, thin tapered body, narrower base than the Peon.
-export function PawnIcon({ size, fill, className }: PieceIconProps) {
+// Detailed mode: smooth waisted body, collar roll, torus base roll, flared
+// plinth, cylindrical shading.
+export function PawnIcon({ size, fill, className, detailed }: PieceIconProps) {
+  const gid = svgIdFor('pw', fill);
+  if (!detailed) {
+    return (
+      <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
+        <path
+          fill={fill}
+          d={[
+            // Small round head
+            'M 0 -7.5 A 2 2 0 1 1 0 -3.5 A 2 2 0 1 1 0 -7.5 Z',
+            // Neck
+            'M -1.8 -3.7 L 1.8 -3.7 L 2.3 -2.4 L -2.3 -2.4 Z',
+            // Slim body — tapered
+            'M -2.3 -2.4 L -3 4 L 3 4 L 2.3 -2.4 Z',
+            // Base — narrower than the Peon
+            'M -4.5 4 L -4.5 7 L 4.5 7 L 4.5 4 Z',
+          ].join(' ')}
+        />
+      </svg>
+    );
+  }
+  const outline = darken(fill, 0.5);
   return (
     <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
-      <path
-        fill={fill}
-        d={[
-          // Small round head
-          'M 0 -7.5 A 2 2 0 1 1 0 -3.5 A 2 2 0 1 1 0 -7.5 Z',
-          // Neck
-          'M -1.8 -3.7 L 1.8 -3.7 L 2.3 -2.4 L -2.3 -2.4 Z',
-          // Slim body — tapered
-          'M -2.3 -2.4 L -3 4 L 3 4 L 2.3 -2.4 Z',
-          // Base — narrower than the Peon
-          'M -4.5 4 L -4.5 7 L 4.5 7 L 4.5 4 Z',
-        ].join(' ')}
-      />
+      <defs><TurnedGradient id={gid} fill={fill} /></defs>
+      <g fill={`url(#${gid})`} stroke={outline} strokeWidth={0.3} strokeLinejoin="round">
+        {/* Small round head */}
+        <circle cx={0} cy={-5.4} r={2.05} />
+        {/* Slim waisted body */}
+        <path d="M -1.5 -2.9 C -2.2 -0.6 -2.7 1.6 -3.0 4.1 L 3.0 4.1 C 2.7 1.6 2.2 -0.6 1.5 -2.9 Z" />
+        {/* Collar roll */}
+        <ellipse cx={0} cy={-3.1} rx={2.0} ry={0.65} />
+        {/* Base roll + flared plinth */}
+        <ellipse cx={0} cy={4.2} rx={3.4} ry={0.7} />
+        <path d="M -4.5 7.2 C -4.5 5.8 -3.7 5.0 -3.0 5.0 L 3.0 5.0 C 3.7 5.0 4.5 5.8 4.5 7.2 Z" />
+      </g>
+      {/* Glint on the head */}
+      <ellipse cx={-0.7} cy={-6.1} rx={0.65} ry={0.5} fill="white" opacity={0.35} transform="rotate(-24 -0.7 -6.1)" />
     </svg>
   );
 }

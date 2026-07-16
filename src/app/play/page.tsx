@@ -7,6 +7,7 @@ import type { PlayerCount, PlayerIndex, BoardLayout, ColorMapping, PlayerNameMap
 import type { AIPlayerMap, AIDifficulty, AIPersonality } from '@/types/ai';
 import { PLAYER_COLORS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, ACTIVE_PLAYERS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
 import { ColorSwatch, SpecialSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
+import { PawnIcon } from '@/components/board/pieceIcons';
 import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
@@ -22,6 +23,13 @@ const DEFAULT_COLORS = COLOR_DISPLAY_ORDER;
 const METALLIC_COLORS_LIST = ROW3_DISPLAY_ORDER;
 const FLOWER_COLORS_LIST = ROW4_DISPLAY_ORDER;
 const EGG_COLORS_LIST = ROW5_DISPLAY_ORDER;
+
+// Marble-only skin colors (rows 2-5) — not selectable in Hex Chess mode.
+const SKIN_COLOR_SET = new Set(
+  [...ROW3_DISPLAY_ORDER, ...GEM_COLORS, ...ROW4_DISPLAY_ORDER, ...ROW5_DISPLAY_ORDER]
+    .filter((c): c is string => Boolean(c))
+    .map((c) => c.toLowerCase())
+);
 
 const PLAYER_COUNT_OPTIONS: { count: PlayerCount; description: string }[] = [
   { count: 2, description: 'Head to head' },
@@ -108,12 +116,21 @@ export default function PlayPage() {
 
   useEffect(() => { loadLayouts(); }, [loadLayouts]);
 
-  // When switching to Hex Chess, lock to standard board and 2 players
+  // When switching to Hex Chess, lock to standard board and 2 players.
+  // Marble skin colors (rows 2-5) don't apply to chess pieces — revert any
+  // selected skin back to the player's default color.
   useEffect(() => {
     if (gameMode === 'hexchess') {
       setSelectedCount(2);
       setSelectedLayout(null);
       setShowBoardSelector(false);
+      setCustomColors(prev => {
+        const entries = Object.entries(prev).filter(
+          ([, color]) => !color || !SKIN_COLOR_SET.has(color.toLowerCase())
+        );
+        if (entries.length === Object.keys(prev).length) return prev;
+        return Object.fromEntries(entries) as ColorMapping;
+      });
     }
   }, [gameMode]);
 
@@ -343,7 +360,13 @@ export default function PlayPage() {
       <div key={playerIndex} className="flex flex-col gap-3 p-4 rounded-lg bg-gray-50">
         {/* Top row: Color swatch, Name, Human/AI toggle */}
         <div className="flex items-center gap-3">
-          <ColorSwatch color={currentColor} className="w-10 h-10 shadow flex-shrink-0" />
+          {gameMode === 'hexchess' ? (
+            <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center">
+              <PawnIcon size={40} fill={currentColor} className="drop-shadow-[0_0_1px_rgba(0,0,0,0.55)]" />
+            </div>
+          ) : (
+            <ColorSwatch color={currentColor} className="w-10 h-10 shadow flex-shrink-0" />
+          )}
           <div className="flex-1 min-w-0">
             {isEditing ? (
               <input
@@ -419,9 +442,30 @@ export default function PlayPage() {
 
         {/* Row 1: player colors + neutrals + custom picker */}
         <div data-hover-sound className="flex gap-x-2 gap-y-1 flex-wrap items-center">
-          {DEFAULT_COLORS.map((color, idx) => {
+          {[...DEFAULT_COLORS, ...NEUTRAL_COLORS].map((color, idx) => {
             const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
             const isTaken = isColorUsedByOther(color, playerIndex);
+            const title = isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`;
+            // Hex Chess: colors preview as pawns instead of marbles
+            if (gameMode === 'hexchess') {
+              return (
+                <Fragment key={color}>
+                  {idx === 5 && <div className="w-full h-0 sm:hidden" />}
+                  <button
+                    onClick={() => handleColorSelectSafe(playerIndex, color)}
+                    disabled={isTaken}
+                    className={`w-7 h-7 transition-all flex items-center justify-center ${
+                      isCurrentColor ? 'ring-2 ring-gray-400 rounded-full'
+                      : isTaken ? 'opacity-40 cursor-not-allowed'
+                      : 'hover:scale-110'
+                    }`}
+                    title={title}
+                  >
+                    <PawnIcon size={28} fill={color} className="drop-shadow-[0_0_1px_rgba(0,0,0,0.55)]" />
+                  </button>
+                </Fragment>
+              );
+            }
             return (
               <Fragment key={color}>
                 {idx === 5 && <div className="w-full h-0 sm:hidden" />}
@@ -431,31 +475,13 @@ export default function PlayPage() {
                   className={`w-7 h-7 rounded-full border-2 transition-all ${
                     isCurrentColor ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
                     : isTaken ? 'border-gray-300 opacity-40 cursor-not-allowed'
+                    : color === '#ffffff' ? 'border-gray-400 shadow hover:scale-110'
                     : 'border-white shadow hover:scale-110'
                   }`}
                   style={{ backgroundColor: color }}
-                  title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
+                  title={title}
                 />
               </Fragment>
-            );
-          })}
-          {NEUTRAL_COLORS.map((color) => {
-            const isCurrentColor = currentColor.toLowerCase() === color.toLowerCase();
-            const isTaken = isColorUsedByOther(color, playerIndex);
-            return (
-              <button
-                key={color}
-                onClick={() => handleColorSelectSafe(playerIndex, color)}
-                disabled={isTaken}
-                className={`w-7 h-7 rounded-full border-2 transition-all ${
-                  isCurrentColor ? 'border-gray-800 ring-2 ring-offset-1 ring-gray-400'
-                  : isTaken ? 'border-gray-300 opacity-40 cursor-not-allowed'
-                  : color === '#ffffff' ? 'border-gray-400 shadow hover:scale-110'
-                  : 'border-white shadow hover:scale-110'
-                }`}
-                style={{ backgroundColor: color }}
-                title={isTaken ? "Too similar to another player's color" : `Select: ${getColorName(color)}`}
-              />
             );
           })}
           <ColorPicker
@@ -468,6 +494,8 @@ export default function PlayPage() {
             blockedColors={getBlockedColors(playerIndex)}
           />
         </div>
+        {/* Rows 2-5 are marble skins — Chinese Checkers only */}
+        {gameMode !== 'hexchess' && <>
         {/* Row 2: metallics + rainbow */}
         <div data-hover-sound className="flex gap-x-2 gap-y-1 flex-wrap items-center">
           {METALLIC_COLORS_LIST.map((color, idx) => {
@@ -572,6 +600,7 @@ export default function PlayPage() {
             );
           })}
         </div>
+        </>}
       </div>
     );
   };
