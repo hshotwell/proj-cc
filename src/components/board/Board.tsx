@@ -1759,7 +1759,29 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
                       pointerEvents="none"
                     />
                   );
-                case 'legalMoveCapture':
+                case 'legalMoveCapture': {
+                  if (h.toward) {
+                    // En passant destination: arrowhead on this empty cell
+                    // pointing at the piece that will be captured. Fixed
+                    // red-on-white colors so it reads regardless of the
+                    // active player's color (a white ring vanishes on light
+                    // tiles). Local coords rotate with the board <g>, so the
+                    // arrow keeps pointing at the target under rotation.
+                    const { x: tx, y: ty } = cubeToPixel(h.toward, HEX_SIZE);
+                    const angle = (Math.atan2(ty - py, tx - px) * 180) / Math.PI;
+                    return (
+                      <path
+                        key={stableKey}
+                        d="M 8 0 L -5 -7 L -2 0 L -5 7 Z"
+                        transform={`translate(${px}, ${py}) rotate(${angle})`}
+                        fill="#ef4444"
+                        stroke="white"
+                        strokeWidth={1.2}
+                        strokeLinejoin="round"
+                        pointerEvents="none"
+                      />
+                    );
+                  }
                   return (
                     <circle
                       key={stableKey}
@@ -1772,6 +1794,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
                       pointerEvents="none"
                     />
                   );
+                }
                 case 'check':
                   return (
                     <circle

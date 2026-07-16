@@ -141,10 +141,18 @@ describe('Board highlight rendering', () => {
     expect(html).not.toMatch(/stroke="#ef4444"[^>]*>/);
   });
 
-  it('renders a hollow capture ring for legalMoveCapture on an EMPTY cell (en passant destination)', () => {
+  it('renders a hollow capture ring for legalMoveCapture on an EMPTY cell without direction', () => {
     const html = renderBoard(makeView([{ kind: 'legalMoveCapture', cell }]));
     expect(html).toMatch(/stroke="#ef4444"[^>]*>/);
     expect(html).toMatch(/fill="none"/);
+  });
+
+  it('renders an arrowhead for legalMoveCapture with `toward` (en passant destination)', () => {
+    const toward: CubeCoord = { q: 1, r: -2, s: 1 };
+    const html = renderBoard(makeView([{ kind: 'legalMoveCapture', cell, toward }]));
+    // Red arrowhead path, rotated to point at the captured piece's cell.
+    expect(html).toMatch(/<path[^>]*fill="#ef4444"/);
+    expect(html).toMatch(/rotate\(/);
   });
 
   it('renders a red pulsing ring for check', () => {

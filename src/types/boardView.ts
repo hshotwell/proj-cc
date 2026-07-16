@@ -33,6 +33,10 @@ export interface BoardHighlight {
   kind: BoardHighlightKind;
   cell: CubeCoord;
   playerIndex?: PlayerIndex;
+  // For legalMoveCapture on an empty destination (en passant): the cell of the
+  // piece that would be captured. Rendered as an arrowhead on `cell` pointing
+  // toward `toward`.
+  toward?: CubeCoord;
 }
 
 export interface BoardMoveAnimation {

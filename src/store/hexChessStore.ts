@@ -386,11 +386,15 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
 
   // Legal move highlights
   for (const target of legalMoveTargets) {
-    const kind = target.capture !== null ? 'legalMoveCapture' : 'legalMoveEmpty';
-    highlights.push({ kind, cell: target.to });
-    // En passant: the captured piece is not on the destination cell — ring it too.
     if (target.capture !== null && !cubeEquals(target.capture.cell, target.to)) {
+      // En passant: the captured piece is not on the destination cell. The
+      // destination gets an arrowhead pointing at the doomed piece, which is
+      // ringed as a capture target too.
+      highlights.push({ kind: 'legalMoveCapture', cell: target.to, toward: target.capture.cell });
       highlights.push({ kind: 'legalMoveCapture', cell: target.capture.cell });
+    } else {
+      const kind = target.capture !== null ? 'legalMoveCapture' : 'legalMoveEmpty';
+      highlights.push({ kind, cell: target.to });
     }
   }
 
