@@ -1,4 +1,5 @@
 import type { CubeCoord, PieceColor } from '@/types/game';
+import type { HexLayoutSnapshot } from './geometry';
 
 export type HexPieceType =
   | 'king' | 'queen' | 'rook' | 'bishop' | 'knight' | 'pawn' | 'soldier';
@@ -32,10 +33,13 @@ export interface HexChessConfig {
   seats: HexPlayerIndex[];
   /** Per-seat player config, keyed by seat index. */
   players: Partial<Record<HexPlayerIndex, HexChessPlayerConfig>>;
-  layoutPreset: 'v1-default';
-  soldierVariant: 'soldier' | 'pawn';
+  layoutPreset: 'v1-default' | 'custom';
+  /** Legacy standard-board option; ignored by new games (peon rules always). */
+  soldierVariant?: 'soldier' | 'pawn';
   // ai maps seat → difficulty. An empty object (or null) means no AI.
   ai: null | Partial<Record<HexPlayerIndex, HexChessDifficulty>>;
+  /** Custom board snapshot; absent = standard v1 board. */
+  layout?: HexLayoutSnapshot;
 }
 
 export interface HexMove {
@@ -76,6 +80,8 @@ export interface HexChessState {
   moveHistory: HexMove[];
   positionHashes: Record<string, number>;
   result: null | { winner: HexPlayerIndex | 'draw'; reason: HexEndReason };
+  /** Custom board snapshot; absent = standard v1 board. */
+  layout?: HexLayoutSnapshot;
 }
 
 /**

@@ -191,4 +191,18 @@ export interface BoardLayout {
   isDefault?: boolean;
   // For endgame puzzles: the number of turns it took to finish in the original game (used as par/goal)
   puzzleGoalMoves?: number;
+  // --- Mode & shared display fields ---
+  // undefined = 'sternhalma' (backward compatible with all existing saves)
+  gameMode?: 'sternhalma' | 'hexchess';
+  // Display-only 30-degree board rotation (pointy-top -> flat-top). Both modes.
+  rotated30?: boolean;
+  // Board default colors per seat; play setup pre-fills from these.
+  defaultColors?: Partial<Record<PlayerIndex, string>>;
+  // --- Hex chess fields (gameMode === 'hexchess' only) ---
+  // cellKey -> piece. 'pawn' is the unified pawn/peon; engine decides behavior.
+  hexPieces?: Record<string, { player: PlayerIndex; type: 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen' | 'king' }>;
+  // Per-army promotion tiles (drawn like goals in the editor).
+  promotionPositions?: Partial<Record<PlayerIndex, string[]>>;
+  // Global promote-to options; undefined = all four.
+  promotionOptions?: ('knight' | 'bishop' | 'rook' | 'queen')[];
 }
