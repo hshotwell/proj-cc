@@ -31,6 +31,14 @@ export const saveTrainingStateV2 = internalMutation({
     matchupIndex: v.number(),
     gamesCompletedInGeneration: v.number(),
     lastUpdated: v.number(),
+    // Omitting this clears it (db.replace) — used when the challenge phase ends.
+    challengeProgress: v.optional(v.object({
+      personalityIdx: v.number(),
+      gamesPlayed: v.number(),
+      candidateWins: v.number(),
+      championWins: v.number(),
+      draws: v.number(),
+    })),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db

@@ -21,7 +21,7 @@ import {
 } from '../src/game/training-v2/genomes';
 import { evolveGeneration, type Individual, type EvolveConfig } from '../src/game/training-v2/evolve';
 import { runTournamentGame, type EngineGenome } from '../src/game/training-v2/tournament';
-import { runChallengeMatch, shouldPromote, CHALLENGE_GAMES } from '../src/game/training-v2/promote';
+import { shouldPromote, CHALLENGE_GAMES, CHALLENGE_MAX_MOVES } from '../src/game/training-v2/promote';
 
 const ENGINES = ['default', 'ricefish', 'ricefish-plus'] as const;
 type Engine = typeof ENGINES[number];
@@ -51,6 +51,24 @@ interface ScheduleSlot {
   opponentPersonality: typeof PERSONALITIES[number];
   gameIdx: number;
 }
+
+/**
+ * Resumable progress through the post-generation challenge phase (the
+ * champion-vs-incumbent matches). Persisted on trainingStateV2 so a tick
+ * that runs out of budget — or is killed by the platform — picks up where
+ * the previous one stopped instead of replaying the whole phase.
+ */
+interface ChallengeProgress {
+  personalityIdx: number;
+  gamesPlayed: number;
+  candidateWins: number;
+  championWins: number;
+  draws: number;
+}
+
+const FRESH_CHALLENGE = (personalityIdx: number): ChallengeProgress => ({
+  personalityIdx, gamesPlayed: 0, candidateWins: 0, championWins: 0, draws: 0,
+});
 
 function buildSchedule(populationSize: number): ScheduleSlot[] {
   const schedule: ScheduleSlot[] = [];
@@ -218,63 +236,110 @@ export const runTrainingV2Step = internalAction({
         gamesThisBatch++;
       }
 
-      // ── 6. Generation complete? evolve + promote ────────────────────────
+      // ── 6. Persist batch progress BEFORE any finalize work ──────────────
+      // The old code ran the entire challenge phase (3 personalities × 20
+      // full games) in this same invocation without saving first. When that
+      // blew the action's platform limit, the batch progress was lost too
+      // and every subsequent tick replayed the same doomed finalize forever.
+      const challengeProgress: ChallengeProgress | undefined =
+        (state as { challengeProgress?: ChallengeProgress }).challengeProgress;
+      const persistState = async (
+        gen: number,
+        pop: Individual<any>[],
+        sched: ScheduleSlot[],
+        idx: number,
+        games: number,
+        challenge: ChallengeProgress | undefined,
+      ) => {
+        await ctx.runMutation(internal.trainingV2.saveTrainingStateV2, {
+          engine,
+          currentGeneration: gen,
+          population: pop,
+          matchupSchedule: sched,
+          matchupIndex: idx,
+          gamesCompletedInGeneration: games,
+          lastUpdated: Date.now(),
+          ...(challenge ? { challengeProgress: challenge } : {}),
+        });
+      };
+      if (gamesThisBatch > 0) {
+        await persistState(currentGeneration, population, schedule, matchupIndex, gamesCompletedInGeneration, challengeProgress);
+      }
+
+      // ── 7. Generation complete? incremental challenge phase, then evolve ─
       if (matchupIndex >= schedule.length) {
+        // Deterministic champion pick — population is frozen during the
+        // challenge phase, so resuming ticks recompute the same champion.
         const sorted = [...population].sort((a, b) => b.fitness - a.fitness);
         const champion = sorted[0];
+        let progress = challengeProgress ?? FRESH_CHALLENGE(0);
+        const SAVE_EVERY = 5;
 
-        for (const p of PERSONALITIES) {
-          const currentChampion = championsMap[engine][p];
-          const challenge = runChallengeMatch(
+        while (progress.personalityIdx < PERSONALITIES.length) {
+          if (gamesThisBatch >= GAMES_PER_BATCH || Date.now() - startTime > BATCH_TIME_LIMIT_MS) {
+            // Budget spent — save and resume on this engine's next tick.
+            await persistState(currentGeneration, population, schedule, matchupIndex, gamesCompletedInGeneration, progress);
+            console.log(`[TrainingV2] ${engine} challenge phase paused at personality ${progress.personalityIdx}, game ${progress.gamesPlayed}/${CHALLENGE_GAMES}`);
+            break;
+          }
+          const p = PERSONALITIES[progress.personalityIdx];
+          const res = runTournamentGame(
             { engine, genome: champion.genome },
-            { engine, genome: currentChampion },
+            { engine, genome: championsMap[engine][p] },
             p,
+            p,
+            progress.gamesPlayed % 2 === 0,
+            CHALLENGE_MAX_MOVES,
           );
-          const promoted = shouldPromote({ candidateWins: challenge.candidateWins, gamesPlayed: challenge.gamesPlayed });
-          await ctx.runMutation(internal.trainingV2.saveChampion, {
-            engine,
-            personality: p,
-            genome: champion.genome,
-            fitness: champion.fitness,
-            challengeEntry: {
-              candidateGenome: champion.genome,
-              wins: challenge.candidateWins,
-              played: challenge.gamesPlayed,
-              date: Date.now(),
-              promoted,
-            },
-            replaceGenome: promoted,
-          });
-          console.log(`[TrainingV2] ${engine}/${p} challenge: ${challenge.candidateWins}/${CHALLENGE_GAMES} (${promoted ? 'PROMOTED' : 'rejected'})`);
+          if (res.winner === 'candidate') progress.candidateWins++;
+          else if (res.winner === 'opponent') progress.championWins++;
+          else progress.draws++;
+          progress.gamesPlayed++;
+          gamesThisBatch++;
+
+          if (progress.gamesPlayed >= CHALLENGE_GAMES) {
+            const promoted = shouldPromote({ candidateWins: progress.candidateWins, gamesPlayed: progress.gamesPlayed });
+            await ctx.runMutation(internal.trainingV2.saveChampion, {
+              engine,
+              personality: p,
+              genome: champion.genome,
+              fitness: champion.fitness,
+              challengeEntry: {
+                candidateGenome: champion.genome,
+                wins: progress.candidateWins,
+                played: progress.gamesPlayed,
+                date: Date.now(),
+                promoted,
+              },
+              replaceGenome: promoted,
+            });
+            console.log(`[TrainingV2] ${engine}/${p} challenge: ${progress.candidateWins}/${CHALLENGE_GAMES} (${promoted ? 'PROMOTED' : 'rejected'})`);
+            progress = FRESH_CHALLENGE(progress.personalityIdx + 1);
+            await persistState(currentGeneration, population, schedule, matchupIndex, gamesCompletedInGeneration, progress);
+          } else if (progress.gamesPlayed % SAVE_EVERY === 0) {
+            // Checkpoint mid-personality so a hard kill costs at most a few games.
+            await persistState(currentGeneration, population, schedule, matchupIndex, gamesCompletedInGeneration, progress);
+          }
         }
 
-        const next = evolveGeneration(
-          population,
-          CONFIG,
-          () => createRandomFor(engine),
-          (g, r, s) => mutateFor(engine, g, r, s),
-          (a, b) => crossoverFor(engine, a, b),
-        );
-        const newSchedule = buildSchedule(CONFIG.populationSize);
-        await ctx.runMutation(internal.trainingV2.saveTrainingStateV2, {
-          engine,
-          currentGeneration: currentGeneration + 1,
-          population: next,
-          matchupSchedule: newSchedule,
-          matchupIndex: 0,
-          gamesCompletedInGeneration: 0,
-          lastUpdated: Date.now(),
-        });
-      } else {
-        await ctx.runMutation(internal.trainingV2.saveTrainingStateV2, {
-          engine,
-          currentGeneration,
-          population,
-          matchupSchedule: schedule,
-          matchupIndex,
-          gamesCompletedInGeneration,
-          lastUpdated: Date.now(),
-        });
+        // All three personalities challenged — evolve into the next generation.
+        if (progress.personalityIdx >= PERSONALITIES.length) {
+          const next = evolveGeneration(
+            population,
+            CONFIG,
+            () => createRandomFor(engine),
+            (g, r, s) => mutateFor(engine, g, r, s),
+            (a, b) => crossoverFor(engine, a, b),
+          );
+          const newSchedule = buildSchedule(CONFIG.populationSize);
+          // challengeProgress intentionally omitted — replace clears it.
+          await persistState(currentGeneration + 1, next, newSchedule, 0, 0, undefined);
+          console.log(`[TrainingV2] ${engine} evolved to generation ${currentGeneration + 1}`);
+        }
+      } else if (gamesThisBatch === 0) {
+        // Nothing played and generation incomplete — still bump lastUpdated
+        // so the state reflects the tick ran.
+        await persistState(currentGeneration, population, schedule, matchupIndex, gamesCompletedInGeneration, challengeProgress);
       }
 
       // ── 7. Advance cron cursor ──────────────────────────────────────────

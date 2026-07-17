@@ -31,6 +31,8 @@ export interface WorkerRequest {
   engine?: AIEngine;
   openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null;
   championGenomes?: import('@/types/ai').ChampionGenomeSet;
+  /** Server-evolved endgame genome; drives the late-endgame beam in the default engine. */
+  endgameGenome?: import('@/types/training').Genome;
 }
 
 export interface WorkerResponse {

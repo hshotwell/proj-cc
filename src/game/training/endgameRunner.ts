@@ -36,7 +36,9 @@ function scoreMoveForBeam(
 function expandBeam(
   beamEntries: Array<{ state: GameState; firstMove: Move | null; solved: boolean }>,
   player: PlayerIndex,
-  genome: Genome
+  genome: Genome,
+  isSolved: (s: GameState) => boolean = (s) =>
+    s.finishedPlayers.length > 0 || isGameFullyOver(s),
 ): Array<{ state: GameState; firstMove: Move | null; solved: boolean }> {
   const candidates: Array<{ state: GameState; score: number; firstMove: Move | null; solved: boolean }> = [];
 
@@ -52,7 +54,7 @@ function expandBeam(
       const score = scoreMoveForBeam(entry.state, move, player, genome);
       if (score === -Infinity) continue;
       const nextState = applyMove(entry.state, move);
-      const solved = nextState.finishedPlayers.length > 0 || isGameFullyOver(nextState);
+      const solved = isSolved(nextState);
       // Winning move gets highest priority
       const effectiveScore = solved ? Infinity : score;
       candidates.push({
@@ -146,6 +148,51 @@ export function runEndgamePuzzle(
     solved: state.finishedPlayers.length > 0 || isGameFullyOver(state),
     turnsUsed: state.turnNumber - 1,
   };
+}
+
+/**
+ * Pick a move for `player` in a REAL game using the endgame-trained genome:
+ * the exact beam search (width 3, depth 3) the training regime optimized,
+ * with the solved predicate scoped to this player (other players may already
+ * have finished, and their pieces are treated as static obstacles — valid in
+ * the late endgame, where armies no longer interact).
+ *
+ * Returns null when the beam produces nothing better than the greedy
+ * fallback and even that is fully vetoed.
+ */
+export function findGenomeEndgameMove(
+  state: GameState,
+  player: PlayerIndex,
+  genome: Genome
+): Move | null {
+  const moves = getAllValidMoves(state, player);
+  if (moves.length === 0) return null;
+  if (moves.length === 1) return moves[0];
+
+  const isSolved = (s: GameState) => s.finishedPlayers.some((f) => f.player === player);
+
+  let beam: Array<{ state: GameState; firstMove: Move | null; solved: boolean }> = [
+    { state, firstMove: null, solved: false },
+  ];
+  for (let depth = 0; depth < BEAM_DEPTH; depth++) {
+    const next = expandBeam(beam, player, genome, isSolved);
+    if (next.length === 0) break;
+    beam = next;
+    if (beam[0]?.solved) break;
+  }
+  if (beam[0]?.firstMove) return beam[0].firstMove;
+
+  // Greedy depth-0 fallback, identical to the training runner.
+  let bestMove: Move | null = null;
+  let bestScore = -Infinity;
+  for (const move of moves) {
+    const score = scoreMoveForBeam(state, move, player, genome);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
+  }
+  return bestScore === -Infinity ? null : bestMove;
 }
 
 export interface StoredPuzzle {

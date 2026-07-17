@@ -12,6 +12,7 @@ import { getValidMoves } from '@/game/moves';
 import { coordKey } from '@/game/coordinates';
 import { useOpeningStore } from '@/store/openingStore';
 import { AI_STANDARD_MOVES, AI_STANDARD_MIRROR_MOVES, getMovesForOpening } from '@/game/ai/openingBook';
+import { loadEndgameGenome } from '@/game/training/persistence';
 import { getServerChampionGenomes } from './useChampionGenomes';
 
 export function useAITurn(enabled: boolean = true) {
@@ -147,6 +148,7 @@ export function useAITurn(enabled: boolean = true) {
         engine: currentAI.engine ?? 'default',
         openingMoves,
         championGenomes: getServerChampionGenomes() ?? undefined,
+        endgameGenome: loadEndgameGenome() ?? undefined,
       });
     }, AI_THINK_DELAY);
 

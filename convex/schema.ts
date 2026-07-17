@@ -207,6 +207,14 @@ export default defineSchema({
     matchupIndex: v.number(),
     gamesCompletedInGeneration: v.number(),
     lastUpdated: v.number(),
+    // Resumable champion-challenge progress; absent outside the challenge phase.
+    challengeProgress: v.optional(v.object({
+      personalityIdx: v.number(),
+      gamesPlayed: v.number(),
+      candidateWins: v.number(),
+      championWins: v.number(),
+      draws: v.number(),
+    })),
   }).index('by_engine', ['engine']),
 
   championsV2: defineTable({

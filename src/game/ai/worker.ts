@@ -6,7 +6,7 @@ import { findRicefishPlusMove } from './ricefish-plus/search';
 import { ricefishScore } from './ricefish/evaluate';
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
-  const { state: serialized, difficulty, personality, engine, openingMoves, championGenomes } = e.data;
+  const { state: serialized, difficulty, personality, engine, openingMoves, championGenomes, endgameGenome } = e.data;
   const state = deserializeGameState(serialized);
 
   let move;
@@ -22,7 +22,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     move = findRicefishMove(state, difficulty, personality, scoreFn);
   } else {
     const g = championGenomes?.default?.[personality];
-    move = findBestMove(state, difficulty, personality, openingMoves, g);
+    move = findBestMove(state, difficulty, personality, openingMoves, g, endgameGenome);
   }
 
   const response: WorkerResponse = { move };

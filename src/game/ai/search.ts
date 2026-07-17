@@ -10,6 +10,7 @@ import { evaluatePosition, setInjectedDefaultGenome } from './evaluate';
 import { computePlayerProgress } from '../progress';
 import { computeStrategicScore, isEndgame, findOpponentJumpThreats, scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreResidualTrajectory, scoreSourceDominance, scoreCreatesOpponentJump, scoreBackPieceChainSetup, scoreBackPiecePriority, backPriorityPersonalityFactor, proactiveJumpFactor, scoreLandingLateralDrift, scoreFutureJumpAdvantage, computeMaxImmediateJumpGain, scoreLateralCohesion, scoreChainExtension, scoreMakeRoomSetup, scoreInGoalRegression, scoreChainEndpointSetup, scoreChainBackwardHop, scoreChainEnablingStep, scoreFrontPieceSidestepPenalty, scoreInGoalLateralPenalty, scoreSamePieceMissedForwardPenalty, scoreLateralReachableByForwardPenalty, scoreShallowGoalEntryPenalty, chainEnablingRiskMultiplier, computeCurrentForwardJumps, computeBestForwardGainBySource } from './strategy';
 import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLateral, getPiecePhase, findOptimalEndgameSequence } from './endgame';
+import { findGenomeEndgameMove } from '@/game/training/endgameRunner';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
 
@@ -1576,6 +1577,7 @@ export function findBestMove(
   personality: AIPersonality,
   openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null,
   genome?: import('@/game/training-v2/genomes').DefaultGenome,
+  endgameGenome?: import('@/types/training').Genome,
 ): Move | null {
   setInjectedDefaultGenome(genome);
   try {
@@ -1649,6 +1651,20 @@ export function findBestMove(
     );
 
     if (!hasExtremeStraggler) {
+      // The endgame-trained genome (server-evolved on real-game puzzles) gets
+      // first crack: replay the exact beam search the training regime
+      // optimized. The BFS-optimal solver above still outranks it, and the
+      // hand-written solver below remains the fallback.
+      if (endgameGenome) {
+        const genomeMove = findGenomeEndgameMove(state, player, endgameGenome);
+        if (genomeMove) {
+          const { repeats } = wouldRepeatState(state, genomeMove);
+          if (!repeats) {
+            genomeMove.debug = buildMinimalDebugInfo(genomeMove, difficulty, personality, 'endgame genome beam');
+            return genomeMove;
+          }
+        }
+      }
       const endgameMove = findEndgameMove(state, player);
       if (endgameMove) {
         // Take the endgame solver's recommendation. The wouldRepeatState gate

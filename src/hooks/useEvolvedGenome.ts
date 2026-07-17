@@ -53,7 +53,10 @@ async function fetchEndgameGenome(): Promise<Genome | null> {
     const client = getConvexClientOrNull();
     if (!client) return cachedEndgameGenome;
 
-    const result = await client.query(api.endgameTraining.getEndgameEvolvedGenome);
+    // getActiveEndgameGenome returns the better of the frozen benchmark and
+    // the latest trained genome, so the AI never regresses if the training
+    // state is reset or a weaker genome lands in endgameEvolvedGenome.
+    const result = await client.query(api.endgameTraining.getActiveEndgameGenome);
     if (result) {
       cachedEndgameGenome = result.genome as Genome;
       endgameCacheTimestamp = Date.now();
