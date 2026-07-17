@@ -1,7 +1,8 @@
 import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
-import { isOnBoard, pieceAt, kingOf, isEliminated } from './board';
+import { pieceAt, kingOf, isEliminated } from './board';
+import { geometryOf, isOpenCell } from './geometry';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
 import { rulesModeOf } from './state';
 import { applyMoveCore, pseudoMovesForPiece } from './moves';
@@ -18,10 +19,11 @@ function slidingAttackCells(
   piece: HexPiece,
   dirs: CubeCoord[],
 ): CubeCoord[] {
+  const geom = geometryOf(state);
   const targets: CubeCoord[] = [];
   for (const d of dirs) {
     let cell = cubeAdd(piece.cell, d);
-    while (isOnBoard(cell)) {
+    while (isOpenCell(geom, cell)) {
       targets.push(cell);
       if (pieceAt(state, cell) !== null) break; // stop AT the blocking piece (include it)
       cell = cubeAdd(cell, d);
@@ -36,6 +38,8 @@ function slidingAttackCells(
  * Soldier and pawn use their CAPTURE cells only (not their move cells).
  */
 function attackCellsForPiece(state: HexChessState, piece: HexPiece): CubeCoord[] {
+  const geom = geometryOf(state);
+  const open = (c: CubeCoord) => isOpenCell(geom, c);
   switch (piece.type) {
     case 'rook':
       return slidingAttackCells(state, piece, EDGE_DIRECTIONS);
@@ -52,22 +56,22 @@ function attackCellsForPiece(state: HexChessState, piece: HexPiece): CubeCoord[]
     case 'knight':
       return KNIGHT_LEAPS
         .map(l => cubeAdd(piece.cell, l))
-        .filter(isOnBoard);
+        .filter(open);
 
     case 'king':
       return [...EDGE_DIRECTIONS, ...DIAGONAL_DIRECTIONS]
         .map(d => cubeAdd(piece.cell, d))
-        .filter(isOnBoard);
+        .filter(open);
 
     case 'soldier':
       // Soldier attacks its 2 forward-edge cells (NOT the forward-diagonal move cell)
       return forwardEdges(piece.player)
         .map(e => cubeAdd(piece.cell, e))
-        .filter(isOnBoard);
+        .filter(open);
 
     case 'pawn':
       // Pawn attacks its 1 forward-diagonal cell (NOT the forward-edge move cells)
-      return [cubeAdd(piece.cell, forwardDiagonal(piece.player))].filter(isOnBoard);
+      return [cubeAdd(piece.cell, forwardDiagonal(piece.player))].filter(open);
   }
 }
 

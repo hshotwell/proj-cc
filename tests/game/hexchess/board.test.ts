@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { pieceAt, isOnBoard, isEmpty, isEnemy, kingOf, nextLivingPlayer } from '@/game/hexchess/board';
+import { pieceAt, isEmpty, isEnemy, kingOf, nextLivingPlayer } from '@/game/hexchess/board';
+import { standardGeometry, isOpenCell } from '@/game/hexchess/geometry';
 import { createInitialState } from '@/game/hexchess/starting';
 import { cubeCoord } from '@/game/coordinates';
 import type { HexChessConfig } from '@/game/hexchess/state';
@@ -43,9 +44,9 @@ describe('board helpers', () => {
     expect(kingOf(s, 0)?.player).toBe(0);
   });
 
-  it('isOnBoard rejects cells far outside the 121-cell star', () => {
-    expect(isOnBoard(cubeCoord(0, 0))).toBe(true);
-    expect(isOnBoard(cubeCoord(20, 20))).toBe(false);
+  it('standard geometry rejects cells far outside the 121-cell star', () => {
+    expect(isOpenCell(standardGeometry(), cubeCoord(0, 0))).toBe(true);
+    expect(isOpenCell(standardGeometry(), cubeCoord(20, 20))).toBe(false);
   });
 
   it('pieceAt returns piece at occupied cell, null otherwise', () => {

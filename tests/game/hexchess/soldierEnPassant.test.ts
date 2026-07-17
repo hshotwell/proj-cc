@@ -3,7 +3,9 @@ import { soldierMoves, applyMoveCore, pseudoMovesForPiece } from '@/game/hexches
 import type { HexChessState, HexPiece, HexMove } from '@/game/hexchess/state';
 import { forwardDiagonal, forwardEdges } from '@/game/hexchess/directions';
 import { cubeAdd, cubeCoord } from '@/game/coordinates';
-import { pieceAt, isOnBoard } from '@/game/hexchess/board';
+import { pieceAt } from '@/game/hexchess/board';
+import { standardGeometry, isOpenCell } from '@/game/hexchess/geometry';
+const isOnBoard = (c: { q: number; r: number; s: number }) => isOpenCell(standardGeometry(), c);
 import { promotionCellsForPlayer } from '@/game/hexchess/starting';
 import { confirmPromotion } from '@/game/hexchess/promotion';
 

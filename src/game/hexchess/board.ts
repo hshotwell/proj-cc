@@ -1,19 +1,6 @@
 import type { CubeCoord } from '@/types/game';
-import { getDefaultBoardCells } from '@/game/defaultLayout';
 import { coordKey } from '@/game/coordinates';
 import type { HexChessState, HexPiece, HexPlayerIndex } from './state';
-
-let boardCellSet: Set<string> | null = null;
-function boardCells(): Set<string> {
-  if (!boardCellSet) {
-    boardCellSet = getDefaultBoardCells();
-  }
-  return boardCellSet;
-}
-
-export function isOnBoard(cell: CubeCoord): boolean {
-  return boardCells().has(coordKey(cell));
-}
 
 export function pieceAt(state: HexChessState, cell: CubeCoord): HexPiece | null {
   const key = coordKey(cell);

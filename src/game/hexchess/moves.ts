@@ -1,7 +1,8 @@
 import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
-import { isOnBoard, pieceAt, isEliminated, livingPlayers, nextLivingPlayer } from './board';
+import { pieceAt, isEliminated, livingPlayers, nextLivingPlayer } from './board';
+import { geometryOf, isOpenCell } from './geometry';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex, HexPieceType } from './state';
 import { rulesModeOf } from './state';
 import { isCheckmate, isStalemate, isThreefoldRepetition, isInsufficientMaterial } from './check';
@@ -13,10 +14,11 @@ export function slidingMoves(
   piece: HexPiece,
   dirs: CubeCoord[],
 ): CubeCoord[] {
+  const geom = geometryOf(state);
   const targets: CubeCoord[] = [];
   for (const d of dirs) {
     let cell = cubeAdd(piece.cell, d);
-    while (isOnBoard(cell)) {
+    while (isOpenCell(geom, cell)) {
       const occupant = pieceAt(state, cell);
       if (occupant === null) {
         targets.push(cell);
@@ -48,10 +50,11 @@ export function queenMoves(state: HexChessState, piece: HexPiece): CubeCoord[] {
 }
 
 function stepMoves(state: HexChessState, piece: HexPiece, offsets: CubeCoord[]): CubeCoord[] {
+  const geom = geometryOf(state);
   const targets: CubeCoord[] = [];
   for (const off of offsets) {
     const cell = cubeAdd(piece.cell, off);
-    if (!isOnBoard(cell)) continue;
+    if (!isOpenCell(geom, cell)) continue;
     const occ = pieceAt(state, cell);
     if (occ && occ.player === piece.player) continue;
     targets.push(cell);
@@ -75,15 +78,16 @@ export interface SoldierPseudoMove {
 }
 
 export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseudoMove[] {
+  const geom = geometryOf(state);
   const out: SoldierPseudoMove[] = [];
   const diag = forwardDiagonal(piece.player);
   const forwardDiagCell = cubeAdd(piece.cell, diag);
-  if (isOnBoard(forwardDiagCell) && pieceAt(state, forwardDiagCell) === null) {
+  if (isOpenCell(geom, forwardDiagCell) && pieceAt(state, forwardDiagCell) === null) {
     out.push({ to: forwardDiagCell, isCapture: false });
   }
   for (const e of forwardEdges(piece.player)) {
     const cell = cubeAdd(piece.cell, e);
-    if (!isOnBoard(cell)) continue;
+    if (!isOpenCell(geom, cell)) continue;
     const occ = pieceAt(state, cell);
     if (occ && occ.player !== piece.player) {
       out.push({ to: cell, isCapture: true });
@@ -102,7 +106,7 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
     if (capturedPiece && capturedPiece.player !== piece.player) {
       for (const e of forwardEdges(piece.player)) {
         const edgeCell = cubeAdd(piece.cell, e);
-        if (!isOnBoard(edgeCell)) continue;
+        if (!isOpenCell(geom, edgeCell)) continue;
         // The EP landing cell must be empty — the passed-through cells of a
         // soldier's diagonal move can hold pieces (the soldier moves between
         // them). If an enemy sits there, the normal capture above covers it.
@@ -140,25 +144,26 @@ export function pawnMoves(
   piece: HexPiece,
   options?: PawnMovesOptions,
 ): PawnPseudoMove[] {
+  const geom = geometryOf(state);
   const startingCells = options?.pawnStartingCells ?? new Set<string>();
   const onStart = startingCells.has(coordKey(piece.cell));
   const out: PawnPseudoMove[] = [];
   // Move: forward edges (2), only if empty. If on starting cell and next-next also empty, add double-step.
   for (const e of forwardEdges(piece.player)) {
     const cell1 = cubeAdd(piece.cell, e);
-    if (!isOnBoard(cell1)) continue;
+    if (!isOpenCell(geom, cell1)) continue;
     if (pieceAt(state, cell1) !== null) continue;
     out.push({ to: cell1, isCapture: false });
     if (onStart) {
       const cell2 = cubeAdd(cell1, e);
-      if (isOnBoard(cell2) && pieceAt(state, cell2) === null) {
+      if (isOpenCell(geom, cell2) && pieceAt(state, cell2) === null) {
         out.push({ to: cell2, isCapture: false, isDoubleStep: true });
       }
     }
   }
   // Capture: forward diagonal (1), only if enemy
   const diagCell = cubeAdd(piece.cell, forwardDiagonal(piece.player));
-  if (isOnBoard(diagCell)) {
+  if (isOpenCell(geom, diagCell)) {
     const occ = pieceAt(state, diagCell);
     if (occ && occ.player !== piece.player) out.push({ to: diagCell, isCapture: true });
   }
@@ -168,7 +173,7 @@ export function pawnMoves(
   // stack two pieces on one cell. An enemy occupant is handled by the normal
   // diagonal capture above.
   const ep = state.enPassantTarget;
-  if (ep && ep.availableUntilTurn === state.turnNumber && isOnBoard(diagCell) && pieceAt(state, diagCell) === null) {
+  if (ep && ep.availableUntilTurn === state.turnNumber && isOpenCell(geom, diagCell) && pieceAt(state, diagCell) === null) {
     for (const targetCell of ep.targetCells) {
       if (diagCell.q === targetCell.q && diagCell.r === targetCell.r) {
         // No type check — a pawn that has since promoted is still an eligible
