@@ -1,5 +1,6 @@
-import { otherPlayer } from './board';
+import { nextLivingPlayer, livingPlayers } from './board';
 import type { HexChessState, HexPieceType } from './state';
+import { rulesModeOf } from './state';
 import { isCheckmate, isStalemate, isThreefoldRepetition, isInsufficientMaterial } from './check';
 import { hashState } from './zobrist';
 
@@ -41,7 +42,7 @@ export function confirmPromotion(state: HexChessState, choice: HexPieceType): He
   // 3. Advance the turn.
   // Mirror applyMoveCore: turnNumber always increments by 1 when advanceTurn=true.
   const mover = state.currentPlayer;
-  const nextPlayer = otherPlayer(mover);
+  const nextPlayer = nextLivingPlayer(state, mover);
   const advancedTurnNumber = state.turnNumber + 1;
 
   let next: HexChessState = {
@@ -62,7 +63,16 @@ export function confirmPromotion(state: HexChessState, choice: HexPieceType): He
   };
 
   // 5. Endgame checks (same pattern as applyMove).
-  if (isCheckmate(next)) {
+  if (rulesModeOf(next) === 'king-capture') {
+    // The promoting move may have captured a king (elimination was recorded
+    // by applyMoveCore) — detect last-standing here too.
+    const living = livingPlayers(next);
+    if (living.length === 1) {
+      next = { ...next, result: { winner: living[0], reason: 'king-capture' } };
+    } else if (isThreefoldRepetition(next)) {
+      next = { ...next, result: { winner: 'draw', reason: 'repetition' } };
+    }
+  } else if (isCheckmate(next)) {
     next = { ...next, result: { winner: mover, reason: 'checkmate' } };
   } else if (isStalemate(next)) {
     next = { ...next, result: { winner: 'draw', reason: 'stalemate' } };

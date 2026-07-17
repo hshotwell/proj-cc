@@ -37,13 +37,14 @@ import { createInitialState } from '@/game/hexchess/starting';
 function makeHexConfig(id: string): HexChessConfig {
   return {
     id,
-    players: [
-      { color: '#ff0000', name: 'Alice', isAI: false },
-      { color: '#0000ff', name: 'Bob', isAI: true },
-    ],
+    seats: [0, 2],
+    players: {
+      0: { color: '#ff0000', name: 'Alice', isAI: false },
+      2: { color: '#0000ff', name: 'Bob', isAI: true },
+    },
     layoutPreset: 'v1-default',
     soldierVariant: 'soldier',
-    ai: { 1: 'medium' },
+    ai: { 2: 'medium' },
   };
 }
 

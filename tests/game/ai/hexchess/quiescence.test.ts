@@ -6,10 +6,11 @@ import type { HexChessConfig, HexChessState, HexMove, HexPiece } from '@/game/he
 
 const config: HexChessConfig = {
   id: 'test',
-  players: [
-    { color: 'red', name: 'P1', isAI: false },
-    { color: 'blue', name: 'P2', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'P1', isAI: false },
+    2: { color: 'blue', name: 'P2', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -25,8 +26,8 @@ describe('orderMoves', () => {
     const pieces: HexPiece[] = [
       { id: '0-king', player: 0, type: 'king', cell: { q: 4, r: -8, s: 4 }, hasMoved: true },
       { id: '0-rook', player: 0, type: 'rook', cell: { q: 0, r: 0, s: 0 }, hasMoved: true },
-      { id: '1-king', player: 1, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
-      { id: '1-pawn', player: 1, type: 'pawn', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
+      { id: '1-king', player: 2, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
+      { id: '1-pawn', player: 2, type: 'pawn', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
     ];
     const state: HexChessState = {
       ...base,
@@ -75,9 +76,9 @@ describe('orderMoves', () => {
     const pieces: HexPiece[] = [
       { id: '0-king', player: 0, type: 'king', cell: { q: 4, r: -8, s: 4 }, hasMoved: true },
       { id: '0-rook', player: 0, type: 'rook', cell: { q: 0, r: 0, s: 0 }, hasMoved: true },
-      { id: '1-king', player: 1, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
-      { id: '1-queen', player: 1, type: 'queen', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
-      { id: '1-pawn', player: 1, type: 'pawn', cell: { q: 2, r: 0, s: -2 }, hasMoved: true },
+      { id: '1-king', player: 2, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
+      { id: '1-queen', player: 2, type: 'queen', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
+      { id: '1-pawn', player: 2, type: 'pawn', cell: { q: 2, r: 0, s: -2 }, hasMoved: true },
     ];
     const state: HexChessState = {
       ...base,
@@ -124,7 +125,7 @@ describe('orderMoves', () => {
     const base = createInitialState(config);
     const pieces: HexPiece[] = [
       { id: '0-king', player: 0, type: 'king', cell: { q: 4, r: -8, s: 4 }, hasMoved: true },
-      { id: '1-king', player: 1, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
+      { id: '1-king', player: 2, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
     ];
     const state: HexChessState = {
       ...base,
@@ -188,9 +189,9 @@ describe('quiescence search', () => {
     const pieces: HexPiece[] = [
       { id: '0-king', player: 0, type: 'king', cell: { q: 4, r: -8, s: 4 }, hasMoved: true },
       { id: '0-rook', player: 0, type: 'rook', cell: { q: 0, r: 0, s: 0 }, hasMoved: true },
-      { id: '1-king', player: 1, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
+      { id: '1-king', player: 2, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
       // Pawn undefended — rook can take it for free
-      { id: '1-pawn', player: 1, type: 'pawn', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
+      { id: '1-pawn', player: 2, type: 'pawn', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
     ];
     const state: HexChessState = {
       ...base,
@@ -224,10 +225,10 @@ describe('quiescence search', () => {
       { id: '0-king', player: 0, type: 'king', cell: { q: 4, r: -8, s: 4 }, hasMoved: true },
       // Player 0 queen at center — could take player 1 pawn but that's defended by player 1 rook
       { id: '0-queen', player: 0, type: 'queen', cell: { q: 0, r: 0, s: 0 }, hasMoved: true },
-      { id: '1-king', player: 1, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
+      { id: '1-king', player: 2, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
       // Player 1 pawn at (1,0,-1) defended by player 1 rook at (2,0,-2)
-      { id: '1-pawn', player: 1, type: 'pawn', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
-      { id: '1-rook', player: 1, type: 'rook', cell: { q: 2, r: 0, s: -2 }, hasMoved: true },
+      { id: '1-pawn', player: 2, type: 'pawn', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
+      { id: '1-rook', player: 2, type: 'rook', cell: { q: 2, r: 0, s: -2 }, hasMoved: true },
     ];
     const state: HexChessState = {
       ...base,

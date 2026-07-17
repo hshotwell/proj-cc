@@ -33,6 +33,28 @@ export function kingOf(state: HexChessState, player: HexPlayerIndex): HexPiece |
   return state.pieces.find((p) => p.player === player && p.type === 'king') ?? null;
 }
 
-export function otherPlayer(player: HexPlayerIndex): HexPlayerIndex {
-  return (1 - player) as HexPlayerIndex;
+export function isEliminated(state: HexChessState, player: HexPlayerIndex): boolean {
+  return state.eliminated.includes(player);
+}
+
+/** Seats still in the game, in turn order. */
+export function livingPlayers(state: HexChessState): HexPlayerIndex[] {
+  return state.activePlayers.filter((p) => !state.eliminated.includes(p));
+}
+
+/**
+ * The next living seat after `after` in turn order (cyclic).
+ * In a 2-player game this is simply the opponent.
+ * Throws if no living seat exists other than possibly `after` itself
+ * being dead too — callers detect last-standing before advancing.
+ */
+export function nextLivingPlayer(state: HexChessState, after: HexPlayerIndex): HexPlayerIndex {
+  const order = state.activePlayers;
+  const idx = order.indexOf(after);
+  if (idx === -1) throw new Error(`nextLivingPlayer: seat ${after} not in activePlayers`);
+  for (let step = 1; step <= order.length; step++) {
+    const candidate = order[(idx + step) % order.length];
+    if (!state.eliminated.includes(candidate)) return candidate;
+  }
+  throw new Error('nextLivingPlayer: no living players remain');
 }

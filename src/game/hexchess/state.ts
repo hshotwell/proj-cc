@@ -3,10 +3,14 @@ import type { CubeCoord, PieceColor } from '@/types/game';
 export type HexPieceType =
   | 'king' | 'queen' | 'rook' | 'bishop' | 'knight' | 'pawn' | 'soldier';
 
-export type HexPlayerIndex = 0 | 1;
+// Seat indices are unified with Chinese Checkers player indices: a seat's
+// number IS its home triangle (0=top, 4=top-right, 3=bottom-right, 2=bottom,
+// 1=bottom-left, 5=top-left). 2-player hex chess uses seats [0, 2].
+export type HexPlayerIndex = 0 | 1 | 2 | 3 | 4 | 5;
 export type HexChessDifficulty = 'easy' | 'medium' | 'hard';
 export type HexEndReason =
-  | 'checkmate' | 'stalemate' | 'repetition' | 'insufficient-material' | 'resignation';
+  | 'checkmate' | 'stalemate' | 'repetition' | 'insufficient-material'
+  | 'resignation' | 'king-capture';
 
 export interface HexPiece {
   id: string;
@@ -24,11 +28,13 @@ export interface HexChessPlayerConfig {
 
 export interface HexChessConfig {
   id: string;
-  players: [HexChessPlayerConfig, HexChessPlayerConfig];
+  /** Seats in clockwise turn order (from ACTIVE_PLAYERS[count]). */
+  seats: HexPlayerIndex[];
+  /** Per-seat player config, keyed by seat index. */
+  players: Partial<Record<HexPlayerIndex, HexChessPlayerConfig>>;
   layoutPreset: 'v1-default';
   soldierVariant: 'soldier' | 'pawn';
-  // ai maps HexPlayerIndex → difficulty. An empty object (or null) means no AI.
-  // If ai[0] is set, player 0 is AI. If ai[1] is set, player 1 is AI. Both = AI vs AI.
+  // ai maps seat → difficulty. An empty object (or null) means no AI.
   ai: null | Partial<Record<HexPlayerIndex, HexChessDifficulty>>;
 }
 
@@ -61,9 +67,22 @@ export interface HexChessState {
   pieces: HexPiece[];
   currentPlayer: HexPlayerIndex;
   turnNumber: number;
+  /** Seats in turn order (copy of config.seats). */
+  activePlayers: HexPlayerIndex[];
+  /** Seats whose king has been captured (or who resigned), in elimination order. */
+  eliminated: HexPlayerIndex[];
   enPassantTarget: HexEnPassantTarget | null;
   pendingPromotion: HexPendingPromotion | null;
   moveHistory: HexMove[];
   positionHashes: Record<string, number>;
   result: null | { winner: HexPlayerIndex | 'draw'; reason: HexEndReason };
+}
+
+/**
+ * 2-player games keep classic chess rules (checkmate, no self-check).
+ * 3+ player games use king-capture rules: check is advisory only and a
+ * player is eliminated when their king is actually captured.
+ */
+export function rulesModeOf(state: HexChessState): 'checkmate' | 'king-capture' {
+  return state.activePlayers.length === 2 ? 'checkmate' : 'king-capture';
 }

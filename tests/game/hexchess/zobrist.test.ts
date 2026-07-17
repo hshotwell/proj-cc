@@ -6,10 +6,11 @@ import type { HexChessState, HexChessConfig } from '@/game/hexchess/state';
 
 const defaultConfig: HexChessConfig = {
   id: 'test',
-  players: [
-    { color: '#ff0000', name: 'P0', isAI: false },
-    { color: '#0000ff', name: 'P1', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: '#ff0000', name: 'P0', isAI: false },
+    2: { color: '#0000ff', name: 'P1', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -40,7 +41,7 @@ describe('Zobrist hashing', () => {
 
   it('different currentPlayer produces different hash', () => {
     const state0 = createInitialState(defaultConfig);
-    const state1: HexChessState = { ...state0, currentPlayer: 1 };
+    const state1: HexChessState = { ...state0, currentPlayer: 2 };
     expect(hashState(state0)).not.toBe(hashState(state1));
   });
 
@@ -88,5 +89,29 @@ describe('Zobrist hashing', () => {
     const fullHash = hashState(nextState);
     const incrementalHash = updateHash(hashState(state), nextState);
     expect(incrementalHash).toBe(fullHash);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multiplayer hashing
+// ---------------------------------------------------------------------------
+
+describe('multiplayer zobrist', () => {
+  it('hashes differ by side-to-move seat', () => {
+    const base = createInitialState(defaultConfig);
+    const asSeat0 = { ...base, currentPlayer: 0 as const, activePlayers: [0, 3, 1] as (0|1|2|3|4|5)[] };
+    const asSeat3 = { ...asSeat0, currentPlayer: 3 as const };
+    const asSeat1 = { ...asSeat0, currentPlayer: 1 as const };
+    const h0 = hashState(asSeat0);
+    expect(hashState(asSeat3)).not.toBe(h0);
+    expect(hashState(asSeat1)).not.toBe(h0);
+    expect(hashState(asSeat1)).not.toBe(hashState(asSeat3));
+  });
+
+  it('hashes differ by eliminated set', () => {
+    const base = { ...createInitialState(defaultConfig), activePlayers: [0, 3, 1] as (0|1|2|3|4|5)[] };
+    const alive = { ...base, eliminated: [] as (0|1|2|3|4|5)[] };
+    const dead3 = { ...base, eliminated: [3 as const] };
+    expect(hashState(dead3)).not.toBe(hashState(alive));
   });
 });

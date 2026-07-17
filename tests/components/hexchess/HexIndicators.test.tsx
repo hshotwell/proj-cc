@@ -18,7 +18,7 @@ import type { HexPiece } from '@/game/hexchess/state';
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-function makePiece(id: string, player: 0 | 1, q = 0, r = 0): HexPiece {
+function makePiece(id: string, player: 0 | 1 | 2, q = 0, r = 0): HexPiece {
   return { id, player, type: 'king', cell: { q, r, s: -q - r }, hasMoved: false };
 }
 
@@ -30,6 +30,8 @@ const baseState: HexChessState = {
   ],
   currentPlayer: 0,
   turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
   enPassantTarget: null,
   pendingPromotion: null,
   moveHistory: [],
@@ -39,10 +41,11 @@ const baseState: HexChessState = {
 
 const baseConfig: HexChessConfig = {
   id: 'test-game',
-  players: [
-    { color: '#ff0000', name: 'Alice', isAI: false },
-    { color: '#0000ff', name: 'Bob', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: '#ff0000', name: 'Alice', isAI: false },
+    2: { color: '#0000ff', name: 'Bob', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'pawn',
   ai: null,
@@ -121,7 +124,7 @@ describe('HexTurnIndicator', () => {
       pieces: [
         makePiece('K0', 0, 0, -4),  // player 0 king at (0,-4,4)
         makePiece('K1', 1, 0, 4),   // player 1 king at (0,4,-4) (far away)
-        { id: 'Q1', player: 1, type: 'queen', cell: { q: 0, r: -3, s: 3 }, hasMoved: true },
+        { id: 'Q1', player: 2, type: 'queen', cell: { q: 0, r: -3, s: 3 }, hasMoved: true },
       ],
     };
     const html = renderToStaticMarkup(
@@ -145,7 +148,7 @@ describe('HexTurnIndicator', () => {
   it('shows winner name and color in result banner', () => {
     const winState: HexChessState = {
       ...baseState,
-      result: { winner: 1, reason: 'checkmate' },
+      result: { winner: 2, reason: 'checkmate' },
     };
     const html = renderToStaticMarkup(
       React.createElement(HexTurnIndicator, { state: winState, config: baseConfig }),
@@ -314,7 +317,7 @@ describe('HexGameOverDialog', () => {
   it('shows the end reason', () => {
     const winState: HexChessState = {
       ...baseState,
-      result: { winner: 1, reason: 'checkmate' },
+      result: { winner: 2, reason: 'checkmate' },
     };
     const html = renderToStaticMarkup(
       React.createElement(HexGameOverDialog, {
@@ -368,7 +371,7 @@ describe('HexGameOverDialog', () => {
     const onHome = vi.fn();
     const winState: HexChessState = {
       ...baseState,
-      result: { winner: 1, reason: 'resignation' },
+      result: { winner: 2, reason: 'resignation' },
     };
     const element = HexGameOverDialog({ state: winState, config: baseConfig, onNewGame: vi.fn(), onHome });
     const buttons = findByType(element, 'button');
@@ -400,5 +403,97 @@ describe('HexGameOverDialog', () => {
     // The outer fixed overlay and inner white card should both be present
     expect(html).toContain('fixed');
     expect(html).toContain('bg-white');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multiplayer indicator and game-over dialog
+// ---------------------------------------------------------------------------
+
+const mpConfig: HexChessConfig = {
+  id: 'mp-game',
+  seats: [0, 3, 1],
+  players: {
+    0: { color: '#ff0000', name: 'Red', isAI: false },
+    3: { color: '#00ff00', name: 'Green', isAI: false },
+    1: { color: '#0000ff', name: 'Blue', isAI: false },
+  },
+  layoutPreset: 'v1-default',
+  soldierVariant: 'soldier',
+  ai: null,
+};
+
+function makeMpPiece(id: string, player: 0 | 1 | 3, q = 0, r = 0): HexPiece {
+  return { id, player, type: 'king', cell: { q, r, s: -q - r }, hasMoved: false };
+}
+
+const mpState: HexChessState = {
+  mode: 'hexchess',
+  pieces: [
+    makeMpPiece('K0', 0, 4, -8),
+    makeMpPiece('K3', 3, 4, 4),
+    makeMpPiece('K1', 1, -8, 4),
+  ],
+  currentPlayer: 0,
+  turnNumber: 7,
+  activePlayers: [0, 3, 1],
+  eliminated: [3],
+  enPassantTarget: null,
+  pendingPromotion: null,
+  moveHistory: [],
+  positionHashes: {},
+  result: null,
+};
+
+describe('HexTurnIndicator — multiplayer', () => {
+  it('lists all seats, marks the current one, and greys the eliminated one', () => {
+    const html = renderToStaticMarkup(
+      <HexTurnIndicator state={mpState} config={mpConfig} />
+    );
+    expect(html).toContain('Red');
+    expect(html).toContain('Green');
+    expect(html).toContain('Blue');
+    expect(html).toContain('to move');
+    expect(html).toContain('line-through');
+    expect(html).toContain('opacity-50');
+  });
+
+  it('labels a king-capture result as last player standing', () => {
+    const finished: HexChessState = {
+      ...mpState,
+      eliminated: [3, 1],
+      result: { winner: 0, reason: 'king-capture' },
+    };
+    const html = renderToStaticMarkup(
+      <HexTurnIndicator state={finished} config={mpConfig} />
+    );
+    expect(html).toContain('Red wins');
+    expect(html).toContain('last player standing');
+  });
+});
+
+describe('HexGameOverDialog — multiplayer finish order', () => {
+  it('shows winner first, then eliminated seats latest-out first', () => {
+    const finished: HexChessState = {
+      ...mpState,
+      eliminated: [3, 1],
+      result: { winner: 0, reason: 'king-capture' },
+    };
+    const html = renderToStaticMarkup(
+      <HexGameOverDialog
+        state={finished}
+        config={mpConfig}
+        onNewGame={() => {}}
+        onHome={() => {}}
+      />
+    );
+    expect(html).toContain('Red wins');
+    // Finish order: Red (winner), Blue (eliminated last), Green (first out).
+    const redIdx = html.indexOf('>Red<');
+    const blueIdx = html.indexOf('>Blue<');
+    const greenIdx = html.indexOf('>Green<');
+    expect(redIdx).toBeGreaterThan(-1);
+    expect(blueIdx).toBeGreaterThan(redIdx);
+    expect(greenIdx).toBeGreaterThan(blueIdx);
   });
 });

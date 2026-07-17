@@ -11,10 +11,11 @@ import type { CubeCoord } from '@/types/game';
 function makeConfig(id = 'capture-test'): HexChessConfig {
   return {
     id,
-    players: [
-      { color: '#ff0000', name: 'Alice', isAI: false },
-      { color: '#0000ff', name: 'Bob', isAI: false },
-    ],
+    seats: [0, 2],
+  players: {
+    0: { color: '#ff0000', name: 'Alice', isAI: false },
+    2: { color: '#0000ff', name: 'Bob', isAI: false },
+  },
     layoutPreset: 'v1-default',
     soldierVariant: 'soldier',
     ai: null,

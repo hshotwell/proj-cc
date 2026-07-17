@@ -7,6 +7,8 @@ import { cubeAdd, cubeCoord } from '@/game/coordinates';
 function stateWith(pieces: HexPiece[]): HexChessState {
   return {
     mode: 'hexchess', pieces, currentPlayer: 0, turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null, pendingPromotion: null, moveHistory: [],
     positionHashes: {}, result: null,
   };
@@ -26,7 +28,7 @@ describe('pawn moves', () => {
   it('blocks forward-edge if occupied by any piece', () => {
     const [e1] = forwardEdges(0);
     const p: HexPiece = { id: 'P', player: 0, type: 'pawn', cell: cubeCoord(0, 0), hasMoved: false };
-    const blocker: HexPiece = { id: 'B', player: 1, type: 'rook', cell: cubeAdd(cubeCoord(0, 0), e1), hasMoved: false };
+    const blocker: HexPiece = { id: 'B', player: 2, type: 'rook', cell: cubeAdd(cubeCoord(0, 0), e1), hasMoved: false };
     const st = stateWith([p, blocker]);
     const nonCaptures = pawnMoves(st, p).filter((m) => !m.isCapture);
     expect(nonCaptures).toHaveLength(1); // only the other forward edge available
@@ -34,7 +36,7 @@ describe('pawn moves', () => {
 
   it('captures via forward diagonal only when enemy sits there', () => {
     const p: HexPiece = { id: 'P', player: 0, type: 'pawn', cell: cubeCoord(0, 0), hasMoved: false };
-    const enemyDiag: HexPiece = { id: 'E', player: 1, type: 'rook', cell: cubeAdd(cubeCoord(0, 0), forwardDiagonal(0)), hasMoved: false };
+    const enemyDiag: HexPiece = { id: 'E', player: 2, type: 'rook', cell: cubeAdd(cubeCoord(0, 0), forwardDiagonal(0)), hasMoved: false };
     const st = stateWith([p, enemyDiag]);
     const captures = pawnMoves(st, p).filter((m) => m.isCapture);
     expect(captures).toHaveLength(1);

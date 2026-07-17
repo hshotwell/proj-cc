@@ -10,12 +10,23 @@ interface HexGameOverDialogProps {
   onHome: () => void;
 }
 
+function reasonLabel(reason: string): string {
+  return reason === 'king-capture' ? 'last player standing' : reason;
+}
+
 export function HexGameOverDialog({ state, config, onNewGame, onHome }: HexGameOverDialogProps) {
   if (!state.result) return null;
 
   const { winner, reason } = state.result;
   const isDraw = winner === 'draw';
   const winnerConfig = isDraw ? null : config.players[winner];
+
+  // Multiplayer finish order: winner first, then eliminated seats latest-out
+  // first (2nd place = last one eliminated).
+  const isMultiplayer = state.activePlayers.length > 2;
+  const finishOrder = isMultiplayer && !isDraw
+    ? [winner as number, ...[...state.eliminated].reverse()]
+    : null;
 
   return (
     <div
@@ -32,9 +43,25 @@ export function HexGameOverDialog({ state, config, onNewGame, onHome }: HexGameO
             <h2 className="text-lg font-semibold leading-tight">
               {isDraw ? 'Draw' : `${winnerConfig!.name} wins`}
             </h2>
-            <p className="text-sm text-gray-600">{reason}</p>
+            <p className="text-sm text-gray-600">{reasonLabel(reason)}</p>
           </div>
         </div>
+        {finishOrder && (
+          <ol className="mt-3 space-y-1">
+            {finishOrder.map((seat, i) => {
+              const seatConfig = config.players[seat as 0 | 1 | 2 | 3 | 4 | 5]!;
+              return (
+                <li key={seat} className="flex items-center gap-2 text-sm">
+                  <span className="w-8 text-gray-500">{i + 1}.</span>
+                  <ColorSwatch color={seatConfig.color} className="w-4 h-4" />
+                  <span className={i === 0 ? 'font-medium' : 'text-gray-600'}>
+                    {seatConfig.name}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
         <div className="mt-3 flex gap-2 justify-end">
           <button
             type="button"

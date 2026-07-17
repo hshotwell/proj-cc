@@ -4,9 +4,9 @@ import { useHexChessStore } from '@/store/hexChessStore';
 import { createHexChessWorker, analyzeWithWorker } from '@/game/ai/hexchess/workerClient';
 import { PIECE_VALUE } from '@/game/ai/hexchess/moveOrdering';
 import type { HexChessDifficulty, HexChessState, HexMove, HexPlayerIndex } from '@/game/hexchess';
-import { legalMoves, applyMove } from '@/game/hexchess';
-import { isCellAttacked, isCheckmate, isInCheck } from '@/game/hexchess/check';
-import { otherPlayer } from '@/game/hexchess/board';
+import { legalMoves, applyMove, rulesModeOf } from '@/game/hexchess';
+import { isCellAttacked, isCellAttackedByEnemies, isCheckmate, isInCheck } from '@/game/hexchess/check';
+import { livingPlayers } from '@/game/hexchess/board';
 
 interface DifficultyProfile {
   budgetMs: number;
@@ -35,11 +35,10 @@ const DIFFICULTY_BUDGET: Record<HexChessDifficulty, DifficultyProfile> = {
 function movePutsPieceEnPrise(state: HexChessState, move: HexMove): boolean {
   const next = applyMove(state, move);
   const mover = state.currentPlayer;
-  const opp = otherPlayer(mover);
   // Find the piece at the destination (should be the moved piece).
   const moved = next.pieces.find(p => p.player === mover && p.cell.q === move.to.q && p.cell.r === move.to.r);
   if (!moved) return false;
-  const attacked = isCellAttacked(next, move.to, opp);
+  const attacked = isCellAttackedByEnemies(next, move.to, mover);
   if (!attacked) return false;
   // Count defenders of the destination cell (other than the moved piece).
   const otherPieces = next.pieces.filter(p => p.id !== moved.id);
@@ -70,11 +69,10 @@ export function maxCaptureAvailable(state: HexChessState, legals: HexMove[]): nu
 
 /** Highest value among `player`'s own pieces that are currently hanging (attacked, undefended). */
 export function maxHangingOwnValue(state: HexChessState, player: HexPlayerIndex): number {
-  const opp = otherPlayer(player);
   let max = 0;
   for (const piece of state.pieces) {
     if (piece.player !== player) continue;
-    if (!isCellAttacked(state, piece.cell, opp)) continue;
+    if (!isCellAttackedByEnemies(state, piece.cell, player)) continue;
     const others = state.pieces.filter(p => p.id !== piece.id);
     const stateWithoutPiece: HexChessState = { ...state, pieces: others };
     if (!isCellAttacked(stateWithoutPiece, piece.cell, player)) {
@@ -164,11 +162,19 @@ export function useHexChessAITurn(enabled: boolean = true) {
         if (currentState) {
           const legals = legalMoves(currentState);
           const nextState = applyMove(currentState, result.move);
-          const opp = otherPlayer(currentPlayer);
-          const givesCheckmate = isCheckmate(nextState);
-          if (!givesCheckmate) {
-            // Never let a found mate get thrown away by a blunder/shuffle roll.
-            const givesCheck = isInCheck(nextState, opp);
+          const isMultiplayer = rulesModeOf(currentState) === 'king-capture';
+          // Never let a found mate (2p) or an actual king capture (3+)
+          // get thrown away by a blunder/shuffle roll.
+          const capturedVictim = result.move.capture
+            ? currentState.pieces.find(p => p.id === result.move!.capture!.pieceId)
+            : undefined;
+          const isDecisive = isMultiplayer
+            ? capturedVictim?.type === 'king'
+            : isCheckmate(nextState);
+          if (!isDecisive) {
+            const givesCheck = livingPlayers(nextState).some(
+              seat => seat !== currentPlayer && isInCheck(nextState, seat),
+            );
             const tacticalWeight = Math.max(
               maxCaptureAvailable(currentState, legals),
               maxHangingOwnValue(currentState, currentPlayer),

@@ -6,13 +6,14 @@
  *
  * Key space:
  *   - pieceKey[type][player][cellIndex]  — one key per (type, player, cell)
- *   - sideToMoveKey                       — XOR'd when currentPlayer === 1
+ *   - sideKey[player]                     — XOR'd for the seat to move
+ *   - eliminatedKey[player]               — XOR'd per eliminated seat
  *   - epKey[cellIndex]                    — XOR'd for enPassantTarget
  */
 
 import { getDefaultBoardCells } from '@/game/defaultLayout';
 import { coordKey } from '@/game/coordinates';
-import type { HexChessState, HexPieceType, HexPlayerIndex } from './state';
+import type { HexChessState, HexPieceType } from './state';
 
 // ---------------------------------------------------------------------------
 // Deterministic 32-bit PRNG (mulberry32) → produces 64-bit keys by pairing
@@ -47,7 +48,7 @@ const PIECE_TYPE_INDEX: Record<HexPieceType, number> = {
   king: 0, queen: 1, rook: 2, bishop: 3, knight: 4, pawn: 5, soldier: 6,
 };
 const NUM_TYPES = PIECE_TYPES.length; // 7
-const NUM_PLAYERS = 2;
+const NUM_PLAYERS = 6; // seats 0-5 (Chinese Checkers corner indices)
 
 // ---------------------------------------------------------------------------
 // Lazy-initialised table
@@ -56,7 +57,10 @@ const NUM_PLAYERS = 2;
 interface ZobristTable {
   /** pieceKey[typeIdx][playerIdx][cellIdx] */
   pieceKey: bigint[][][];
-  sideToMoveKey: bigint;
+  /** sideKey[playerIdx] — XOR'd for the seat to move */
+  sideKey: bigint[];
+  /** eliminatedKey[playerIdx] — XOR'd for each eliminated seat */
+  eliminatedKey: bigint[];
   /** epKey[cellIdx] */
   epKey: bigint[];
   /** Maps coordKey string → stable cell index */
@@ -85,11 +89,12 @@ export function initZobristTable(): void {
     )
   );
 
-  const sideToMoveKey = rand64(next);
+  const sideKey: bigint[] = Array.from({ length: NUM_PLAYERS }, () => rand64(next));
+  const eliminatedKey: bigint[] = Array.from({ length: NUM_PLAYERS }, () => rand64(next));
 
   const epKey: bigint[] = Array.from({ length: numCells }, () => rand64(next));
 
-  _table = { pieceKey, sideToMoveKey, epKey, cellIndexMap };
+  _table = { pieceKey, sideKey, eliminatedKey, epKey, cellIndexMap };
 }
 
 function getTable(): ZobristTable {
@@ -127,8 +132,10 @@ export function hashState(state: HexChessState): string {
     h ^= tbl.pieceKey[typeIdx][playerIdx][cellIdx];
   }
 
-  if (state.currentPlayer === 1) {
-    h ^= tbl.sideToMoveKey;
+  h ^= tbl.sideKey[state.currentPlayer];
+
+  for (const seat of state.eliminated) {
+    h ^= tbl.eliminatedKey[seat];
   }
 
   if (state.enPassantTarget !== null && state.enPassantTarget.targetCells.length > 0) {

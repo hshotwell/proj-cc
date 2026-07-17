@@ -6,6 +6,8 @@ import { cubeCoord } from '@/game/coordinates';
 function stateWith(pieces: HexPiece[]): HexChessState {
   return {
     mode: 'hexchess', pieces, currentPlayer: 0, turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null, pendingPromotion: null, moveHistory: [],
     positionHashes: {}, result: null,
   };
@@ -26,7 +28,7 @@ describe('rook moves', () => {
 
   it('stops before own piece, and stops ON enemy piece', () => {
     const friend: HexPiece = { id: 'F', player: 0, type: 'soldier', cell: cubeCoord(2, 0), hasMoved: false };
-    const enemy: HexPiece = { id: 'E', player: 1, type: 'soldier', cell: cubeCoord(-3, 0), hasMoved: false };
+    const enemy: HexPiece = { id: 'E', player: 2, type: 'soldier', cell: cubeCoord(-3, 0), hasMoved: false };
     const s = stateWith([rook, friend, enemy]);
     const targets = rookMoves(s, rook);
     // Along +q edge direction, (1,0) is empty; (2,0) is friend → stop before it.

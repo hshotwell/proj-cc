@@ -5,10 +5,11 @@ import type { HexChessConfig } from '@/game/hexchess/state';
 
 const config: HexChessConfig = {
   id: 't',
-  players: [
-    { color: 'red', name: 'A', isAI: false },
-    { color: 'blue', name: 'B', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'A', isAI: false },
+    2: { color: 'blue', name: 'B', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -20,7 +21,7 @@ const config: HexChessConfig = {
 describe('soldier advance from v1 starting position', () => {
   it('every soldier on both sides has at least one legal move (non-capture)', () => {
     const s = createInitialState(config);
-    for (const player of [0, 1] as const) {
+    for (const player of [0, 2] as const) {
       const soldiers = s.pieces.filter((p) => p.player === player && p.type === 'soldier');
       // v1 layout: 2 soldiers on row 4 (between the knights) + 3 soldiers in
       // the middle of row 5 = 5 total.

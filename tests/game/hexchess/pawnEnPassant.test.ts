@@ -11,6 +11,8 @@ function stateWith(pieces: HexPiece[], overrides?: Partial<HexChessState>): HexC
     pieces,
     currentPlayer: 0,
     turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],
@@ -48,7 +50,7 @@ describe('pawn en passant', () => {
    *   landing on the passed-through cell.
    */
   it('sets enPassantTarget after pawn double-step', () => {
-    const [e1] = forwardEdges(1); // player 1's forward edge
+    const [e1] = forwardEdges(2); // player 1's forward edge
 
     // Black pawn at a cell deep enough on its own side that a double-step
     // doesn't cross the midline (which would trigger promotion instead of EP).
@@ -58,13 +60,13 @@ describe('pawn en passant', () => {
 
     const blackPawn: HexPiece = {
       id: 'BP',
-      player: 1,
+      player: 2,
       type: 'pawn',
       cell: blackPawnStart,
       hasMoved: false,
     };
 
-    const st = stateWith([blackPawn], { currentPlayer: 1 });
+    const st = stateWith([blackPawn], { currentPlayer: 2 });
     const move = doubleStepMove(blackPawn, blackPawnDest);
     const next = applyMoveCore(st, move);
 
@@ -76,7 +78,7 @@ describe('pawn en passant', () => {
   });
 
   it('white pawn can capture en passant after black double-step', () => {
-    const [e1] = forwardEdges(1); // player 1's forward edge
+    const [e1] = forwardEdges(2); // player 1's forward edge
 
     const blackPawnStart = cubeCoord(0, 0);
     const blackPawnMid = cubeAdd(blackPawnStart, e1);   // passed-through (en passant target cell)
@@ -102,7 +104,7 @@ describe('pawn en passant', () => {
     };
     const blackPawn: HexPiece = {
       id: 'BP',
-      player: 1,
+      player: 2,
       type: 'pawn',
       cell: blackPawnDest,
       hasMoved: true,
@@ -132,7 +134,7 @@ describe('pawn en passant', () => {
     // A soldier's forward-diagonal move sets EP targetCells on the two cells it
     // passed between — those cells may hold pieces. A pawn must not be offered
     // an EP capture landing on an occupied cell.
-    const [e1] = forwardEdges(1);
+    const [e1] = forwardEdges(2);
 
     const blackPawnStart = cubeCoord(0, 0);
     const blackPawnMid = cubeAdd(blackPawnStart, e1);
@@ -154,7 +156,7 @@ describe('pawn en passant', () => {
     };
     const blackPawn: HexPiece = {
       id: 'BP',
-      player: 1,
+      player: 2,
       type: 'pawn',
       cell: blackPawnDest,
       hasMoved: true,
@@ -184,7 +186,7 @@ describe('pawn en passant', () => {
   });
 
   it('pseudoMovesForPiece includes en passant move with correct capture', () => {
-    const [e1] = forwardEdges(1);
+    const [e1] = forwardEdges(2);
 
     const blackPawnStart = cubeCoord(0, 0);
     const blackPawnMid = cubeAdd(blackPawnStart, e1);
@@ -206,7 +208,7 @@ describe('pawn en passant', () => {
     };
     const blackPawn: HexPiece = {
       id: 'BP',
-      player: 1,
+      player: 2,
       type: 'pawn',
       cell: blackPawnDest,
       hasMoved: true,
@@ -234,7 +236,7 @@ describe('pawn en passant', () => {
   });
 
   it('applying en passant move removes the captured pawn', () => {
-    const [e1] = forwardEdges(1);
+    const [e1] = forwardEdges(2);
 
     const blackPawnStart = cubeCoord(0, 0);
     const blackPawnMid = cubeAdd(blackPawnStart, e1);
@@ -256,7 +258,7 @@ describe('pawn en passant', () => {
     };
     const blackPawn: HexPiece = {
       id: 'BP',
-      player: 1,
+      player: 2,
       type: 'pawn',
       cell: blackPawnDest,
       hasMoved: true,

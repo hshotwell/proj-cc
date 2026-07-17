@@ -1,5 +1,6 @@
 import type { CubeCoord } from '@/types/game';
-import { coordKey } from '@/game/coordinates';
+import { rotateCube } from '@/game/coordinates';
+import { ROTATION_STEPS } from './directions';
 import type {
   HexChessConfig,
   HexChessState,
@@ -7,7 +8,6 @@ import type {
   HexPlayerIndex,
   HexPieceType,
 } from './state';
-import { otherPlayer } from './board';
 
 /**
  * Returns the set of cells (as coordKey strings) where pawns start for the given player.
@@ -23,9 +23,10 @@ export function pawnStartingCellsForPlayer(_player: HexPlayerIndex): Set<string>
 // ---------------------------------------------------------------------------
 // Arm geometry
 //
-// The hexchess board is a 2-player variant played on the same 121-cell star.
-// Player 0 starts at the south apex {q:4, r:-8} and moves north.
-// Player 1 starts at the north apex {q:-4, r:8} and moves south.
+// All geometry is defined once for seat 0 (arm at triangle 0, apex {4,-8})
+// and rotated clockwise by ROTATION_STEPS[seat] * 60 degrees for every other
+// seat. Seat indices equal Chinese Checkers home-triangle indices, so the
+// rotated arms land exactly on DEFAULT_BOARD_LAYOUT.startingPositions[seat].
 //
 // Each arm has 4 rows (1+2+3+4 = 10 cells) indexed apex→base:
 //   index 0        — apex (row 1, 1 cell)
@@ -33,21 +34,42 @@ export function pawnStartingCellsForPlayer(_player: HexPlayerIndex): Set<string>
 //   indices 3-5    — row 3 (3 cells)
 //   indices 6-9    — row 4 / base (4 cells)
 //
-// Geometry formula (k = row index 0..3, j = cell within row 0..k):
-//   player 0: { q: 4-k+j, r: -8+k }
-//   player 1: { q: -4+j, r:  8-k }
+// Canonical (seat 0) geometry formula (k = row index 0..3, j = cell within row 0..k):
+//   { q: 4-k+j, r: -8+k }
 // ---------------------------------------------------------------------------
+
+function canonicalArmCells(): CubeCoord[] {
+  const cells: CubeCoord[] = [];
+  for (let k = 0; k < 4; k++) {
+    for (let j = 0; j <= k; j++) {
+      const q = 4 - k + j;
+      const r = -8 + k;
+      cells.push({ q, r, s: -q - r });
+    }
+  }
+  return cells;
+}
+
+/** Row 5 for seat 0 — the 5 cells just inside the central hexagon. */
+function canonicalExtensionCells(): CubeCoord[] {
+  const cells: CubeCoord[] = [];
+  for (let j = 0; j < 5; j++) {
+    const q = j;
+    const r = -4;
+    cells.push({ q, r, s: -q - r });
+  }
+  return cells;
+}
 
 /**
  * Returns the set of cell coordKeys that are promotion cells for `player`.
  * A soldier or pawn belonging to `player` that reaches any of these cells
- * must promote. The zone is the OPPONENT'S HALF of the board — every cell
- * where `r` has crossed the midline (r = 0). This gives soldiers a much
- * shorter, more strategic path to promotion.
- *   - Player 0 (arm at r = -8): promotes on r >= 0.
- *   - Player 1 (arm at r =  8): promotes on r <= 0.
+ * must promote. The zone is the FAR HALF of the board — every cell past the
+ * centerline perpendicular to the seat's forward direction (for seat 0:
+ * r >= 1). Other seats use the same rule rotated to their corner.
  */
 export function promotionCellsForPlayer(player: HexPlayerIndex): Set<string> {
+  const inverseSteps = (6 - ROTATION_STEPS[player]) % 6;
   const cells: string[] = [];
   // Enumerate all cells on the standard 121-cell star. Using cube-distance
   // bounds |q|, |r|, |s| <= 8 covers every cell on the star; the play code
@@ -56,36 +78,15 @@ export function promotionCellsForPlayer(player: HexPlayerIndex): Set<string> {
     for (let r = -8; r <= 8; r++) {
       const s = -q - r;
       if (Math.abs(s) > 8) continue;
-      const past = player === 0 ? r >= 1 : r <= -1;
-      if (past) cells.push(`${q},${r}`);
+      const canonical = rotateCube({ q, r, s }, inverseSteps);
+      if (canonical.r >= 1) cells.push(`${q},${r}`);
     }
   }
   return new Set(cells);
 }
 
 export function armCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
-  const cells: CubeCoord[] = [];
-
-  for (let k = 0; k < 4; k++) {
-    for (let j = 0; j <= k; j++) {
-      let q: number;
-      let r: number;
-
-      if (player === 0) {
-        // South apex at (4,-8); rows advance toward center (r increases, q shifts left)
-        q = 4 - k + j;
-        r = -8 + k;
-      } else {
-        // North apex at (-4,8); rows advance toward center (r decreases, q shifts right)
-        q = -4 + j;
-        r = 8 - k;
-      }
-
-      cells.push({ q, r, s: -q - r });
-    }
-  }
-
-  return cells;
+  return canonicalArmCells().map(c => rotateCube(c, ROTATION_STEPS[player]));
 }
 
 /**
@@ -94,14 +95,7 @@ export function armCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
  * starting layout (3 peons + 2 knights in the front).
  */
 export function armExtensionCellsForPlayer(player: HexPlayerIndex): CubeCoord[] {
-  const cells: CubeCoord[] = [];
-  // Row 5, k=4, j=0..4
-  for (let j = 0; j < 5; j++) {
-    const q = player === 0 ? j : -4 + j;
-    const r = player === 0 ? -4 : 4;
-    cells.push({ q, r, s: -q - r });
-  }
-  return cells;
+  return canonicalExtensionCells().map(c => rotateCube(c, ROTATION_STEPS[player]));
 }
 
 /**
@@ -141,15 +135,15 @@ const V1_LAYOUT: (HexPieceType | null)[] = [
 export function createInitialState(config: HexChessConfig): HexChessState {
   const pieces: HexPiece[] = [];
 
-  for (const player of [0, 1] as const) {
-    const cells = startingCellsForPlayer(player);
+  for (const seat of config.seats) {
+    const cells = startingCellsForPlayer(seat);
 
     for (let i = 0; i < V1_LAYOUT.length; i++) {
       const type = V1_LAYOUT[i];
       if (type === null) continue;   // empty starting cell
       pieces.push({
-        id: `${player}-${type}-${i}`,
-        player,
+        id: `${seat}-${type}-${i}`,
+        player: seat,
         type,
         cell: cells[i],
         hasMoved: false,
@@ -160,8 +154,10 @@ export function createInitialState(config: HexChessConfig): HexChessState {
   return {
     mode: 'hexchess',
     pieces,
-    currentPlayer: 0,
+    currentPlayer: config.seats[0],
     turnNumber: 1,
+    activePlayers: [...config.seats],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],

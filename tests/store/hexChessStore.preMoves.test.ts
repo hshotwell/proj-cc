@@ -17,10 +17,11 @@ import { cubeCoord } from '@/game/coordinates';
 function makeConfig(id = 'premove-test'): HexChessConfig {
   return {
     id,
-    players: [
-      { color: '#ff0000', name: 'Alice', isAI: false },
-      { color: '#0000ff', name: 'Bob', isAI: false },
-    ],
+    seats: [0, 2],
+  players: {
+    0: { color: '#ff0000', name: 'Alice', isAI: false },
+    2: { color: '#0000ff', name: 'Bob', isAI: false },
+  },
     layoutPreset: 'v1-default',
     soldierVariant: 'soldier',
     ai: null,
@@ -147,7 +148,7 @@ describe('hexChessStore pre-moves', () => {
     useHexChessStore.getState().createGame(makeConfig());
     const state = useHexChessStore.getState().state!;
     const mover = state.pieces.find(p => p.type === 'rook' && p.player === 0)!;
-    const victim = state.pieces.find(p => p.player === 1)!;
+    const victim = state.pieces.find(p => p.player === 2)!;
 
     useHexChessStore.getState().selectPreMovePiece(mover.id);
     useHexChessStore.getState().queuePreMove(victim.cell); // simulated capture, legality not checked

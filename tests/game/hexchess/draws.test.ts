@@ -11,7 +11,7 @@ import { cubeCoord } from '@/game/coordinates';
 
 function piece(
   id: string,
-  player: 0 | 1,
+  player: 0 | 1 | 2,
   type: HexPiece['type'],
   q: number,
   r: number,
@@ -19,12 +19,14 @@ function piece(
   return { id, player, type, cell: cubeCoord(q, r), hasMoved: true };
 }
 
-function stateFor(pieces: HexPiece[], currentPlayer: 0 | 1 = 0): HexChessState {
+function stateFor(pieces: HexPiece[], currentPlayer: 0 | 1 | 2 = 0): HexChessState {
   return {
     mode: 'hexchess',
     pieces,
     currentPlayer,
     turnNumber: 10,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],
@@ -41,7 +43,7 @@ describe('isInsufficientMaterial', () => {
   it('Test 1 — K vs K is insufficient material', () => {
     const state = stateFor([
       piece('wK', 0, 'king', 0, 0),
-      piece('bK', 1, 'king', 0, 2),
+      piece('bK', 2, 'king', 0, 2),
     ]);
     expect(isInsufficientMaterial(state)).toBe(true);
   });
@@ -50,7 +52,7 @@ describe('isInsufficientMaterial', () => {
     const state = stateFor([
       piece('wK', 0, 'king',   0, 0),
       piece('wB', 0, 'bishop', 1, 0),
-      piece('bK', 1, 'king',   0, 2),
+      piece('bK', 2, 'king',   0, 2),
     ]);
     expect(isInsufficientMaterial(state)).toBe(true);
   });
@@ -59,7 +61,7 @@ describe('isInsufficientMaterial', () => {
     const state = stateFor([
       piece('wK', 0, 'king',   0, 0),
       piece('wN', 0, 'knight', 1, 0),
-      piece('bK', 1, 'king',   0, 2),
+      piece('bK', 2, 'king',   0, 2),
     ]);
     expect(isInsufficientMaterial(state)).toBe(true);
   });
@@ -71,8 +73,8 @@ describe('isInsufficientMaterial', () => {
     const state = stateFor([
       piece('wK', 0, 'king',   0, 0),
       piece('wB', 0, 'bishop', 0, 0), // hex color 0
-      piece('bK', 1, 'king',   0, 2),
-      piece('bB', 1, 'bishop', 0, 3), // hex color (0+6)%3 = 0
+      piece('bK', 2, 'king',   0, 2),
+      piece('bB', 2, 'bishop', 0, 3), // hex color (0+6)%3 = 0
     ]);
     expect(isInsufficientMaterial(state)).toBe(true);
   });
@@ -83,8 +85,8 @@ describe('isInsufficientMaterial', () => {
     const state = stateFor([
       piece('wK', 0, 'king',   0, 0),
       piece('wB', 0, 'bishop', 0, 0), // hex color 0
-      piece('bK', 1, 'king',   0, 2),
-      piece('bB', 1, 'bishop', 1, 0), // hex color (1+0)%3 = 1
+      piece('bK', 2, 'king',   0, 2),
+      piece('bB', 2, 'bishop', 1, 0), // hex color (1+0)%3 = 1
     ]);
     expect(isInsufficientMaterial(state)).toBe(false);
   });
@@ -93,7 +95,7 @@ describe('isInsufficientMaterial', () => {
     const state = stateFor([
       piece('wK', 0, 'king', 0, 0),
       piece('wR', 0, 'rook', 1, 0),
-      piece('bK', 1, 'king', 0, 2),
+      piece('bK', 2, 'king', 0, 2),
     ]);
     expect(isInsufficientMaterial(state)).toBe(false);
   });
@@ -107,7 +109,7 @@ describe('isThreefoldRepetition', () => {
   it('Test 7 — state with current hash appearing 3+ times in positionHashes is repetition', () => {
     const baseState = stateFor([
       piece('wK', 0, 'king', 0, 0),
-      piece('bK', 1, 'king', 0, 2),
+      piece('bK', 2, 'king', 0, 2),
     ]);
     const hash = hashState(baseState);
     const stateWithRepetition: HexChessState = {
@@ -120,7 +122,7 @@ describe('isThreefoldRepetition', () => {
   it('Test 7b — state with current hash appearing fewer than 3 times is NOT repetition', () => {
     const baseState = stateFor([
       piece('wK', 0, 'king', 0, 0),
-      piece('bK', 1, 'king', 0, 2),
+      piece('bK', 2, 'king', 0, 2),
     ]);
     const hash = hashState(baseState);
     const stateWith2: HexChessState = {
@@ -141,14 +143,14 @@ describe('applyMove draw detection', () => {
     // We pre-populate positionHashes so that after player 0 moves, the resulting
     // state's hash has already appeared 2 times — this move makes it 3.
     const wK = piece('wK', 0, 'king', 0, -1);
-    const bK = piece('bK', 1, 'king', 0, 2);
+    const bK = piece('bK', 2, 'king', 0, 2);
 
     // The state after the move will be: wK at (0,0), bK at (0,2), currentPlayer=1
     // Compute what that hash will be
     const postMoveBase = stateFor([
       piece('wK', 0, 'king', 0, 0),
-      piece('bK', 1, 'king', 0, 2),
-    ], 1);
+      piece('bK', 2, 'king', 0, 2),
+    ], 2);
     const targetHash = hashState(postMoveBase);
 
     const state: HexChessState = {
@@ -156,6 +158,8 @@ describe('applyMove draw detection', () => {
       pieces: [wK, bK],
       currentPlayer: 0,
       turnNumber: 10,
+    activePlayers: [0, 2],
+    eliminated: [],
       enPassantTarget: null,
       pendingPromotion: null,
       moveHistory: [],
@@ -187,8 +191,8 @@ describe('applyMove draw detection', () => {
     // Player 0 captures the ... wait, player 0 can't capture player 1's king directly.
     // Instead: player 1 has a rook which player 0 captures, leaving K vs K.
     const wK = piece('wK', 0, 'king',  0, 0);
-    const bK = piece('bK', 1, 'king',  0, 4);
-    const bR = piece('bR', 1, 'rook',  0, 1); // white king can capture this
+    const bK = piece('bK', 2, 'king',  0, 4);
+    const bR = piece('bR', 2, 'rook',  0, 1); // white king can capture this
 
     const state = stateFor([wK, bK, bR], 0);
 

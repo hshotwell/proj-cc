@@ -21,12 +21,14 @@ import type { HexChessState, HexPiece } from '@/game/hexchess/state';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeState(pieces: HexPiece[], currentPlayer: 0 | 1 = 0): HexChessState {
+function makeState(pieces: HexPiece[], currentPlayer: 0 | 1 | 2 = 0): HexChessState {
   return {
     mode: 'hexchess',
     pieces,
     currentPlayer,
     turnNumber: 10,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],
@@ -56,8 +58,8 @@ describe('Puzzle 1 — bishop captures hanging rook (depth 1)', () => {
     const state = makeState([
       { id: 'wB', player: 0, type: 'bishop', cell: cubeCoord(1,  0), hasMoved: true },
       { id: 'wK', player: 0, type: 'king',   cell: cubeCoord(4, -8), hasMoved: true },
-      { id: 'bR', player: 1, type: 'rook',   cell: cubeCoord(3, -1), hasMoved: true },
-      { id: 'bK', player: 1, type: 'king',   cell: cubeCoord(-4, 8), hasMoved: true },
+      { id: 'bR', player: 2, type: 'rook',   cell: cubeCoord(3, -1), hasMoved: true },
+      { id: 'bK', player: 2, type: 'king',   cell: cubeCoord(-4, 8), hasMoved: true },
     ]);
 
     const result = searchBestMove(state, OPTS);
@@ -88,12 +90,12 @@ describe('Puzzle 2 — black rook captures hanging white bishop (depth 1, player
   it('finds the rook capture of undefended bishop', () => {
     const state = makeState(
       [
-        { id: 'bR', player: 1, type: 'rook',   cell: cubeCoord( 0,  0), hasMoved: true },
-        { id: 'bK', player: 1, type: 'king',   cell: cubeCoord(-4,  8), hasMoved: true },
+        { id: 'bR', player: 2, type: 'rook',   cell: cubeCoord( 0,  0), hasMoved: true },
+        { id: 'bK', player: 2, type: 'king',   cell: cubeCoord(-4,  8), hasMoved: true },
         { id: 'wB', player: 0, type: 'bishop', cell: cubeCoord( 0,  3), hasMoved: true },
         { id: 'wK', player: 0, type: 'king',   cell: cubeCoord( 4, -8), hasMoved: true },
       ],
-      1, // player 1 to move
+      2, // seat 2 (black) to move
     );
 
     const result = searchBestMove(state, OPTS);
@@ -139,7 +141,7 @@ describe('Puzzle 3 — checkmate in 1 with queen (player 0)', () => {
       { id: 'wQ', player: 0, type: 'queen', cell: cubeCoord( 0,  1), hasMoved: true },
       { id: 'wR', player: 0, type: 'rook',  cell: cubeCoord(-3,  2), hasMoved: true },
       { id: 'wK', player: 0, type: 'king',  cell: cubeCoord( 4, -8), hasMoved: true },
-      { id: 'bK', player: 1, type: 'king',  cell: cubeCoord(-4,  8), hasMoved: true },
+      { id: 'bK', player: 2, type: 'king',  cell: cubeCoord(-4,  8), hasMoved: true },
     ]);
 
     const result = searchBestMove(state, OPTS);
@@ -177,8 +179,8 @@ describe('Puzzle 4 — knight fork of king and queen (depth 2, player 0)', () =>
     const state = makeState([
       { id: 'wN', player: 0, type: 'knight', cell: cubeCoord( 1, -1), hasMoved: true },
       { id: 'wK', player: 0, type: 'king',   cell: cubeCoord( 4, -8), hasMoved: true },
-      { id: 'bK', player: 1, type: 'king',   cell: cubeCoord( 3, -2), hasMoved: true },
-      { id: 'bQ', player: 1, type: 'queen',  cell: cubeCoord( 0,  4), hasMoved: true },
+      { id: 'bK', player: 2, type: 'king',   cell: cubeCoord( 3, -2), hasMoved: true },
+      { id: 'bQ', player: 2, type: 'queen',  cell: cubeCoord( 0,  4), hasMoved: true },
     ]);
 
     const result = searchBestMove(state, OPTS);

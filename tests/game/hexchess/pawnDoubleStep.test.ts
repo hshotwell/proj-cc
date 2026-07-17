@@ -10,6 +10,8 @@ function stateWith(pieces: HexPiece[]): HexChessState {
     pieces,
     currentPlayer: 0,
     turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],
@@ -49,7 +51,7 @@ describe('pawn double-step', () => {
     const [e1] = forwardEdges(0);
     const blocker: HexPiece = {
       id: 'B',
-      player: 1,
+      player: 2,
       type: 'rook',
       cell: cubeAdd(cubeCoord(0, 0), e1),
       hasMoved: false,

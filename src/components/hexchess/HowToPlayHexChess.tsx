@@ -57,6 +57,16 @@ export function HowToPlayHexChess({ open, onClose }: HowToPlayHexChessProps) {
             <li>Insufficient material: neither side can checkmate (King vs King, King+Bishop vs King, etc.).</li>
           </ul>
         </section>
+        <section className="mb-4">
+          <h3 className="font-medium mb-2">Multiplayer (3-6 players)</h3>
+          <ul className="text-sm text-gray-700 space-y-1">
+            <li>Each player fields a full army in their own corner; turns pass clockwise.</li>
+            <li>Check is only a warning — you may ignore it, and you may even move into check.</li>
+            <li>A player is eliminated when another player actually captures their king.</li>
+            <li>An eliminated army turns grey and freezes: it never moves and gives no check, but still blocks paths and can be captured (knights leap over as usual).</li>
+            <li>The last player standing wins. Threefold repetition is still a draw.</li>
+          </ul>
+        </section>
         <div className="flex justify-end">
           <button
             type="button"

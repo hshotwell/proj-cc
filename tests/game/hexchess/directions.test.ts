@@ -39,9 +39,9 @@ describe('hex directions', () => {
     }
   });
 
-  it('forwardDiagonal(0) and forwardDiagonal(1) are opposite', () => {
+  it('forwardDiagonal(0) and forwardDiagonal(2) are opposite', () => {
     const a = forwardDiagonal(0);
-    const b = forwardDiagonal(1);
+    const b = forwardDiagonal(2);
     expect(cubeEquals(a, { q: -b.q, r: -b.r, s: -b.s })).toBe(true);
   });
 

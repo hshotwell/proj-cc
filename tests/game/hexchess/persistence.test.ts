@@ -42,13 +42,14 @@ import { createInitialState } from '@/game/hexchess/starting';
 function makeConfig(id: string): HexChessConfig {
   return {
     id,
-    players: [
-      { color: '#ff0000', name: 'Alice', isAI: false },
-      { color: '#0000ff', name: 'Bob', isAI: true },
-    ],
+    seats: [0, 2],
+  players: {
+    0: { color: '#ff0000', name: 'Alice', isAI: false },
+    2: { color: '#0000ff', name: 'Bob', isAI: true },
+  },
     layoutPreset: 'v1-default',
     soldierVariant: 'soldier',
-    ai: { 1: 'medium' },
+    ai: { 2: 'medium' },
   };
 }
 
@@ -75,7 +76,7 @@ describe('hexchess persistence', () => {
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe('game-001');
     expect(loaded!.mode).toBe('hexchess');
-    expect(loaded!.schemaVersion).toBe(1);
+    expect(loaded!.schemaVersion).toBe(2);
     expect(loaded!.config).toEqual(config);
     expect(loaded!.state.mode).toBe('hexchess');
     expect(loaded!.state.pieces.length).toBe(state.pieces.length);
@@ -169,5 +170,112 @@ describe('hexchess persistence', () => {
     // Most recently updated first
     expect(list[0].id).toBe('game-sort-3');
     expect(list[2].id).toBe('game-sort-1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v1 → v2 migration
+// ---------------------------------------------------------------------------
+
+import { applyMove } from '@/game/hexchess/moves';
+import { legalMoves } from '@/game/hexchess/check';
+import type { HexMove, HexPiece } from '@/game/hexchess/state';
+
+// The row-reversal permutation used to translate v1 piece indices; it is an
+// involution, so it also de-migrates v2 ids back to v1 for fixture building.
+const PERM: Record<number, number> = {
+  0: 0, 1: 2, 2: 1, 3: 5, 4: 4, 5: 3,
+  6: 9, 7: 8, 8: 7, 9: 6, 10: 14, 11: 13, 12: 12, 13: 11, 14: 10,
+};
+
+function demigrateId(id: string): string {
+  if (!id.startsWith('2-')) return id;
+  const parts = id.split('-');
+  parts[0] = '1';
+  parts[parts.length - 1] = String(PERM[Number(parts[parts.length - 1])]);
+  return parts.join('-');
+}
+
+function demigrateSeat(p: number): number {
+  return p === 2 ? 1 : p;
+}
+
+describe('v1 record migration', () => {
+  it('loads a v1 record with seats [0,2], remapped players and ids, and replayable history', () => {
+    // Build a real v2 game with two moves played...
+    const config = makeConfig('mig-001');
+    let state = makeState(config);
+    const move1 = legalMoves(state).find(m => m.pieceId.includes('soldier'))!;
+    state = applyMove(state, move1);
+    const move2 = legalMoves(state).find(m => m.pieceId.includes('soldier'))!;
+    state = applyMove(state, move2);
+
+    // ...then hand-craft the equivalent v1 record (old ids, players 0/1).
+    const v1Record = {
+      schemaVersion: 1,
+      mode: 'hexchess',
+      id: 'mig-001',
+      createdAt: 111,
+      updatedAt: 222,
+      config: {
+        id: 'mig-001',
+        players: [config.players[0], config.players[2]],
+        layoutPreset: 'v1-default',
+        soldierVariant: 'soldier',
+        ai: { 1: 'medium' },
+      },
+      state: {
+        ...state,
+        activePlayers: undefined,
+        eliminated: undefined,
+        pieces: state.pieces.map((p: HexPiece) => ({
+          ...p,
+          id: demigrateId(p.id),
+          player: demigrateSeat(p.player),
+        })),
+        currentPlayer: demigrateSeat(state.currentPlayer),
+        moveHistory: state.moveHistory.map((m: HexMove) => ({
+          ...m,
+          pieceId: demigrateId(m.pieceId),
+          player: demigrateSeat(m.player),
+          capture: m.capture
+            ? { ...m.capture, pieceId: demigrateId(m.capture.pieceId) }
+            : null,
+        })),
+      },
+      moveHistory: [],
+      result: null,
+    };
+    localStorage.setItem('hexchess-game-mig-001', JSON.stringify(v1Record));
+
+    const loaded = loadHexChessGame('mig-001')!;
+    expect(loaded).not.toBeNull();
+    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.config.seats).toEqual([0, 2]);
+    expect(loaded.config.players[2]!.name).toBe('Bob');
+    expect(loaded.config.ai).toEqual({ 2: 'medium' });
+    expect(loaded.state.activePlayers).toEqual([0, 2]);
+    expect(loaded.state.eliminated).toEqual([]);
+
+    // Every migrated piece matches the original v2 game exactly (id + cell).
+    const byId = new Map(state.pieces.map(p => [p.id, p]));
+    expect(loaded.state.pieces).toHaveLength(state.pieces.length);
+    for (const p of loaded.state.pieces) {
+      const original = byId.get(p.id)!;
+      expect(original).toBeDefined();
+      expect(p.cell).toEqual(original.cell);
+      expect(p.player).toBe(original.player);
+    }
+
+    // Replaying the migrated history from a fresh initial state reproduces
+    // the saved position (this is what the replay viewer does).
+    let replayed = createInitialState(loaded.config);
+    for (const m of loaded.state.moveHistory) {
+      replayed = applyMove(replayed, m);
+    }
+    const replayedCells = new Map(replayed.pieces.map(p => [p.id, `${p.cell.q},${p.cell.r}`]));
+    for (const p of state.pieces) {
+      expect(replayedCells.get(p.id)).toBe(`${p.cell.q},${p.cell.r}`);
+    }
   });
 });

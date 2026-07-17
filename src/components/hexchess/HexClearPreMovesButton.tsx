@@ -13,9 +13,10 @@ export function HexClearPreMovesButton({ localPlayer }: HexClearPreMovesButtonPr
   const config = useHexChessStore((s) => s.config);
   const clearAllPreMoves = useHexChessStore((s) => s.clearAllPreMoves);
 
-  if (preMoves.length === 0 || localPlayer === undefined || !config) return null;
+  const playerConfig = localPlayer !== undefined ? config?.players[localPlayer] : undefined;
+  if (preMoves.length === 0 || !playerConfig) return null;
 
-  const color = getCSSColor(config.players[localPlayer].color);
+  const color = getCSSColor(playerConfig.color);
   const label = preMoves.length === 1 ? 'Clear pre-move' : `Clear ${preMoves.length} pre-moves`;
 
   return (

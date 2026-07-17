@@ -33,10 +33,11 @@ import { loadHexChessGame } from '@/game/hexchess/persistence';
 function makeConfig(id = 'test-game'): HexChessConfig {
   return {
     id,
-    players: [
-      { color: '#ff0000', name: 'Alice', isAI: false },
-      { color: '#0000ff', name: 'Bob', isAI: false },
-    ],
+    seats: [0, 2],
+  players: {
+    0: { color: '#ff0000', name: 'Alice', isAI: false },
+    2: { color: '#0000ff', name: 'Bob', isAI: false },
+  },
     layoutPreset: 'v1-default',
     soldierVariant: 'soldier',
     ai: null,
@@ -114,7 +115,7 @@ describe('hexChessStore', () => {
     useHexChessStore.getState().selectPiece(legal[0].pieceId);
 
     // Now attempt to select a player-1 piece.
-    const opponentPiece = state.pieces.find(p => p.player === 1);
+    const opponentPiece = state.pieces.find(p => p.player === 2);
     expect(opponentPiece).toBeDefined();
     useHexChessStore.getState().selectPiece(opponentPiece!.id);
 
@@ -153,8 +154,8 @@ describe('hexChessStore', () => {
     expect(result).toBe(true);
 
     const s = useHexChessStore.getState();
-    // Turn should have advanced to player 1.
-    expect(s.state!.currentPlayer).toBe(1);
+    // Turn should have advanced to seat 2.
+    expect(s.state!.currentPlayer).toBe(2);
     // Selection should be cleared.
     expect(s.selectedPieceId).toBeNull();
     expect(s.legalMoveTargets).toHaveLength(0);
@@ -194,7 +195,7 @@ describe('hexChessStore', () => {
     const s = useHexChessStore.getState();
 
     expect(s.state!.result).not.toBeNull();
-    expect(s.state!.result!.winner).toBe(1);
+    expect(s.state!.result!.winner).toBe(2);
     expect(s.state!.result!.reason).toBe('resignation');
   });
 
@@ -223,7 +224,7 @@ describe('hexChessStore', () => {
     const saved = loadHexChessGame('persist-move');
     expect(saved).not.toBeNull();
     // After the move, the saved state's currentPlayer should be 1 (turn advanced).
-    expect(saved!.state.currentPlayer).toBe(1);
+    expect(saved!.state.currentPlayer).toBe(2);
     // Move history should contain one entry.
     expect(saved!.moveHistory).toHaveLength(1);
   });
@@ -237,7 +238,7 @@ describe('hexChessStore', () => {
     const saved = loadHexChessGame('persist-resign');
     expect(saved).not.toBeNull();
     expect(saved!.result).not.toBeNull();
-    expect(saved!.result!.winner).toBe(1);
+    expect(saved!.result!.winner).toBe(2);
     expect(saved!.result!.reason).toBe('resignation');
   });
 
@@ -260,5 +261,46 @@ describe('hexChessStore', () => {
     expect(s.selectedPieceId).toBeNull();
     expect(s.legalMoveTargets).toHaveLength(0);
     expect(s.lastMove).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multiplayer resign
+// ---------------------------------------------------------------------------
+
+describe('multiplayer resign', () => {
+  function make3pConfig(id = 'mp-resign'): HexChessConfig {
+    return {
+      id,
+      seats: [0, 3, 1],
+      players: {
+        0: { color: '#ff0000', name: 'Red', isAI: false },
+        3: { color: '#00ff00', name: 'Green', isAI: false },
+        1: { color: '#0000ff', name: 'Blue', isAI: false },
+      },
+      layoutPreset: 'v1-default',
+      soldierVariant: 'soldier',
+      ai: null,
+    };
+  }
+
+  it('resigning a 3-player game eliminates the seat and play continues', () => {
+    useHexChessStore.getState().clearGame();
+    useHexChessStore.getState().createGame(make3pConfig());
+    useHexChessStore.getState().resign(0);
+    const s = useHexChessStore.getState().state!;
+    expect(s.eliminated).toEqual([0]);
+    expect(s.result).toBeNull();
+    expect(s.currentPlayer).toBe(3);
+  });
+
+  it('the last living seat wins when the others resign', () => {
+    useHexChessStore.getState().clearGame();
+    useHexChessStore.getState().createGame(make3pConfig('mp-resign-2'));
+    useHexChessStore.getState().resign(0);
+    useHexChessStore.getState().resign(3);
+    const s = useHexChessStore.getState().state!;
+    expect(s.eliminated).toEqual([0, 3]);
+    expect(s.result).toEqual({ winner: 1, reason: 'king-capture' });
   });
 });

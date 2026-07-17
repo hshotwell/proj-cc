@@ -6,10 +6,11 @@ import { cubeCoord } from '@/game/coordinates';
 
 const config: HexChessConfig = {
   id: 'test',
-  players: [
-    { color: 'red', name: 'P1', isAI: false },
-    { color: 'blue', name: 'P2', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'P1', isAI: false },
+    2: { color: 'blue', name: 'P2', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -29,7 +30,7 @@ describe('evaluate', () => {
   // material value in the eval.
   function withSymmetricQueens(state: HexChessState): HexChessState {
     const q0: HexPiece = { id: 'test-q0', player: 0, type: 'queen', cell: cubeCoord(5, -5), hasMoved: true };
-    const q1: HexPiece = { id: 'test-q1', player: 1, type: 'queen', cell: cubeCoord(-5, 5), hasMoved: true };
+    const q1: HexPiece = { id: 'test-q1', player: 2, type: 'queen', cell: cubeCoord(-5, 5), hasMoved: true };
     return { ...state, pieces: [...state.pieces, q0, q1] };
   }
 

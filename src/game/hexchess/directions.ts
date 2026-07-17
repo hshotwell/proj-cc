@@ -1,5 +1,5 @@
 import type { CubeCoord } from '@/types/game';
-import { cubeCoord, cubeAdd, cubeEquals } from '@/game/coordinates';
+import { cubeCoord, cubeAdd, cubeEquals, rotateCube } from '@/game/coordinates';
 import type { HexPlayerIndex } from './state';
 
 export const EDGE_DIRECTIONS: CubeCoord[] = [
@@ -30,15 +30,21 @@ export const KNIGHT_LEAPS: CubeCoord[] = [
   cubeCoord(-3, 2), cubeCoord(-3, 1), cubeCoord(-2, -1), cubeCoord(-1, -2),
 ];
 
-// Player 0's arm apex is at (4, -8) — the "north" corner of the star.
-// Player 1's arm apex is at (-4, 8) — the "south" corner.
-// Each player's forward diagonal points from their apex toward the center
-// (and beyond, toward the opposite apex).
-const DIAG_NORTH: CubeCoord = cubeCoord(1, -2);   // r decreases → toward player 0's apex
-const DIAG_SOUTH: CubeCoord = cubeCoord(-1, 2);   // r increases → toward player 1's apex
+// Seat indices equal Chinese Checkers home-triangle indices. Rotating the
+// canonical seat-0 geometry clockwise by ROTATION_STEPS[seat] * 60 degrees
+// (rotateCube: (q,r,s) -> (-r,-s,-q) per step) maps triangle 0 onto the
+// seat's own triangle. Clockwise triangle order: 0, 4, 3, 2, 1, 5.
+export const ROTATION_STEPS: Record<HexPlayerIndex, number> = {
+  0: 0, 4: 1, 3: 2, 2: 3, 1: 4, 5: 5,
+};
+
+// Seat 0's arm apex is at (4,-8); its forward diagonal points from the apex
+// toward the board center (and beyond). Every other seat's forward diagonal
+// is the canonical one rotated to that seat's triangle.
+const CANONICAL_FORWARD: CubeCoord = cubeCoord(-1, 2);
 
 export function forwardDiagonal(player: HexPlayerIndex): CubeCoord {
-  return player === 0 ? DIAG_SOUTH : DIAG_NORTH;
+  return rotateCube(CANONICAL_FORWARD, ROTATION_STEPS[player]);
 }
 
 // Returns the two edge-direction vectors that sum to forwardDiagonal(player).

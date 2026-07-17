@@ -6,10 +6,11 @@ import { cubeEquals } from '@/game/coordinates';
 
 const config: HexChessConfig = {
   id: 't',
-  players: [
-    { color: 'red', name: 'A', isAI: false },
-    { color: 'blue', name: 'B', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'A', isAI: false },
+    2: { color: 'blue', name: 'B', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -53,7 +54,7 @@ describe('applyMove', () => {
     const knight = s0.pieces.find(p => p.player === 0 && p.type === 'knight')!;
     const move = pseudoMovesForPiece(s0, knight).find(m => m.capture === null)!;
     const s1 = applyMove(s0, move);
-    expect(s1.currentPlayer).toBe(1);
+    expect(s1.currentPlayer).toBe(2);
     expect(s1.turnNumber).toBe(2);
   });
 
@@ -70,11 +71,13 @@ describe('applyMove', () => {
     // Construct a state where a rook can immediately capture.
     // Simplest: use a synthesized state, not the initial position.
     const rook: HexChessState['pieces'][0] = { id: 'R', player: 0, type: 'rook', cell: { q: 0, r: 0, s: 0 }, hasMoved: false };
-    const enemy: HexChessState['pieces'][0] = { id: 'E', player: 1, type: 'soldier', cell: { q: 3, r: 0, s: -3 }, hasMoved: false };
+    const enemy: HexChessState['pieces'][0] = { id: 'E', player: 2, type: 'soldier', cell: { q: 3, r: 0, s: -3 }, hasMoved: false };
     const kingA: HexChessState['pieces'][0] = { id: 'KA', player: 0, type: 'king', cell: { q: 4, r: -4, s: 0 }, hasMoved: false };
-    const kingB: HexChessState['pieces'][0] = { id: 'KB', player: 1, type: 'king', cell: { q: -4, r: 4, s: 0 }, hasMoved: false };
+    const kingB: HexChessState['pieces'][0] = { id: 'KB', player: 2, type: 'king', cell: { q: -4, r: 4, s: 0 }, hasMoved: false };
     const state: HexChessState = {
       mode: 'hexchess', pieces: [rook, enemy, kingA, kingB], currentPlayer: 0, turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
       enPassantTarget: null, pendingPromotion: null, moveHistory: [], positionHashes: {}, result: null,
     };
     const move: HexMove = {

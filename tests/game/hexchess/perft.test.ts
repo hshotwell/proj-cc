@@ -6,10 +6,11 @@ import type { HexChessConfig, HexChessState } from '@/game/hexchess';
 
 const config: HexChessConfig = {
   id: 'perft',
-  players: [
-    { color: 'red', name: 'A', isAI: false },
-    { color: 'blue', name: 'B', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'A', isAI: false },
+    2: { color: 'blue', name: 'B', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,

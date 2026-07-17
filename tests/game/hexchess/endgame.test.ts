@@ -10,7 +10,7 @@ import { cubeCoord } from '@/game/coordinates';
 
 function piece(
   id: string,
-  player: 0 | 1,
+  player: 0 | 1 | 2,
   type: HexPiece['type'],
   q: number,
   r: number,
@@ -18,12 +18,14 @@ function piece(
   return { id, player, type, cell: cubeCoord(q, r), hasMoved: true };
 }
 
-function stateFor(pieces: HexPiece[], currentPlayer: 0 | 1 = 1): HexChessState {
+function stateFor(pieces: HexPiece[], currentPlayer: 0 | 1 | 2 = 2): HexChessState {
   return {
     mode: 'hexchess',
     pieces,
     currentPlayer,
     turnNumber: 10,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],
@@ -52,34 +54,34 @@ function stateFor(pieces: HexPiece[], currentPlayer: 0 | 1 = 1): HexChessState {
 
 describe('isCheckmate', () => {
   it('Test 1 — returns true for a minimal 3-piece mate: king cornered, queen delivers mate, white king defends', () => {
-    const blackKing  = piece('bK', 1, 'king',  -4,  8);  // cornered at arm apex
+    const blackKing  = piece('bK', 2, 'king',  -4,  8);  // cornered at arm apex
     const whiteQueen = piece('wQ', 0, 'queen', -3,  6);  // delivers check, covers 2 escapes
     const whiteKing  = piece('wK', 0, 'king',  -3,  5);  // defends queen, covers diagonal escape
 
-    // currentPlayer: 1 (black — the player to move who is checkmated)
-    const state = stateFor([blackKing, whiteQueen, whiteKing], 1);
+    // currentPlayer: 2 (black — the player to move who is checkmated)
+    const state = stateFor([blackKing, whiteQueen, whiteKing], 2);
     expect(isCheckmate(state)).toBe(true);
   });
 
   it('Test 2 — returns false when the king has a legal escape', () => {
     // Same position but white king is removed: black king can capture the queen
     // at {-3, 6} via the diagonal (1, -2) from {-4, 8}.
-    const blackKing  = piece('bK', 1, 'king',  -4,  8);
+    const blackKing  = piece('bK', 2, 'king',  -4,  8);
     const whiteQueen = piece('wQ', 0, 'queen', -3,  6);  // undefended — king can capture
     // No white king to defend the queen
 
-    const state = stateFor([blackKing, whiteQueen], 1);
+    const state = stateFor([blackKing, whiteQueen], 2);
     expect(isCheckmate(state)).toBe(false);
   });
 
   it('Test 4 — returns false when in check but king has a legal escape', () => {
     // Black king at (0, 0), white rook at (3, 0) — in check along edge.
     // Black king can step to many cells; this is check but not mate.
-    const blackKing = piece('bK', 1, 'king', 0, 0);
+    const blackKing = piece('bK', 2, 'king', 0, 0);
     const whiteRook = piece('wR', 0, 'rook', 3, 0);
     const whiteKing = piece('wK', 0, 'king', -4, 4); // far away
 
-    const state = stateFor([blackKing, whiteRook, whiteKing], 1);
+    const state = stateFor([blackKing, whiteRook, whiteKing], 2);
     expect(isCheckmate(state)).toBe(false);
   });
 });
@@ -96,31 +98,31 @@ describe('isCheckmate', () => {
 
 describe('isStalemate', () => {
   it('Test 3 — returns true for stalemate: king not in check but has no legal moves', () => {
-    const blackKing  = piece('bK', 1, 'king',  -4,  8);  // arm apex
+    const blackKing  = piece('bK', 2, 'king',  -4,  8);  // arm apex
     const whiteKing  = piece('wK', 0, 'king',  -2,  6);  // covers {-3,7} and {-4,7}
     const whiteRook  = piece('wR', 0, 'rook',  -3,  0);  // covers {-3,6} via file
 
-    const state = stateFor([blackKing, whiteKing, whiteRook], 1);
+    const state = stateFor([blackKing, whiteKing, whiteRook], 2);
     expect(isStalemate(state)).toBe(true);
   });
 
   it('Test 4b — isStalemate returns false when in check (even with no moves)', () => {
     // Reuse the checkmate position — it should return false from isStalemate.
-    const blackKing  = piece('bK', 1, 'king',  -4,  8);
+    const blackKing  = piece('bK', 2, 'king',  -4,  8);
     const whiteQueen = piece('wQ', 0, 'queen', -3,  6);
     const whiteKing  = piece('wK', 0, 'king',  -3,  5);
 
-    const state = stateFor([blackKing, whiteQueen, whiteKing], 1);
+    const state = stateFor([blackKing, whiteQueen, whiteKing], 2);
     expect(isStalemate(state)).toBe(false);
   });
 
   it('Test 4c — isCheckmate returns false when not in check', () => {
     // The stalemate position — isCheckmate should be false.
-    const blackKing  = piece('bK', 1, 'king',  -4,  8);
+    const blackKing  = piece('bK', 2, 'king',  -4,  8);
     const whiteKing  = piece('wK', 0, 'king',  -2,  6);
     const whiteRook  = piece('wR', 0, 'rook',  -3,  0);
 
-    const state = stateFor([blackKing, whiteKing, whiteRook], 1);
+    const state = stateFor([blackKing, whiteKing, whiteRook], 2);
     expect(isCheckmate(state)).toBe(false);
   });
 });
@@ -135,7 +137,7 @@ describe('applyMove result', () => {
     // Black king at {-4, 8}, white king at {-3, 5}.
     // White queen at {-3, 7}: not yet delivering check.
     // Player 0 moves queen from {-3, 7} to {-3, 6}: now delivers checkmate.
-    const blackKing   = piece('bK', 1, 'king',  -4,  8);
+    const blackKing   = piece('bK', 2, 'king',  -4,  8);
     const whiteKing   = piece('wK', 0, 'king',  -3,  5);
     const whiteQueen  = piece('wQ', 0, 'queen', -3,  7);
 

@@ -12,7 +12,7 @@ import { useGameStore } from '@/store/gameStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useHexChessStore } from '@/store/hexChessStore';
-import type { HexChessConfig } from '@/game/hexchess';
+import type { HexChessConfig, HexPlayerIndex } from '@/game/hexchess';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { HowToPlayHexChess } from '@/components/hexchess/HowToPlayHexChess';
 import { areTooSimilar } from '@/game/colors';
@@ -112,27 +112,39 @@ export default function PlayPage() {
 
   useEffect(() => { loadLayouts(); }, [loadLayouts]);
 
-  // When switching to Hex Chess, lock to standard board and 2 players.
-  // Colors reset to classic chess defaults (white vs black) — favorite/skin
-  // colors don't apply to chess pieces. The Sternhalma color choices are
-  // stashed and restored when switching back.
+  // When switching to Hex Chess, lock to the standard board. Colors reset to
+  // hex chess defaults — classic white vs black for 2 players, CC corner
+  // colors (via PLAYER_COLORS fallback) for 3+. The Sternhalma color choices
+  // are stashed and restored when switching back.
   const sternhalmaColorsRef = useRef<ColorMapping | null>(null);
+  const hexChessDefaultColors = (count: PlayerCount): ColorMapping => {
+    if (count !== 2) return {}; // fall back to CC defaults per corner
+    const [p0, p1] = ACTIVE_PLAYERS[2];
+    return { [p0]: HEX_CHESS_DEFAULT_COLORS[0], [p1]: HEX_CHESS_DEFAULT_COLORS[1] } as ColorMapping;
+  };
   useEffect(() => {
     if (gameMode === 'hexchess') {
-      setSelectedCount(2);
       setSelectedLayout(null);
       setShowBoardSelector(false);
       setCustomColors(prev => {
         sternhalmaColorsRef.current = prev;
-        const [p0, p1] = ACTIVE_PLAYERS[2];
-        return { [p0]: HEX_CHESS_DEFAULT_COLORS[0], [p1]: HEX_CHESS_DEFAULT_COLORS[1] } as ColorMapping;
+        return hexChessDefaultColors(selectedCount);
       });
     } else if (sternhalmaColorsRef.current !== null) {
       const restored = sternhalmaColorsRef.current;
       sternhalmaColorsRef.current = null;
       setCustomColors(restored);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameMode]);
+
+  // Changing the player count within hex chess re-seeds the default colors
+  // (2 players = white/black, 3+ = CC corner colors).
+  useEffect(() => {
+    if (gameMode !== 'hexchess') return;
+    setCustomColors(hexChessDefaultColors(selectedCount));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCount]);
 
   // On first mount, seed colors from favoriteColor
   useEffect(() => {
@@ -197,7 +209,9 @@ export default function PlayPage() {
     setCustomColors(prev => ({ ...prev, [player]: color }));
   };
 
-  const handleResetColors = () => { setCustomColors({}); };
+  const handleResetColors = () => {
+    setCustomColors(gameMode === 'hexchess' ? hexChessDefaultColors(selectedCount) : {});
+  };
 
   const handleNameChange = (player: PlayerIndex, name: string) => {
     setPlayerNames(prev => {
@@ -212,29 +226,25 @@ export default function PlayPage() {
 
   const handleStartGame = () => {
     if (gameMode === 'hexchess') {
-      // configPlayers for 2-player standard board = [0, 2] (Sternhalma arm indices)
-      const p0 = configPlayers[0] ?? (0 as PlayerIndex);
-      const p1 = configPlayers[1] ?? (2 as PlayerIndex);
+      // Seats are CC player indices (seat = home triangle), in clockwise
+      // turn order: 2 -> [0,2], 3 -> [0,3,1], 4 -> [4,3,1,5], 6 -> all.
+      const seats = ACTIVE_PLAYERS[selectedCount] as HexPlayerIndex[];
       const hexGameId = Math.random().toString(36).substring(2, 10);
-      const p0AI = aiConfig[p0];
-      const p1AI = aiConfig[p1];
-      const aiMap: Partial<Record<0 | 1, 'easy' | 'medium' | 'hard'>> = {};
-      if (p0AI) aiMap[0] = p0AI.difficulty ?? 'medium';
-      if (p1AI) aiMap[1] = p1AI.difficulty ?? 'medium';
+      const players: HexChessConfig['players'] = {};
+      const aiMap: NonNullable<HexChessConfig['ai']> = {};
+      for (const seat of seats) {
+        const seatAI = aiConfig[seat];
+        players[seat] = {
+          color: getEffectiveColor(seat),
+          name: playerNames[seat] ?? getDefaultName(seat, seats),
+          isAI: seatAI != null,
+        };
+        if (seatAI) aiMap[seat] = seatAI.difficulty ?? 'medium';
+      }
       const hexConfig: HexChessConfig = {
         id: hexGameId,
-        players: [
-          {
-            color: getEffectiveColor(p0),
-            name: playerNames[p0] ?? getDefaultName(p0, configPlayers),
-            isAI: p0AI != null,
-          },
-          {
-            color: getEffectiveColor(p1),
-            name: playerNames[p1] ?? getDefaultName(p1, configPlayers),
-            isAI: p1AI != null,
-          },
-        ],
+        seats,
+        players,
         layoutPreset: 'v1-default',
         soldierVariant: 'soldier',
         ai: Object.keys(aiMap).length > 0 ? aiMap : null,
@@ -754,32 +764,26 @@ export default function PlayPage() {
         {/* Player count */}
         {!selectedLayout ? (
           <div className="mb-8">
-            {gameMode === 'hexchess' && (
+            {gameMode === 'hexchess' && selectedCount !== 2 && (
               <p className="text-sm text-gray-500 italic mb-2">
-                Hex Chess v1 supports only 2 players. More player counts coming later.
+                Multiplayer hex chess: capture a king to eliminate that player. Last one standing wins.
               </p>
             )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {PLAYER_COUNT_OPTIONS.map(({ count, description }) => {
-                const lockedOut = gameMode === 'hexchess' && count !== 2;
-                return (
-                  <button
-                    key={count}
-                    onClick={() => { if (!lockedOut) setSelectedCount(count); }}
-                    disabled={lockedOut}
-                    className={`p-6 rounded-xl border-2 transition-all ${
-                      selectedCount === count
-                        ? 'border-blue-500 bg-blue-50 shadow-lg'
-                        : lockedOut
-                        ? 'border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="text-4xl font-bold text-gray-900 mb-1">{count}</div>
-                    <div className="text-sm text-gray-500">{description}</div>
-                  </button>
-                );
-              })}
+              {PLAYER_COUNT_OPTIONS.map(({ count, description }) => (
+                <button
+                  key={count}
+                  onClick={() => setSelectedCount(count)}
+                  className={`p-6 rounded-xl border-2 transition-all ${
+                    selectedCount === count
+                      ? 'border-blue-500 bg-blue-50 shadow-lg'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-4xl font-bold text-gray-900 mb-1">{count}</div>
+                  <div className="text-sm text-gray-500">{description}</div>
+                </button>
+              ))}
             </div>
           </div>
         ) : availableCustomCounts.length > 1 ? (

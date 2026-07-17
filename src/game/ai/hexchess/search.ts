@@ -5,6 +5,7 @@ import { evaluate } from './evaluate';
 import { orderMoves } from './moveOrdering';
 import { TranspositionTable } from './transposition';
 import type { TTFlag } from './transposition';
+import { searchBestMoveMaxN } from './maxn';
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -170,11 +171,18 @@ export function searchBestMove(
   state: HexChessState,
   options: SearchOptions,
 ): SearchResult {
+  // 3+ players use king-capture rules and a Max^n search — no single
+  // adversary to alpha-beta against.
+  if (state.activePlayers.length > 2) {
+    return searchBestMoveMaxN(state, options);
+  }
+
   // Reset transposition table at the start of each new search
   tt = new TranspositionTable(65536);
 
   const startedAt = Date.now();
-  const rootMaximizing = state.currentPlayer === 0;
+  // evaluate() scores from the first seat's perspective (activePlayers[0]).
+  const rootMaximizing = state.currentPlayer === state.activePlayers[0];
 
   let best: SearchResult = { move: null, evalCp: 0, depth: 0, nodes: 0 };
 

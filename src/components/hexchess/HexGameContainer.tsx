@@ -24,11 +24,11 @@ export function HexGameContainer() {
   const view = selectHexChessBoardView(store);
   const preMovesSetting = useSettingsStore((s) => s.preMoves);
 
-  const humanPlayers = store.config
-    ? ([0, 1] as const).filter((p) => !store.config!.ai?.[p])
+  const humanPlayers: HexPlayerIndex[] = store.config
+    ? store.config.seats.filter((p) => !store.config!.ai?.[p])
     : [];
   const localPlayer: HexPlayerIndex | undefined =
-    humanPlayers.length === 1 ? (humanPlayers[0] as HexPlayerIndex) : undefined;
+    humanPlayers.length === 1 ? humanPlayers[0] : undefined;
   const preMovesAllowed = !!(
     preMovesSetting &&
     localPlayer !== undefined &&
@@ -153,7 +153,9 @@ export function HexGameContainer() {
 
   const handleResign = () => {
     if (window.confirm('Really resign?')) {
-      store.resign();
+      // With a single local human, resign acts for their seat even when it is
+      // not their turn; hotseat games resign the seat currently to move.
+      store.resign(localPlayer);
     }
   };
 
@@ -179,7 +181,7 @@ export function HexGameContainer() {
     );
   }
 
-  const currentColor = store.config.players[store.state.currentPlayer].color;
+  const currentColor = store.config.players[store.state.currentPlayer]!.color;
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
@@ -215,7 +217,7 @@ export function HexGameContainer() {
             preMovesAllowed && (
             <PromotionPicker
               pieceCell={store.pendingPreMovePromotion.to}
-              playerColor={store.config.players[localPlayer].color}
+              playerColor={store.config.players[localPlayer]!.color}
               onChoose={(choice) => store.confirmPreMovePromotion(choice)}
               onCancel={() => store.cancelPreMovePromotion()}
             />

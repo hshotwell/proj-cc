@@ -42,15 +42,17 @@ describe('DIFFICULTY_BUDGET', () => {
   });
 });
 
-function stateWith(pieces: HexPiece[], currentPlayer: 0 | 1 = 0): HexChessState {
+function stateWith(pieces: HexPiece[], currentPlayer: 0 | 1 | 2 = 0): HexChessState {
   return {
     mode: 'hexchess', pieces, currentPlayer, turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null, pendingPromotion: null, moveHistory: [],
     positionHashes: {}, result: null,
   };
 }
 
-function piece(id: string, player: 0 | 1, type: HexPiece['type'], q: number, r: number): HexPiece {
+function piece(id: string, player: 0 | 1 | 2, type: HexPiece['type'], q: number, r: number): HexPiece {
   return { id, player, type, cell: cubeCoord(q, r), hasMoved: true };
 }
 

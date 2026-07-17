@@ -1,8 +1,9 @@
 import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
-import { isOnBoard, pieceAt } from './board';
+import { isOnBoard, pieceAt, isEliminated, livingPlayers, nextLivingPlayer } from './board';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex, HexPieceType } from './state';
+import { rulesModeOf } from './state';
 import { isCheckmate, isStalemate, isThreefoldRepetition, isInsufficientMaterial } from './check';
 import { hashState } from './zobrist';
 import { promotionCellsForPlayer } from './starting';
@@ -249,17 +250,50 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
     };
   }
 
+  // Elimination (king-capture mode): capturing a king removes its owner from
+  // play immediately. Their remaining pieces stay on the board as frozen
+  // obstacles; turn order skips them from now on.
+  let eliminated = state.eliminated;
+  if (rulesModeOf(state) === 'king-capture' && move.capture !== null) {
+    const victim = state.pieces.find(p => p.id === move.capture!.pieceId);
+    if (victim && victim.type === 'king' && !eliminated.includes(victim.player)) {
+      eliminated = [...eliminated, victim.player];
+    }
+  }
+
   const advanceTurn = pendingPromotion === null;
+  const withElimination: HexChessState = { ...state, eliminated };
 
   return {
-    ...state,
+    ...withElimination,
     pieces: nextPieces,
     moveHistory: [...state.moveHistory, move],
     enPassantTarget,
     pendingPromotion,
-    currentPlayer: advanceTurn ? ((1 - state.currentPlayer) as 0 | 1) : state.currentPlayer,
+    currentPlayer: advanceTurn
+      ? nextLivingPlayer(withElimination, state.currentPlayer)
+      : state.currentPlayer,
     turnNumber: advanceTurn ? state.turnNumber + 1 : state.turnNumber,
   };
+}
+
+/**
+ * Removes `seat` from play outside of a king capture (resignation).
+ * Their pieces freeze in place exactly as if their king had been captured.
+ * If it was their turn, play passes to the next living seat; if only one
+ * seat remains alive, that seat wins as the last player standing.
+ */
+export function eliminatePlayer(state: HexChessState, seat: HexPlayerIndex): HexChessState {
+  if (state.eliminated.includes(seat) || state.result !== null) return state;
+  let next: HexChessState = { ...state, eliminated: [...state.eliminated, seat] };
+  const living = livingPlayers(next);
+  if (living.length === 1) {
+    next = { ...next, result: { winner: living[0], reason: 'king-capture' } };
+  }
+  if (next.currentPlayer === seat && living.length >= 1) {
+    next = { ...next, currentPlayer: nextLivingPlayer(next, seat) };
+  }
+  return next;
 }
 
 /**
@@ -280,10 +314,19 @@ export function applyMove(state: HexChessState, move: HexMove): HexChessState {
     positionHashes: { ...next.positionHashes, [hash]: prevCount + 1 },
   };
 
-  // TODO(Task 23): when pendingPromotion !== null, turn is not yet advanced —
+  // When pendingPromotion !== null, turn is not yet advanced —
   // skip result detection until the promotion is resolved.
   if (next.pendingPromotion === null) {
-    if (isCheckmate(next)) {
+    if (rulesModeOf(next) === 'king-capture') {
+      // Multiplayer: only last-standing wins and repetition draws. Check is
+      // advisory, so checkmate/stalemate/insufficient-material don't apply.
+      const living = livingPlayers(next);
+      if (living.length === 1) {
+        next = { ...next, result: { winner: living[0], reason: 'king-capture' } };
+      } else if (isThreefoldRepetition(next)) {
+        next = { ...next, result: { winner: 'draw', reason: 'repetition' } };
+      }
+    } else if (isCheckmate(next)) {
       next = { ...next, result: { winner: mover, reason: 'checkmate' } };
     } else if (isStalemate(next)) {
       next = { ...next, result: { winner: 'draw', reason: 'stalemate' } };
@@ -298,6 +341,8 @@ export function applyMove(state: HexChessState, move: HexMove): HexChessState {
 }
 
 export function pseudoMovesForPiece(state: HexChessState, piece: HexPiece): HexMove[] {
+  // Eliminated players' pieces are frozen obstacles — they never move.
+  if (isEliminated(state, piece.player)) return [];
   let rawTargets: { to: CubeCoord; isCapture?: boolean; isDoubleStep?: boolean; isEnPassant?: boolean; epCapturedCell?: CubeCoord }[] = [];
   switch (piece.type) {
     case 'king':    rawTargets = kingMoves(state, piece).map(to => ({ to })); break;

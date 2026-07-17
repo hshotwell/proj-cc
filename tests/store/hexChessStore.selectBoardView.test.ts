@@ -7,10 +7,11 @@ import type { HexChessConfig } from '@/game/hexchess';
 
 const DEFAULT_CONFIG: HexChessConfig = {
   id: 'test-game',
-  players: [
-    { color: '#ff0000', name: 'Red', isAI: false },
-    { color: '#0000ff', name: 'Blue', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: '#ff0000', name: 'Red', isAI: false },
+    2: { color: '#0000ff', name: 'Blue', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -144,7 +145,7 @@ describe('selectHexChessBoardView', () => {
         // Player 0 king only at (4,-8)
         { id: '0-king', player: 0 as const, type: 'king' as const, cell: { q: 4, r: -8, s: 4 }, hasMoved: true },
         // Player 1 rook adjacent to king — at (3,-8,5) attacking along q direction
-        { id: '1-rook', player: 1 as const, type: 'rook' as const, cell: { q: 3, r: -8, s: 5 }, hasMoved: true },
+        { id: '1-rook', player: 2 as const, type: 'rook' as const, cell: { q: 3, r: -8, s: 5 }, hasMoved: true },
       ],
     };
 
@@ -238,7 +239,7 @@ describe('selectHexChessBoardView', () => {
       lastMove: null,
     } as never);
 
-    expect(view!.playerColors).toEqual({ 0: '#ff0000', 1: '#0000ff' });
+    expect(view!.playerColors).toEqual({ 0: '#ff0000', 2: '#0000ff' });
   });
 
   it('includes gameId from the config', () => {
@@ -253,5 +254,101 @@ describe('selectHexChessBoardView', () => {
     } as never);
 
     expect(view!.gameId).toBe('test-game');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multiplayer view
+// ---------------------------------------------------------------------------
+
+import { ELIMINATED_GREY } from '@/store/hexChessStore';
+import type { HexChessState, HexPiece, HexPlayerIndex } from '@/game/hexchess';
+import { cubeCoord } from '@/game/coordinates';
+
+const CONFIG_3P: HexChessConfig = {
+  id: 'mp-game',
+  seats: [0, 3, 1],
+  players: {
+    0: { color: '#ff0000', name: 'Red', isAI: false },
+    3: { color: '#00ff00', name: 'Green', isAI: false },
+    1: { color: '#0000ff', name: 'Blue', isAI: false },
+  },
+  layoutPreset: 'v1-default',
+  soldierVariant: 'soldier',
+  ai: null,
+};
+
+function mpPiece(
+  id: string,
+  player: HexPlayerIndex,
+  type: HexPiece['type'],
+  q: number,
+  r: number,
+): HexPiece {
+  return { id, player, type, cell: cubeCoord(q, r), hasMoved: true };
+}
+
+function mpView(state: HexChessState) {
+  return selectHexChessBoardView({
+    state,
+    gameId: 'mp-game',
+    config: CONFIG_3P,
+    selectedPieceId: null,
+    legalMoveTargets: [],
+    lastMove: null,
+  } as never)!;
+}
+
+describe('selectHexChessBoardView — multiplayer', () => {
+  it('renders eliminated seats in the fixed grey and living seats in their colors', () => {
+    const state: HexChessState = {
+      mode: 'hexchess',
+      pieces: [
+        mpPiece('k0', 0, 'king', 4, -8),
+        mpPiece('b3', 3, 'bishop', 1, 1),
+        mpPiece('k1', 1, 'king', -8, 4),
+      ],
+      currentPlayer: 0,
+      turnNumber: 5,
+      activePlayers: [0, 3, 1],
+      eliminated: [3],
+      enPassantTarget: null,
+      pendingPromotion: null,
+      moveHistory: [],
+      positionHashes: {},
+      result: null,
+    };
+    const view = mpView(state);
+    expect(view.pieces.find(p => p.id === 'b3')!.color).toBe(ELIMINATED_GREY);
+    expect(view.pieces.find(p => p.id === 'k0')!.color).toBe('#ff0000');
+    expect(view.playerColors![3]).toBe(ELIMINATED_GREY);
+    expect(view.playerColors![0]).toBe('#ff0000');
+  });
+
+  it('highlights every living king in check simultaneously', () => {
+    // Seat-0 rook attacks both other kings along its file/rays.
+    const state: HexChessState = {
+      mode: 'hexchess',
+      pieces: [
+        mpPiece('k0', 0, 'king', 4, -8),
+        mpPiece('r0a', 0, 'rook', 3, 0),
+        mpPiece('k3', 3, 'king', 0, 0),   // shares r=0 edge ray with rook
+        mpPiece('r0b', 0, 'rook', -5, 4),
+        mpPiece('k1', 1, 'king', -8, 4),  // shares r=4 edge ray with rook b
+      ],
+      currentPlayer: 3,
+      turnNumber: 5,
+      activePlayers: [0, 3, 1],
+      eliminated: [],
+      enPassantTarget: null,
+      pendingPromotion: null,
+      moveHistory: [],
+      positionHashes: {},
+      result: null,
+    };
+    const view = mpView(state);
+    const checks = view.highlights.filter(h => h.kind === 'check');
+    const cells = checks.map(h => coordKey(h.cell)).sort();
+    expect(cells).toEqual(['-8,4', '0,0']);
   });
 });

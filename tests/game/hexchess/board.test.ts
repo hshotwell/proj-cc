@@ -1,25 +1,45 @@
 import { describe, it, expect } from 'vitest';
-import { pieceAt, isOnBoard, isEmpty, isEnemy, kingOf, otherPlayer } from '@/game/hexchess/board';
+import { pieceAt, isOnBoard, isEmpty, isEnemy, kingOf, nextLivingPlayer } from '@/game/hexchess/board';
 import { createInitialState } from '@/game/hexchess/starting';
 import { cubeCoord } from '@/game/coordinates';
+import type { HexChessConfig } from '@/game/hexchess/state';
 
-const config = {
-  id: 't', players: [
-    { color: 'red', name: 'A', isAI: false },
-    { color: 'blue', name: 'B', isAI: false },
-  ] as const, layoutPreset: 'v1-default' as const, soldierVariant: 'soldier' as const, ai: null,
+const config: HexChessConfig = {
+  id: 't',
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'A', isAI: false },
+    2: { color: 'blue', name: 'B', isAI: false },
+  },
+  layoutPreset: 'v1-default', soldierVariant: 'soldier', ai: null,
 };
 
 describe('board helpers', () => {
-  it('otherPlayer swaps 0 and 1', () => {
-    expect(otherPlayer(0)).toBe(1);
-    expect(otherPlayer(1)).toBe(0);
+  it('nextLivingPlayer swaps the two seats of a 2-player game', () => {
+    const s = createInitialState(config);
+    expect(nextLivingPlayer(s, 0)).toBe(2);
+    expect(nextLivingPlayer(s, 2)).toBe(0);
+  });
+
+  it('nextLivingPlayer skips eliminated seats', () => {
+    const s = createInitialState({
+      ...config,
+      seats: [0, 3, 1],
+      players: {
+        0: { color: 'red', name: 'A', isAI: false },
+        3: { color: 'green', name: 'B', isAI: false },
+        1: { color: 'blue', name: 'C', isAI: false },
+      },
+    });
+    const withElim = { ...s, eliminated: [3 as const] };
+    expect(nextLivingPlayer(withElim, 0)).toBe(1);
+    expect(nextLivingPlayer(withElim, 1)).toBe(0);
   });
 
   it('kingOf finds each king', () => {
     const s = createInitialState(config);
     expect(kingOf(s, 0)?.type).toBe('king');
-    expect(kingOf(s, 1)?.type).toBe('king');
+    expect(kingOf(s, 2)?.type).toBe('king');
     expect(kingOf(s, 0)?.player).toBe(0);
   });
 
@@ -37,9 +57,9 @@ describe('board helpers', () => {
 
   it('isEmpty and isEnemy are complementary at enemy king', () => {
     const s = createInitialState(config);
-    const enemyKing = kingOf(s, 1)!;
+    const enemyKing = kingOf(s, 2)!;
     expect(isEmpty(s, enemyKing.cell)).toBe(false);
     expect(isEnemy(s, enemyKing.cell, 0)).toBe(true);
-    expect(isEnemy(s, enemyKing.cell, 1)).toBe(false);
+    expect(isEnemy(s, enemyKing.cell, 2)).toBe(false);
   });
 });

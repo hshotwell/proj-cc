@@ -20,7 +20,7 @@ const MAX_SAVED_GAMES = 20;
 // ---------------------------------------------------------------------------
 
 export interface SavedHexChessGame {
-  schemaVersion: 1;
+  schemaVersion: 2;
   mode: 'hexchess';
   id: string;
   createdAt: number;
@@ -30,6 +30,114 @@ export interface SavedHexChessGame {
   moveHistory: HexMove[];
   result: null | { winner: HexPlayerIndex | 'draw'; reason: HexEndReason };
 }
+
+// ---------------------------------------------------------------------------
+// v1 → v2 migration
+//
+// v1 records predate multiplayer: seats were 0/1 with player 1 on triangle 2.
+// v2 unifies seat indices with Chinese Checkers corners, so a 2-player game
+// uses seats [0, 2]. Migration remaps every player-1 reference (including
+// the `1-` piece-id prefix, so replays reconstruct from createInitialState)
+// to seat 2 and adds the new state fields.
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function migrateSeat(p: any): HexPlayerIndex {
+  return p === 1 ? 2 : p;
+}
+
+// Old player-1 ids were `1-{type}-{index}` with indices enumerated by the
+// legacy arm formula. Seat 2's rotated enumeration reverses the order within
+// each row (rows: [0], [1,2], [3,5], [6,9], [10,14]), so the index must map
+// through the row-reversal permutation for replays to reconstruct correctly
+// from createInitialState. The v1 layout is symmetric within every row, so
+// the piece type at a permuted index always matches.
+const V1_INDEX_PERMUTATION: Record<number, number> = {
+  0: 0,
+  1: 2, 2: 1,
+  3: 5, 4: 4, 5: 3,
+  6: 9, 7: 8, 8: 7, 9: 6,
+  10: 14, 11: 13, 12: 12, 13: 11, 14: 10,
+};
+
+function migratePieceId(id: unknown): string {
+  if (typeof id !== 'string' || !id.startsWith('1-')) return id as string;
+  const parts = id.split('-');
+  const index = Number(parts[parts.length - 1]);
+  const permuted = V1_INDEX_PERMUTATION[index];
+  if (permuted !== undefined && Number.isInteger(index)) {
+    parts[parts.length - 1] = String(permuted);
+  }
+  parts[0] = '2';
+  return parts.join('-');
+}
+
+function migrateV1(record: any): SavedHexChessGame {
+  const oldConfig = record.config ?? {};
+  const oldPlayers: any[] = Array.isArray(oldConfig.players) ? oldConfig.players : [];
+  const oldAi = oldConfig.ai ?? null;
+
+  const config: HexChessConfig = {
+    id: oldConfig.id,
+    seats: [0, 2],
+    players: { 0: oldPlayers[0], 2: oldPlayers[1] },
+    layoutPreset: oldConfig.layoutPreset ?? 'v1-default',
+    soldierVariant: oldConfig.soldierVariant ?? 'soldier',
+    ai: oldAi === null ? null : {
+      ...(oldAi[0] !== undefined ? { 0: oldAi[0] } : {}),
+      ...(oldAi[1] !== undefined ? { 2: oldAi[1] } : {}),
+    },
+  };
+
+  const migrateMove = (m: any): HexMove => ({
+    ...m,
+    pieceId: migratePieceId(m.pieceId),
+    capture: m.capture ? { ...m.capture, pieceId: migratePieceId(m.capture.pieceId) } : null,
+    player: migrateSeat(m.player),
+  });
+
+  const oldState = record.state ?? {};
+  const state: HexChessState = {
+    ...oldState,
+    pieces: (oldState.pieces ?? []).map((p: any) => ({
+      ...p,
+      id: migratePieceId(p.id),
+      player: migrateSeat(p.player),
+    })),
+    currentPlayer: migrateSeat(oldState.currentPlayer),
+    activePlayers: [0, 2],
+    eliminated: [],
+    enPassantTarget: oldState.enPassantTarget
+      ? {
+          ...oldState.enPassantTarget,
+          capturedPieceId: migratePieceId(oldState.enPassantTarget.capturedPieceId),
+        }
+      : null,
+    pendingPromotion: oldState.pendingPromotion
+      ? {
+          ...oldState.pendingPromotion,
+          pieceId: migratePieceId(oldState.pendingPromotion.pieceId),
+        }
+      : null,
+    moveHistory: (oldState.moveHistory ?? []).map(migrateMove),
+    result: oldState.result && oldState.result.winner !== 'draw'
+      ? { ...oldState.result, winner: migrateSeat(oldState.result.winner) }
+      : oldState.result ?? null,
+  };
+
+  return {
+    schemaVersion: 2,
+    mode: 'hexchess',
+    id: record.id,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    config,
+    state,
+    moveHistory: state.moveHistory,
+    result: state.result,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export interface HexChessSavedGameSummary {
   id: string;
@@ -116,7 +224,7 @@ export function saveHexChessGame(config: HexChessConfig, state: HexChessState): 
   }
 
   const record: SavedHexChessGame = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     mode: 'hexchess',
     id,
     createdAt,
@@ -140,11 +248,10 @@ export function saveHexChessGame(config: HexChessConfig, state: HexChessState): 
     mode: 'hexchess',
     createdAt,
     updatedAt: now,
-    players: config.players.map(p => ({
-      color: p.color,
-      name: p.name,
-      isAI: p.isAI,
-    })),
+    players: config.seats.map(s => {
+      const p = config.players[s]!;
+      return { color: p.color, name: p.name, isAI: p.isAI };
+    }),
     result: buildResultSummary(record.result, config),
   };
 
@@ -179,6 +286,9 @@ export function loadHexChessGame(id: string): SavedHexChessGame | null {
     const parsed = JSON.parse(raw) as SavedHexChessGame;
     // Basic sanity check
     if (parsed.mode !== 'hexchess' || !parsed.id) return null;
+    if ((parsed as { schemaVersion: number }).schemaVersion !== 2) {
+      return migrateV1(parsed);
+    }
     return parsed;
   } catch {
     return null;

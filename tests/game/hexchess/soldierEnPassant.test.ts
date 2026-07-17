@@ -13,6 +13,8 @@ function stateWith(pieces: HexPiece[], overrides?: Partial<HexChessState>): HexC
     pieces,
     currentPlayer: 0,
     turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],
@@ -97,9 +99,9 @@ describe('soldier en passant', () => {
     // passedCell1 = soldierAStart + e1
     const passedCell1 = cubeAdd(soldierAStart, e1);
 
-    // Player 1 soldier B captures along forwardEdges(1). Position B so that
+    // Player 1 soldier B captures along forwardEdges(2). Position B so that
     // B.cell + e1p1 = passedCell1, i.e. B.cell = passedCell1 - e1p1.
-    const [e1p1] = forwardEdges(1);
+    const [e1p1] = forwardEdges(2);
     const soldierBCell = {
       q: passedCell1.q - e1p1.q,
       r: passedCell1.r - e1p1.r,
@@ -115,14 +117,14 @@ describe('soldier en passant', () => {
     };
     const soldierB: HexPiece = {
       id: 'SB',
-      player: 1,
+      player: 2,
       type: 'soldier',
       cell: soldierBCell,
       hasMoved: true,
     };
 
     const st = stateWith([soldierA, soldierB], {
-      currentPlayer: 1,
+      currentPlayer: 2,
       turnNumber: 2,
       enPassantTarget: {
         capturedPieceId: 'SA',
@@ -156,7 +158,7 @@ describe('soldier en passant', () => {
 
     // Position B so its forward DIAGONAL (movement, not capture) lands on passedCell1,
     // and neither of its forward edges does.
-    const diag1 = forwardDiagonal(1);
+    const diag1 = forwardDiagonal(2);
     const soldierBCell = {
       q: passedCell1.q - diag1.q,
       r: passedCell1.r - diag1.r,
@@ -172,14 +174,14 @@ describe('soldier en passant', () => {
     };
     const soldierB: HexPiece = {
       id: 'SB',
-      player: 1,
+      player: 2,
       type: 'soldier',
       cell: soldierBCell,
       hasMoved: true,
     };
 
     const st = stateWith([soldierA, soldierB], {
-      currentPlayer: 1,
+      currentPlayer: 2,
       turnNumber: 2,
       enPassantTarget: {
         capturedPieceId: 'SA',
@@ -204,7 +206,7 @@ describe('soldier en passant', () => {
     const soldierADest = cubeAdd(soldierAStart, diag0);
     const passedCell1 = cubeAdd(soldierAStart, e1);
 
-    const [e1p1] = forwardEdges(1);
+    const [e1p1] = forwardEdges(2);
     const soldierBCell = {
       q: passedCell1.q - e1p1.q,
       r: passedCell1.r - e1p1.r,
@@ -220,7 +222,7 @@ describe('soldier en passant', () => {
     };
     const soldierB: HexPiece = {
       id: 'SB',
-      player: 1,
+      player: 2,
       type: 'soldier',
       cell: soldierBCell,
       hasMoved: true,
@@ -228,14 +230,14 @@ describe('soldier en passant', () => {
     // Friendly piece of B's own side already sits on the passed-through cell.
     const blocker: HexPiece = {
       id: 'BLK',
-      player: 1,
+      player: 2,
       type: 'rook',
       cell: passedCell1,
       hasMoved: true,
     };
 
     const st = stateWith([soldierA, soldierB, blocker], {
-      currentPlayer: 1,
+      currentPlayer: 2,
       turnNumber: 2,
       enPassantTarget: {
         capturedPieceId: 'SA',
@@ -282,7 +284,7 @@ describe('soldier en passant', () => {
       id: 'WS', player: 0, type: 'soldier', cell: from!, hasMoved: true,
     };
     const blackPeon: HexPiece = {
-      id: 'BS', player: 1, type: 'soldier', cell: brushedCell, hasMoved: true,
+      id: 'BS', player: 2, type: 'soldier', cell: brushedCell, hasMoved: true,
     };
 
     const st = stateWith([whiteSoldier, blackPeon], { currentPlayer: 0, turnNumber: 5 });
@@ -297,7 +299,7 @@ describe('soldier en passant', () => {
     next = confirmPromotion(next, 'queen');
 
     // It is now black's turn; the promoted queen is still EP-capturable.
-    expect(next.currentPlayer).toBe(1);
+    expect(next.currentPlayer).toBe(2);
     const moves = soldierMoves(next, next.pieces.find(p => p.id === 'BS')!);
     const epMoves = moves.filter(m => m.isEnPassant);
     expect(epMoves).toHaveLength(1);
@@ -308,7 +310,7 @@ describe('soldier en passant', () => {
     const epMove: HexMove = {
       pieceId: 'BS', from: brushedCell, to: from!,
       capture: { pieceId: 'WS', cell: dest! }, promotion: null,
-      isEnPassant: true, isDoubleStep: false, player: 1, turnNumber: next.turnNumber,
+      isEnPassant: true, isDoubleStep: false, player: 2, turnNumber: next.turnNumber,
     };
     const after = applyMoveCore(next, epMove);
     expect(after.pieces.find(p => p.id === 'WS')).toBeUndefined();
@@ -337,14 +339,14 @@ describe('soldier en passant', () => {
     };
     const soldierB: HexPiece = {
       id: 'SB',
-      player: 1,
+      player: 2,
       type: 'soldier',
       cell: cubeCoord(4, -4), // far from the en passant zone
       hasMoved: true,
     };
 
     const st = stateWith([soldierA, soldierB], {
-      currentPlayer: 1,
+      currentPlayer: 2,
       turnNumber: 2,
       enPassantTarget: {
         capturedPieceId: 'SA',
@@ -363,7 +365,7 @@ describe('soldier en passant', () => {
   it('applying en passant move removes the captured soldier', () => {
     const [e1] = forwardEdges(0);
     const diag0 = forwardDiagonal(0);
-    const [e1p1] = forwardEdges(1);
+    const [e1p1] = forwardEdges(2);
 
     const soldierAStart = cubeCoord(2, -4);
     const soldierADest = cubeAdd(soldierAStart, diag0);
@@ -384,14 +386,14 @@ describe('soldier en passant', () => {
     };
     const soldierB: HexPiece = {
       id: 'SB',
-      player: 1,
+      player: 2,
       type: 'soldier',
       cell: soldierBCell,
       hasMoved: true,
     };
 
     const st = stateWith([soldierA, soldierB], {
-      currentPlayer: 1,
+      currentPlayer: 2,
       turnNumber: 2,
       enPassantTarget: {
         capturedPieceId: 'SA',
@@ -409,7 +411,7 @@ describe('soldier en passant', () => {
       promotion: null,
       isEnPassant: true,
       isDoubleStep: false,
-      player: 1,
+      player: 2,
       turnNumber: 2,
     };
 
@@ -436,14 +438,14 @@ describe('soldier en passant', () => {
 
     const rook: HexPiece = {
       id: 'R',
-      player: 1,
+      player: 2,
       type: 'rook',
       cell: rookCell,
       hasMoved: false,
     };
 
     const st = stateWith([rook], {
-      currentPlayer: 1,
+      currentPlayer: 2,
       turnNumber: 2,
       enPassantTarget: {
         capturedPieceId: 'SA',
@@ -461,7 +463,7 @@ describe('soldier en passant', () => {
       promotion: null,
       isEnPassant: false,
       isDoubleStep: false,
-      player: 1,
+      player: 2,
       turnNumber: 2,
     };
 

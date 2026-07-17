@@ -7,9 +7,11 @@ import { cubeCoord, coordKey } from '@/game/coordinates';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function stateWith(pieces: HexPiece[], currentPlayer: 0 | 1 = 0): HexChessState {
+function stateWith(pieces: HexPiece[], currentPlayer: 0 | 1 | 2 = 0): HexChessState {
   return {
     mode: 'hexchess', pieces, currentPlayer, turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null, pendingPromotion: null, moveHistory: [],
     positionHashes: {}, result: null,
   };
@@ -17,7 +19,7 @@ function stateWith(pieces: HexPiece[], currentPlayer: 0 | 1 = 0): HexChessState 
 
 function piece(
   id: string,
-  player: 0 | 1,
+  player: 0 | 1 | 2,
   type: HexPiece['type'],
   q: number,
   r: number,
@@ -27,10 +29,11 @@ function piece(
 
 const config: HexChessConfig = {
   id: 't',
-  players: [
-    { color: 'red', name: 'A', isAI: false },
-    { color: 'blue', name: 'B', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'A', isAI: false },
+    2: { color: 'blue', name: 'B', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -47,7 +50,7 @@ describe('filterLegal — pinned piece', () => {
     // but NOT to any off-pin-line cell.
     const king   = piece('k0', 0, 'king',  0, 0);
     const rook   = piece('r0', 0, 'rook',  2, 0);
-    const queen  = piece('q1', 1, 'queen', 4, 0);
+    const queen  = piece('q1', 2, 'queen', 4, 0);
 
     const state = stateWith([king, rook, queen]);
     const pseudos = pseudoMovesForPiece(state, rook);
@@ -78,7 +81,7 @@ describe('filterLegal — king cannot step into check', () => {
     // Edge direction (0,1): cell (0,1) is attacked by the enemy rook.
     // King's step to (0,1) must be illegal.
     const king   = piece('k0', 0, 'king', 0, 0);
-    const rook   = piece('r1', 1, 'rook', 0, 3);
+    const rook   = piece('r1', 2, 'rook', 0, 3);
     const state  = stateWith([king, rook]);
 
     const pseudos = pseudoMovesForPiece(state, king);
@@ -91,7 +94,7 @@ describe('filterLegal — king cannot step into check', () => {
 
   it('king can still step to non-attacked cells', () => {
     const king  = piece('k0', 0, 'king', 0, 0);
-    const rook  = piece('r1', 1, 'rook', 0, 5);
+    const rook  = piece('r1', 2, 'rook', 0, 5);
     const state = stateWith([king, rook]);
 
     const pseudos = pseudoMovesForPiece(state, king);
@@ -113,10 +116,10 @@ describe('legalMoves — in check, only escape moves are legal', () => {
     // White also has a bishop at (3,3) which CANNOT help (moving it doesn't address check).
     const king         = piece('k0', 0, 'king',   0,  0);
     const friendRook   = piece('fr', 0, 'rook',   2, -2);
-    const enemyRook    = piece('er', 1, 'rook',   4,  0);
+    const enemyRook    = piece('er', 2, 'rook',   4,  0);
     const friendBishop = piece('fb', 0, 'bishop', 3,  3);
     // Player 1 also needs a king (so no crash)
-    const enemyKing    = piece('ek', 1, 'king',  -4,  4);
+    const enemyKing    = piece('ek', 2, 'king',  -4,  4);
 
     const state = stateWith([king, friendRook, enemyRook, friendBishop, enemyKing]);
     const legal = legalMoves(state);
@@ -159,7 +162,7 @@ describe('legalMoves — smoke test on v1 starting position', () => {
   it('returns a non-empty move list for player 1 at start', () => {
     const s0 = createInitialState(config);
     // Flip currentPlayer to 1 for this check
-    const s1: HexChessState = { ...s0, currentPlayer: 1 };
+    const s1: HexChessState = { ...s0, currentPlayer: 2 };
     const moves = legalMoves(s1);
     expect(moves.length).toBeGreaterThan(0);
   });

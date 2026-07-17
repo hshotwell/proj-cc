@@ -11,6 +11,8 @@ function stateWith(pieces: HexPiece[], overrides?: Partial<HexChessState>): HexC
     pieces,
     currentPlayer: 0,
     turnNumber: 1,
+    activePlayers: [0, 2],
+    eliminated: [],
     enPassantTarget: null,
     pendingPromotion: null,
     moveHistory: [],
@@ -41,7 +43,7 @@ function buildMove(piece: HexPiece, to: HexPiece['cell']): HexMove {
 
 /** Returns the first cell in player 1's arm (the opponent arm for player 0). */
 function p1ArmCell(index: number): HexPiece['cell'] {
-  const cells = armCellsForPlayer(1);
+  const cells = armCellsForPlayer(2);
   return cells[index];
 }
 
@@ -74,7 +76,7 @@ describe('promotion — soldier', () => {
       cell: cubeCoord(4, -8), hasMoved: false,
     };
     const king1: HexPiece = {
-      id: 'k1', player: 1, type: 'king',
+      id: 'k1', player: 2, type: 'king',
       cell: cubeCoord(-4, 8), hasMoved: false,
     };
 
@@ -120,7 +122,7 @@ describe('promotion — pawn', () => {
       cell: cubeCoord(4, -8), hasMoved: false,
     };
     const king1: HexPiece = {
-      id: 'k1', player: 1, type: 'king',
+      id: 'k1', player: 2, type: 'king',
       cell: cubeCoord(-4, 8), hasMoved: false,
     };
 
@@ -153,7 +155,7 @@ describe('confirmPromotion', () => {
     const king0: HexPiece = {
       id: 'k0', player: 0, type: 'king', cell: cubeCoord(4, -8), hasMoved: false };
     const king1: HexPiece = {
-      id: 'k1', player: 1, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false };
+      id: 'k1', player: 2, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false };
 
     const st = stateWith([soldier, king0, king1]);
     const move = buildMove(soldier, targetCell);
@@ -172,7 +174,7 @@ describe('confirmPromotion', () => {
     expect(promotedPiece!.type).toBe('queen');
 
     // Turn advanced
-    expect(confirmed.currentPlayer).toBe(1);
+    expect(confirmed.currentPlayer).toBe(2);
     expect(confirmed.turnNumber).toBe(2);
 
     // pendingPromotion cleared
@@ -205,7 +207,7 @@ describe('confirmPromotion', () => {
     const king0: HexPiece = {
       id: 'k0', player: 0, type: 'king', cell: cubeCoord(4, -8), hasMoved: false };
     const king1: HexPiece = {
-      id: 'k1', player: 1, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false };
+      id: 'k1', player: 2, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false };
     const normalState = stateWith([king0, king1]);
     expect(() => confirmPromotion(normalState, 'queen')).toThrow();
   });
@@ -229,7 +231,7 @@ describe('confirmPromotion', () => {
     //   (-3,6): queen edge {0,-1} ray covers it
     //   → checkmate
 
-    const promotionTarget = armCellsForPlayer(1)[2]; // (-3, 7)
+    const promotionTarget = armCellsForPlayer(2)[1]; // (-3, 7)
 
     const soldier: HexPiece = {
       id: 's0',
@@ -242,7 +244,7 @@ describe('confirmPromotion', () => {
       id: 'k0', player: 0, type: 'king', cell: cubeCoord(4, -8), hasMoved: false,
     };
     const king1: HexPiece = {
-      id: 'k1', player: 1, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false,
+      id: 'k1', player: 2, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false,
     };
     // Rook at (-3,5): on q=-3 edge ray toward (-3,7), defends the queen after promotion.
     const rook0: HexPiece = {
@@ -270,7 +272,7 @@ describe('confirmPromotion', () => {
 describe('replay reconstruction with promotion', () => {
   it('reconstructing a moveHistory that includes a promotion yields the promoted piece type', () => {
     // Build a state with a soldier one step away from the promotion zone.
-    const targetCell = armCellsForPlayer(1)[9]; // last base-row cell of player 1's arm
+    const targetCell = armCellsForPlayer(2)[6]; // base-row cell (-1,5) of seat 2's arm
     const soldier: HexPiece = {
       id: 's0-soldier',
       player: 0,
@@ -282,7 +284,7 @@ describe('replay reconstruction with promotion', () => {
       id: 'k0', player: 0, type: 'king', cell: cubeCoord(4, -8), hasMoved: false,
     };
     const king1: HexPiece = {
-      id: 'k1', player: 1, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false,
+      id: 'k1', player: 2, type: 'king', cell: cubeCoord(-4, 8), hasMoved: false,
     };
 
     const initial = stateWith([soldier, king0, king1]);
@@ -316,6 +318,6 @@ describe('replay reconstruction with promotion', () => {
     // pendingPromotion cleared
     expect(finalState.pendingPromotion).toBeNull();
     // Turn advanced past player 0
-    expect(finalState.currentPlayer).toBe(1);
+    expect(finalState.currentPlayer).toBe(2);
   });
 });

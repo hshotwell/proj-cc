@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import type { CubeCoord, PlayerIndex } from '@/types/game';
-import type { HexChessConfig, HexChessState, HexMove, HexPiece, HexPieceType } from '@/game/hexchess';
+import type { HexChessConfig, HexChessState, HexMove, HexPiece, HexPieceType, HexPlayerIndex } from '@/game/hexchess';
 import {
   createInitialState,
   applyMove,
@@ -11,15 +11,20 @@ import {
   isInCheck,
   promotionCellsForPlayer,
 } from '@/game/hexchess';
+import { eliminatePlayer } from '@/game/hexchess/moves';
 import { cubeEquals, parseCoordKey, coordKey } from '@/game/coordinates';
 import { getDefaultBoardCells } from '@/game/defaultLayout';
+import { ROTATION_FOR_PLAYER } from '@/game/constants';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
-import { kingOf } from '@/game/hexchess/board';
+import { kingOf, isEliminated, livingPlayers, nextLivingPlayer } from '@/game/hexchess/board';
 import { saveHexChessGame, loadHexChessGame } from '@/game/hexchess/persistence';
 import { playStep, playCapture, playCheck, playCheckmate } from '@/audio/soundEffects';
 
 /** Duration (ms) the captured piece overlay persists for the fade-out animation. */
 const CAPTURE_ANIM_DURATION_MS = 400;
+
+/** Fixed dull grey for eliminated players' frozen armies. */
+export const ELIMINATED_GREY = '#8a8a8a';
 
 /** Captured piece kept alive in the store for the fade-out window. */
 export interface AnimatingCapture {
@@ -52,7 +57,7 @@ interface HexChessStoreState {
   selectPiece: (pieceId: string | null) => void;
   attemptMove: (targetCell: CubeCoord) => boolean;
   confirmPromotion: (choice: HexPieceType) => void;
-  resign: () => void;
+  resign: (seat?: HexPlayerIndex) => void;
   loadGame: (id: string, savedState: HexChessState, savedConfig: HexChessConfig) => void;
   clearGame: () => void;
   selectPreMovePiece: (pieceId: string | null) => void;
@@ -175,9 +180,16 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     } else {
       playStep();
     }
-    if (nextState.result?.reason === 'checkmate') {
+    const capturedAKing =
+      nextState.eliminated.length > state.eliminated.length;
+    if (nextState.result?.reason === 'checkmate' || capturedAKing) {
+      // Checkmate in 2p, or a king actually captured in multiplayer — the
+      // elimination fanfare.
       playCheckmate();
-    } else if (nextState.result === null && isInCheck(nextState, nextState.currentPlayer)) {
+    } else if (
+      nextState.result === null &&
+      livingPlayers(nextState).some(seat => isInCheck(nextState, seat))
+    ) {
       playCheck();
     }
     return true;
@@ -192,15 +204,21 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     if (config) saveHexChessGame(config, nextState);
   },
 
-  resign() {
+  resign(seat) {
     const { state, config } = get();
     if (!state || state.result !== null) return;
 
-    const winner: 0 | 1 = state.currentPlayer === 0 ? 1 : 0;
-    const nextState: HexChessState = {
-      ...state,
-      result: { winner, reason: 'resignation' },
-    };
+    const resigningSeat = seat ?? state.currentPlayer;
+    let nextState: HexChessState;
+    if (state.activePlayers.length === 2) {
+      // 2-player: resignation ends the game, opponent wins.
+      const winner = nextLivingPlayer(state, resigningSeat);
+      nextState = { ...state, result: { winner, reason: 'resignation' } };
+    } else {
+      // Multiplayer: the resigner is eliminated (army freezes grey) and the
+      // game continues; eliminatePlayer sets the result if one seat remains.
+      nextState = eliminatePlayer(state, resigningSeat);
+    }
     set({ state: nextState });
     if (config) saveHexChessGame(config, nextState);
   },
@@ -350,11 +368,16 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
   // distinct via their star shape.
   const homeZones = new Map<PlayerIndex, CubeCoord[]>();
 
+  // Eliminated players' frozen armies render in a fixed dull grey regardless
+  // of the seat's chosen color.
+  const colorForSeat = (seat: HexPlayerIndex): string =>
+    isEliminated(state, seat) ? ELIMINATED_GREY : config.players[seat]!.color;
+
   // Build pieces list from active pieces in state
   const pieces: BoardPiece[] = state.pieces.map(piece => ({
     id: piece.id,
     cell: piece.cell,
-    color: config.players[piece.player].color,
+    color: colorForSeat(piece.player),
     pieceType: piece.type,
     faded: false,
   }));
@@ -367,7 +390,7 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     pieces.push({
       id: cp.id,
       cell: cp.cell,
-      color: config.players[cp.player].color,
+      color: colorForSeat(cp.player),
       pieceType: cp.type,
       faded: true,
     });
@@ -404,11 +427,14 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     highlights.push({ kind: 'lastMoveTo', cell: lastMove.to });
   }
 
-  // Check highlight on king if current player is in check
-  if (isInCheck(state, state.currentPlayer)) {
-    const king = kingOf(state, state.currentPlayer);
-    if (king) {
-      highlights.push({ kind: 'check', cell: king.cell });
+  // Check highlight on every living king currently attacked (with 3+ players
+  // several kings can be in check at once).
+  for (const seat of livingPlayers(state)) {
+    if (isInCheck(state, seat)) {
+      const king = kingOf(state, seat);
+      if (king) {
+        highlights.push({ kind: 'check', cell: king.cell });
+      }
     }
   }
 
@@ -430,21 +456,20 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     }
   }
 
-  // Hex chess rotation. Player 0's arm is at the top (straight up in pixel
-  // coords), so 180° brings it to the bottom. Player 1's arm is at the bottom
-  // naturally (0°). Pick the initial rotation to face the first human seat.
-  const rotationForPlayer = (p: 0 | 1): number => (p === 0 ? 180 : 0);
-  const p0Human = !config.ai || !config.ai[0];
-  const p1Human = !config.ai || !config.ai[1];
-  const initialFocusPlayer: 0 | 1 = p0Human ? 0 : (p1Human ? 1 : 0);
-  const activeRotation = rotationForPlayer(state.currentPlayer);
-  const initialRotation = rotationForPlayer(initialFocusPlayer);
+  // Hex chess rotation. Seat indices equal CC home triangles, so the shared
+  // ROTATION_FOR_PLAYER map brings any seat's arm to the bottom. Pick the
+  // initial rotation to face the first human seat.
+  const rotationForSeat = (p: HexPlayerIndex): number => ROTATION_FOR_PLAYER[p as PlayerIndex];
+  const firstHumanSeat = config.seats.find(s => !config.ai || !config.ai[s]);
+  const initialFocusPlayer: HexPlayerIndex = firstHumanSeat ?? config.seats[0];
+  const activeRotation = rotationForSeat(state.currentPlayer);
+  const initialRotation = rotationForSeat(initialFocusPlayer);
 
   // Expose the currently-fading captured piece as a burst signal for particles.
   const captureBurst = animatingCapture
     ? {
         cell: animatingCapture.piece.cell,
-        color: config.players[animatingCapture.piece.player].color,
+        color: colorForSeat(animatingCapture.piece.player),
         // key is stable per capture (piece id + timestamp) so Board can dedupe
         key: `${animatingCapture.piece.id}-${animatingCapture.startedAt}`,
       }
@@ -458,12 +483,14 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     animatingMove: null,
     rotation: 0,
     activePlayerIndex: state.currentPlayer as PlayerIndex,
-    activePlayerColor: config.players[state.currentPlayer].color,
+    activePlayerColor: config.players[state.currentPlayer]?.color,
     activePlayerIsAI: !!(config.ai && config.ai[state.currentPlayer]),
     initialRotation,
     activeRotation,
     captureBurst,
-    playerColors: { 0: config.players[0].color, 1: config.players[1].color },
+    playerColors: Object.fromEntries(
+      config.seats.map(s => [s, colorForSeat(s)])
+    ) as Record<number, string>,
     gameId: config.id,
   };
 }

@@ -1,8 +1,9 @@
 import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
 import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
-import { isOnBoard, pieceAt, kingOf, otherPlayer } from './board';
+import { isOnBoard, pieceAt, kingOf, isEliminated } from './board';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
+import { rulesModeOf } from './state';
 import { applyMoveCore, pseudoMovesForPiece } from './moves';
 import { hashState } from './zobrist';
 
@@ -90,20 +91,45 @@ export function isCellAttacked(
 }
 
 /**
- * Returns true if `player`'s king is currently attacked by the other player.
- * Returns false if the king cannot be found (invalid/in-progress state).
+ * Returns true if `cell` is attacked by any LIVING enemy of `ofPlayer`.
+ * Eliminated players' frozen pieces give no threats.
+ */
+export function isCellAttackedByEnemies(
+  state: HexChessState,
+  cell: CubeCoord,
+  ofPlayer: HexPlayerIndex,
+): boolean {
+  const cellKey = coordKey(cell);
+  for (const piece of state.pieces) {
+    if (piece.player === ofPlayer) continue;
+    if (isEliminated(state, piece.player)) continue;
+    const attacked = attackCellsForPiece(state, piece);
+    if (attacked.some(c => coordKey(c) === cellKey)) return true;
+  }
+  return false;
+}
+
+/**
+ * Returns true if `player`'s king is currently attacked by any living enemy.
+ * Returns false if the king cannot be found (invalid/in-progress state) or
+ * the player is already eliminated.
  */
 export function isInCheck(state: HexChessState, player: HexPlayerIndex): boolean {
+  if (isEliminated(state, player)) return false;
   const king = kingOf(state, player);
   if (!king) return false;
-  return isCellAttacked(state, king.cell, otherPlayer(player));
+  return isCellAttackedByEnemies(state, king.cell, player);
 }
 
 /**
  * Filters `pseudos` to only those moves that do NOT leave `state.currentPlayer`'s
  * king in check after the move is applied.
+ *
+ * King-capture mode (3+ players): check is advisory only — every pseudo-legal
+ * move is legal, including moving into or ignoring check.
  */
 export function filterLegal(state: HexChessState, pseudos: HexMove[]): HexMove[] {
+  if (rulesModeOf(state) === 'king-capture') return pseudos;
   const mover = state.currentPlayer;
   return pseudos.filter(move => {
     // Use applyMoveCore (no result detection) to avoid infinite recursion:
@@ -175,9 +201,11 @@ function hexColor(q: number, r: number): number {
  *   - K+B vs K+B where both bishops occupy cells of the same hex color
  */
 export function isInsufficientMaterial(state: HexChessState): boolean {
+  // 2-player (checkmate mode) only — multiplayer never calls this.
+  const [seatA, seatB] = state.activePlayers;
   // Partition pieces by player, ignoring kings
-  const extras0 = state.pieces.filter(p => p.player === 0 && p.type !== 'king');
-  const extras1 = state.pieces.filter(p => p.player === 1 && p.type !== 'king');
+  const extras0 = state.pieces.filter(p => p.player === seatA && p.type !== 'king');
+  const extras1 = state.pieces.filter(p => p.player === seatB && p.type !== 'king');
 
   // Mating material check: only pieces that cannot force mate are bishop/knight
   const isMatingType = (type: HexPiece['type']): boolean =>

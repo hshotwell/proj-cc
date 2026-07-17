@@ -5,10 +5,11 @@ import type { HexChessConfig, HexChessState, HexPiece } from '@/game/hexchess/st
 
 const config: HexChessConfig = {
   id: 'test',
-  players: [
-    { color: 'red', name: 'P1', isAI: false },
-    { color: 'blue', name: 'P2', isAI: false },
-  ],
+  seats: [0, 2],
+  players: {
+    0: { color: 'red', name: 'P1', isAI: false },
+    2: { color: 'blue', name: 'P2', isAI: false },
+  },
   layoutPreset: 'v1-default',
   soldierVariant: 'soldier',
   ai: null,
@@ -46,9 +47,9 @@ describe('searchBestMove', () => {
       // Player 0 rook at center
       { id: '0-rook', player: 0, type: 'rook', cell: { q: 0, r: 0, s: 0 }, hasMoved: true },
       // Player 1 king — safe at north apex
-      { id: '1-king', player: 1, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
+      { id: '1-king', player: 2, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
       // Player 1 queen — hanging next to player 0 rook (edge neighbor)
-      { id: '1-queen', player: 1, type: 'queen', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
+      { id: '1-queen', player: 2, type: 'queen', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
     ];
 
     const state: HexChessState = {
