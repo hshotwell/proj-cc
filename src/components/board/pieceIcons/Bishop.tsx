@@ -4,11 +4,12 @@ import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } 
 // Bishop: mitre-shaped top with a slit, tapered body, small collar, wide base.
 // Detailed mode: smooth onion-dome mitre with carved slit, ball finial, collar
 // ring, flaring body, torus base roll, flared plinth, cylindrical shading.
-export function BishopIcon({ size, fill, className, detailed }: PieceIconProps){
+export function BishopIcon({ size, fill, className, detailed, outlined }: PieceIconProps){
   const gid = svgIdFor('bp', fill);
   if (!detailed) {
     return (
       <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
+        <g stroke={outlined ? outlineFor(fill) : undefined} strokeWidth={outlined ? 0.6 : undefined} strokeLinejoin="round">
         <path
           fill={fill}
           d={[
@@ -24,6 +25,7 @@ export function BishopIcon({ size, fill, className, detailed }: PieceIconProps){
             'M -6 7 L -6 9 L 6 9 L 6 7 Z',
           ].join(' ')}
         />
+      </g>
       </svg>
     );
   }

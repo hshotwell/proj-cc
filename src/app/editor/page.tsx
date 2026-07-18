@@ -16,6 +16,7 @@ import { SettingsButton } from '@/components/SettingsButton';
 import { BoardCell } from '@/components/board/BoardCell';
 import { Piece } from '@/components/board/Piece';
 import { hexChessTileColor } from '@/components/board/hexChessTiles';
+import { HexPieceGrid, HEX_PIECE_ICONS } from '@/components/editor/HexPieceGrid';
 import { playStep, playJump } from '@/audio/soundEffects';
 import type { HexLayoutPieceType, HexPromotionOption } from '@/game/hexchess';
 
@@ -1240,6 +1241,26 @@ export default function EditorPage() {
                       variant={pieceSpecialties.get(coordKey(cubeCoord(q, r))) ?? 'normal'}
                     />
                   )}
+                  {editorGameMode === 'hexchess' && hexPieces.has(key) && (() => {
+                    const pc = hexPieces.get(key)!;
+                    const color = armyColors[pc.player] ?? PLAYER_COLORS[pc.player];
+                    const Icon = HEX_PIECE_ICONS[pc.type];
+                    const glyphSize = HEX_SIZE * 1.5;
+                    return (
+                      // Counter-rotate so glyphs stay upright on rotated30 boards
+                      <g transform={rotated30 ? `rotate(-30 ${x} ${y})` : undefined} style={{ pointerEvents: 'none' }}>
+                        <svg
+                          x={x - glyphSize / 2}
+                          y={y - glyphSize / 2}
+                          width={glyphSize}
+                          height={glyphSize}
+                          style={{ overflow: 'visible' }}
+                        >
+                          <Icon size={glyphSize} fill={color} outlined />
+                        </svg>
+                      </g>
+                    );
+                  })()}
                 </g>
               );
             })}
@@ -1655,6 +1676,29 @@ export default function EditorPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Hex chess pieces tab: 9-color piece grid */}
+              {editorGameMode === 'hexchess' && hexMode === 'pieces' && (
+                <div className="flex flex-col gap-2">
+                  <HexPieceGrid
+                    colors={EDITOR_ARMY_COLORS}
+                    brush={hexBrush}
+                    onSelect={setHexBrush}
+                    usedColors={new Set(Object.values(armyColors).filter((c): c is string => c !== undefined))}
+                    darkMode={darkMode}
+                  />
+                  <div className={`text-xs rounded p-2 ${dm('bg-gray-700/50 text-gray-400', 'bg-gray-50 text-gray-500')}`}>
+                    One click picks piece type and color together. Each color is an army — up to 6.
+                    Painting over a cell with any brush replaces its piece; clicking an occupied cell removes it.
+                  </div>
+                  <button
+                    onClick={() => setHexPieces(new Map())}
+                    className={`self-start px-3 py-1.5 text-xs rounded-lg ${dm('text-gray-200 bg-gray-700 hover:bg-gray-600', 'text-gray-700 bg-gray-100 hover:bg-gray-200')}`}
+                  >
+                    Clear Pieces
+                  </button>
                 </div>
               )}
 

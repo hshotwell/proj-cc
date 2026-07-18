@@ -27,11 +27,12 @@ const HEAD_PATH = [
   'Z',
 ].join(' ');
 
-export function KnightIcon({ size, fill, className, detailed }: PieceIconProps) {
+export function KnightIcon({ size, fill, className, detailed, outlined }: PieceIconProps) {
   const gid = svgIdFor('kn', fill);
   if (!detailed) {
     return (
       <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
+        <g stroke={outlined ? outlineFor(fill) : undefined} strokeWidth={outlined ? 0.6 : undefined} strokeLinejoin="round">
         <path
           fill={fill}
           d={[
@@ -42,6 +43,7 @@ export function KnightIcon({ size, fill, className, detailed }: PieceIconProps) 
         />
         {/* Eye (small dark spot for character) */}
         <circle cx="-4.5" cy="-3.6" r="0.55" fill="rgba(0,0,0,0.55)" />
+      </g>
       </svg>
     );
   }

@@ -6,11 +6,12 @@ import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } 
 // simpler top and slightly beefier body.
 // Detailed mode: smooth waisted body, collar roll, torus base roll, flared
 // plinth, cylindrical shading.
-export function PeonIcon({ size, fill, className, detailed }: PieceIconProps) {
+export function PeonIcon({ size, fill, className, detailed, outlined }: PieceIconProps) {
   const gid = svgIdFor('pe', fill);
   if (!detailed) {
     return (
       <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
+        <g stroke={outlined ? outlineFor(fill) : undefined} strokeWidth={outlined ? 0.6 : undefined} strokeLinejoin="round">
         <path
           fill={fill}
           d={[
@@ -24,6 +25,7 @@ export function PeonIcon({ size, fill, className, detailed }: PieceIconProps) {
             'M -5.5 4 L -5.5 7.5 L 5.5 7.5 L 5.5 4 Z',
           ].join(' ')}
         />
+      </g>
       </svg>
     );
   }

@@ -4,11 +4,12 @@ import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } 
 // King: small cross on top, wide crown base with 3 points, tapered body, flat base.
 // Detailed mode: smooth-curved crown with pearl tips, waisted body, torus base
 // roll, flared plinth, cylindrical shading.
-export function KingIcon({ size, fill, className, detailed }: PieceIconProps){
+export function KingIcon({ size, fill, className, detailed, outlined }: PieceIconProps){
   const gid = svgIdFor('kg', fill);
   if (!detailed) {
     return (
       <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
+        <g stroke={outlined ? outlineFor(fill) : undefined} strokeWidth={outlined ? 0.6 : undefined} strokeLinejoin="round">
         <path
           fill={fill}
           d={[
@@ -22,6 +23,7 @@ export function KingIcon({ size, fill, className, detailed }: PieceIconProps){
             'M -6 5 L -6 8 L 6 8 L 6 5 Z',
           ].join(' ')}
         />
+      </g>
       </svg>
     );
   }

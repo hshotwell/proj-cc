@@ -4,11 +4,12 @@ import { type PieceIconProps, TurnedGradient, outlineFor, detailFor, svgIdFor } 
 // Rook: castle turret with 3 crenellations, straight body, wide base.
 // Detailed mode: rounded merlons, cornice band, brickwork lines, torus base
 // roll, flared plinth, cylindrical shading.
-export function RookIcon({ size, fill, className, detailed }: PieceIconProps){
+export function RookIcon({ size, fill, className, detailed, outlined }: PieceIconProps){
   const gid = svgIdFor('rk', fill);
   if (!detailed) {
     return (
       <svg width={size} height={size} viewBox="-10 -10 20 20" className={className}>
+        <g stroke={outlined ? outlineFor(fill) : undefined} strokeWidth={outlined ? 0.6 : undefined} strokeLinejoin="round">
         <path
           fill={fill}
           d={[
@@ -23,6 +24,7 @@ export function RookIcon({ size, fill, className, detailed }: PieceIconProps){
             'M -7 5 L -7 9 L 7 9 L 7 5 Z',
           ].join(' ')}
         />
+      </g>
       </svg>
     );
   }
