@@ -1,13 +1,12 @@
 import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
-import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
+import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS } from './directions';
 import { pieceAt, isEliminated, livingPlayers, nextLivingPlayer } from './board';
 import { geometryOf, isOpenCell } from './geometry';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex, HexPieceType } from './state';
 import { rulesModeOf } from './state';
 import { isCheckmate, isStalemate, isThreefoldRepetition, isInsufficientMaterial } from './check';
 import { hashState } from './zobrist';
-import { promotionCellsForPlayer } from './starting';
 
 export function slidingMoves(
   state: HexChessState,
@@ -79,13 +78,14 @@ export interface SoldierPseudoMove {
 
 export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseudoMove[] {
   const geom = geometryOf(state);
+  const fwd = geom.forward[piece.player];
+  if (!fwd) return [];
   const out: SoldierPseudoMove[] = [];
-  const diag = forwardDiagonal(piece.player);
-  const forwardDiagCell = cubeAdd(piece.cell, diag);
+  const forwardDiagCell = cubeAdd(piece.cell, fwd.dir);
   if (isOpenCell(geom, forwardDiagCell) && pieceAt(state, forwardDiagCell) === null) {
     out.push({ to: forwardDiagCell, isCapture: false });
   }
-  for (const e of forwardEdges(piece.player)) {
+  for (const e of fwd.captureDirs) {
     const cell = cubeAdd(piece.cell, e);
     if (!isOpenCell(geom, cell)) continue;
     const occ = pieceAt(state, cell);
@@ -104,7 +104,7 @@ export function soldierMoves(state: HexChessState, piece: HexPiece): SoldierPseu
     // to a queen/rook/bishop/knight can still be captured en passant if the
     // enemy soldier had already committed to the double-step response.
     if (capturedPiece && capturedPiece.player !== piece.player) {
-      for (const e of forwardEdges(piece.player)) {
+      for (const e of fwd.captureDirs) {
         const edgeCell = cubeAdd(piece.cell, e);
         if (!isOpenCell(geom, edgeCell)) continue;
         // The EP landing cell must be empty — the passed-through cells of a
@@ -135,57 +135,50 @@ export interface PawnPseudoMove {
   epCapturedCell?: CubeCoord;
 }
 
-export interface PawnMovesOptions {
-  pawnStartingCells?: Set<string>;
-}
-
-export function pawnMoves(
-  state: HexChessState,
-  piece: HexPiece,
-  options?: PawnMovesOptions,
-): PawnPseudoMove[] {
+export function pawnMoves(state: HexChessState, piece: HexPiece): PawnPseudoMove[] {
   const geom = geometryOf(state);
-  const startingCells = options?.pawnStartingCells ?? new Set<string>();
-  const onStart = startingCells.has(coordKey(piece.cell));
+  const fwd = geom.forward[piece.player];
+  if (!fwd) return [];
+  const onStart = geom.pawnStartCells[piece.player]?.has(coordKey(piece.cell)) ?? false;
   const out: PawnPseudoMove[] = [];
-  // Move: forward edges (2), only if empty. If on starting cell and next-next also empty, add double-step.
-  for (const e of forwardEdges(piece.player)) {
-    const cell1 = cubeAdd(piece.cell, e);
-    if (!isOpenCell(geom, cell1)) continue;
-    if (pieceAt(state, cell1) !== null) continue;
-    out.push({ to: cell1, isCapture: false });
+  // Move: 1 step along the forward direction; double-step from a start cell.
+  const c1 = cubeAdd(piece.cell, fwd.dir);
+  if (isOpenCell(geom, c1) && pieceAt(state, c1) === null) {
+    out.push({ to: c1, isCapture: false });
     if (onStart) {
-      const cell2 = cubeAdd(cell1, e);
-      if (isOpenCell(geom, cell2) && pieceAt(state, cell2) === null) {
-        out.push({ to: cell2, isCapture: false, isDoubleStep: true });
+      const c2 = cubeAdd(c1, fwd.dir);
+      if (isOpenCell(geom, c2) && pieceAt(state, c2) === null) {
+        out.push({ to: c2, isCapture: false, isDoubleStep: true });
       }
     }
   }
-  // Capture: forward diagonal (1), only if enemy
-  const diagCell = cubeAdd(piece.cell, forwardDiagonal(piece.player));
-  if (isOpenCell(geom, diagCell)) {
-    const occ = pieceAt(state, diagCell);
-    if (occ && occ.player !== piece.player) out.push({ to: diagCell, isCapture: true });
+  // Capture: the two adjacent flanking cells only.
+  for (const d of fwd.captureDirs) {
+    const cell = cubeAdd(piece.cell, d);
+    if (!isOpenCell(geom, cell)) continue;
+    const occ = pieceAt(state, cell);
+    if (occ && occ.player !== piece.player) out.push({ to: cell, isCapture: true });
   }
-  // En passant capture: if the diagonal cell is an enPassantTarget AND empty,
-  // add an en passant move. A soldier-created target cell can hold a piece
-  // (the soldier passes between its two target cells); landing there would
-  // stack two pieces on one cell. An enemy occupant is handled by the normal
-  // diagonal capture above.
+  // En passant: a flanking cell that is empty AND an active EP target.
   const ep = state.enPassantTarget;
-  if (ep && ep.availableUntilTurn === state.turnNumber && isOpenCell(geom, diagCell) && pieceAt(state, diagCell) === null) {
-    for (const targetCell of ep.targetCells) {
-      if (diagCell.q === targetCell.q && diagCell.r === targetCell.r) {
-        // No type check — a pawn that has since promoted is still an eligible
-        // en passant target (its identity, not its current type, is what matters).
-        const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
-        if (capturedPiece && capturedPiece.player !== piece.player) {
-          out.push({
-            to: diagCell,
-            isCapture: true,
-            isEnPassant: true,
-            epCapturedCell: capturedPiece.cell,
-          });
+  if (ep && ep.availableUntilTurn === state.turnNumber) {
+    // No type check — a pawn that has since promoted is still an eligible
+    // en passant target (its identity, not its current type, is what matters).
+    const capturedPiece = state.pieces.find(p => p.id === ep.capturedPieceId);
+    if (capturedPiece && capturedPiece.player !== piece.player) {
+      for (const d of fwd.captureDirs) {
+        const cell = cubeAdd(piece.cell, d);
+        if (!isOpenCell(geom, cell)) continue;
+        if (pieceAt(state, cell) !== null) continue;
+        for (const targetCell of ep.targetCells) {
+          if (cell.q === targetCell.q && cell.r === targetCell.r) {
+            out.push({
+              to: cell,
+              isCapture: true,
+              isEnPassant: true,
+              epCapturedCell: capturedPiece.cell,
+            });
+          }
         }
       }
     }
@@ -207,18 +200,19 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
   // Shared reference: the piece that is moving (pre-move state).
   const movingPiece = state.pieces.find(p => p.id === move.pieceId);
 
-  // Detect promotion: soldier or pawn arriving on the opposing arm.
+  // Detect promotion: soldier or pawn arriving on a promotion cell.
+  const geom = geometryOf(state);
   const isPromotingType =
     movingPiece?.type === 'soldier' || movingPiece?.type === 'pawn';
   const isPromotionCell =
     isPromotingType &&
     movingPiece !== undefined &&
-    promotionCellsForPlayer(movingPiece.player).has(coordKey(move.to));
-  const pendingPromotion = isPromotionCell && movingPiece !== undefined
+    (geom.promotionCells[movingPiece.player]?.has(coordKey(move.to)) ?? false);
+  const pendingPromotion = isPromotionCell && movingPiece !== undefined && geom.promotionOptions.length > 0
     ? {
         pieceId: move.pieceId,
         targetCell: move.to,
-        options: ['queen', 'rook', 'bishop', 'knight'] as HexPieceType[],
+        options: [...geom.promotionOptions] as HexPieceType[],
       }
     : null;
 
@@ -245,14 +239,17 @@ export function applyMoveCore(state: HexChessState, move: HexMove): HexChessStat
     // The vacated departure cell is also a target: the only enemy peons whose
     // capture reaches it are the ones standing ON a passed-through cell — the
     // mover slid right past them, and they may take it on the cell it left.
-    const [e1, e2] = forwardEdges(movingPiece.player);
-    const passedCell1 = cubeAdd(move.from, e1);
-    const passedCell2 = cubeAdd(move.from, e2);
-    enPassantTarget = {
-      capturedPieceId: move.pieceId,
-      targetCells: [passedCell1, passedCell2, move.from],
-      availableUntilTurn: nextTurnNumber,
-    };
+    const fwd = geom.forward[movingPiece.player];
+    if (fwd) {
+      const [e1, e2] = fwd.captureDirs;
+      const passedCell1 = cubeAdd(move.from, e1);
+      const passedCell2 = cubeAdd(move.from, e2);
+      enPassantTarget = {
+        capturedPieceId: move.pieceId,
+        targetCells: [passedCell1, passedCell2, move.from],
+        availableUntilTurn: nextTurnNumber,
+      };
+    }
   }
 
   // Elimination (king-capture mode): capturing a king removes its owner from

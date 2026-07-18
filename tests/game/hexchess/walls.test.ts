@@ -78,8 +78,7 @@ describe('walls in hex chess', () => {
     expect(targets).not.toContain('5,0'); // radius-4 board; 5,0 is off-board (would be on the 121 star)
   });
 
-  // un-skipped in Task 3 (unified pawn/soldier rules read forward from geometry)
-  it.skip('pseudoMovesForPiece returns [] for a pawn-army with no derived forward', () => {
+  it('pseudoMovesForPiece returns [] for a pawn-army with no derived forward', () => {
     const soldier: HexPiece = { id: '0-soldier-0', player: 0, type: 'soldier', cell: cubeCoord(0, 0), hasMoved: false };
     const st = customState({ pieces: [soldier, king(0, -4, 0), king(2, 4, 0)] }); // no promotion tiles -> no forward
     expect(pseudoMovesForPiece(st, soldier)).toEqual([]);

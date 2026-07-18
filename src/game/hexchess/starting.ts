@@ -9,17 +9,6 @@ import type {
   HexPieceType,
 } from './state';
 
-/**
- * Returns the set of cells (as coordKey strings) where pawns start for the given player.
- *
- * v1 default layout has no pawns, so this returns an empty set.
- * TODO(future editor): read from layout config to detect pawn-starting cells dynamically,
- * e.g. by filtering createInitialState(config).pieces for type === 'pawn'.
- */
-export function pawnStartingCellsForPlayer(_player: HexPlayerIndex): Set<string> {
-  return new Set<string>();
-}
-
 // ---------------------------------------------------------------------------
 // Arm geometry
 //

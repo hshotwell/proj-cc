@@ -1,4 +1,4 @@
-export { createInitialState, armCellsForPlayer, pawnStartingCellsForPlayer, promotionCellsForPlayer } from './starting';
+export { createInitialState, armCellsForPlayer, promotionCellsForPlayer } from './starting';
 export { applyMove, applyMoveCore, pseudoMovesForPiece } from './moves';
 export { legalMoves, filterLegal, isInCheck, isCellAttacked, isCheckmate, isStalemate, isThreefoldRepetition, isInsufficientMaterial } from './check';
 export { confirmPromotion } from './promotion';

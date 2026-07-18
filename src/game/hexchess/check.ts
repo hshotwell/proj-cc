@@ -1,6 +1,6 @@
 import type { CubeCoord } from '@/types/game';
 import { cubeAdd, coordKey } from '@/game/coordinates';
-import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS, forwardDiagonal, forwardEdges } from './directions';
+import { EDGE_DIRECTIONS, DIAGONAL_DIRECTIONS, KNIGHT_LEAPS } from './directions';
 import { pieceAt, kingOf, isEliminated } from './board';
 import { geometryOf, isOpenCell } from './geometry';
 import type { HexChessState, HexMove, HexPiece, HexPlayerIndex } from './state';
@@ -64,14 +64,13 @@ function attackCellsForPiece(state: HexChessState, piece: HexPiece): CubeCoord[]
         .filter(open);
 
     case 'soldier':
-      // Soldier attacks its 2 forward-edge cells (NOT the forward-diagonal move cell)
-      return forwardEdges(piece.player)
-        .map(e => cubeAdd(piece.cell, e))
-        .filter(open);
-
-    case 'pawn':
-      // Pawn attacks its 1 forward-diagonal cell (NOT the forward-edge move cells)
-      return [cubeAdd(piece.cell, forwardDiagonal(piece.player))].filter(open);
+    case 'pawn': {
+      // Both capture (and therefore attack) exactly their two flanking
+      // capture-direction cells — never their forward move cell.
+      const fwd = geom.forward[piece.player];
+      if (!fwd) return [];
+      return fwd.captureDirs.map(e => cubeAdd(piece.cell, e)).filter(open);
+    }
   }
 }
 

@@ -9,7 +9,7 @@ import {
   legalMoves,
   confirmPromotion as applyConfirmPromotion,
   isInCheck,
-  promotionCellsForPlayer,
+  geometryOf,
 } from '@/game/hexchess';
 import { eliminatePlayer } from '@/game/hexchess/moves';
 import { cubeEquals, parseCoordKey, coordKey } from '@/game/coordinates';
@@ -287,7 +287,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     }
 
     const isPromotable = piece.type === 'soldier' || piece.type === 'pawn';
-    if (isPromotable && promotionCellsForPlayer(piece.player).has(coordKey(to))) {
+    if (isPromotable && (geometryOf(state).promotionCells[piece.player]?.has(coordKey(to)) ?? false)) {
       set({
         pendingPreMovePromotion: { pieceId: piece.id, to },
         preMoveSelectedPieceId: null,

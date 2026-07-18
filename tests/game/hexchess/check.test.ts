@@ -74,23 +74,24 @@ describe('isCellAttacked — soldier', () => {
   });
 });
 
-describe('isCellAttacked — pawn', () => {
-  it('attacks its 1 forward-diagonal cell only (player 0)', () => {
-    // Player 0 pawn at (0,0): forward diagonal = (-1,2), forward edges = (0,1) and (-1,1)
+describe('isCellAttacked — pawn (unified rule: attacks flanking capture cells)', () => {
+  it('attacks its 2 flanking capture cells, not its forward move cell (player 0)', () => {
+    // Player 0 (point-forward on the standard board): forward diagonal = (-1,2),
+    // capture cells = the flanking edges (0,1) and (-1,1).
     const p0 = piece('p', 0, 'pawn', 0, 0);
     const state = stateWith([p0]);
-    expect(isCellAttacked(state, cubeCoord(-1, 2), 0)).toBe(true);  // forward diagonal — attacked
-    expect(isCellAttacked(state, cubeCoord(0, 1), 0)).toBe(false);   // forward edges — NOT attacked
-    expect(isCellAttacked(state, cubeCoord(-1, 1), 0)).toBe(false);
+    expect(isCellAttacked(state, cubeCoord(-1, 2), 0)).toBe(false); // move cell — NOT attacked
+    expect(isCellAttacked(state, cubeCoord(0, 1), 0)).toBe(true);   // capture cells — attacked
+    expect(isCellAttacked(state, cubeCoord(-1, 1), 0)).toBe(true);
   });
 
-  it('attacks its forward-diagonal even when that cell is empty', () => {
+  it('attacks its capture cells even when they are empty (player 2)', () => {
     const p1 = piece('p', 2, 'pawn', 0, 0);
     const state = stateWith([p1]);
-    // Player 1 forward diagonal = (1,-2)
-    expect(isCellAttacked(state, cubeCoord(1, -2), 2)).toBe(true);
-    expect(isCellAttacked(state, cubeCoord(0, -1), 2)).toBe(false);
-    expect(isCellAttacked(state, cubeCoord(1, -1), 2)).toBe(false);
+    // Player 2 forward diagonal = (1,-2); capture cells = (0,-1) and (1,-1)
+    expect(isCellAttacked(state, cubeCoord(1, -2), 2)).toBe(false);
+    expect(isCellAttacked(state, cubeCoord(0, -1), 2)).toBe(true);
+    expect(isCellAttacked(state, cubeCoord(1, -1), 2)).toBe(true);
   });
 });
 
