@@ -7,6 +7,7 @@ export interface LayoutValidationResult {
 }
 
 export function validateLayout(layout: BoardLayout): LayoutValidationResult {
+  if (layout.gameMode === 'hexchess') return validateHexChessLayout(layout);
   const errors: string[] = [];
   const wallSet = new Set(layout.walls ?? []);
 
@@ -54,6 +55,57 @@ export function validateLayout(layout: BoardLayout): LayoutValidationResult {
         );
       }
     }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+export function validateHexChessLayout(layout: BoardLayout): LayoutValidationResult {
+  const errors: string[] = [];
+  const cellSet = new Set(layout.cells);
+  const wallSet = new Set(layout.walls ?? []);
+  const live = (k: string) => cellSet.has(k) && !wallSet.has(k);
+  const pieces = layout.hexPieces ?? {};
+
+  const armies = new Map<PlayerIndex, { kings: number; pawns: number; total: number }>();
+  for (const [key, pc] of Object.entries(pieces)) {
+    if (!live(key)) errors.push(`A piece sits on a wall or missing cell (${key}).`);
+    const a = armies.get(pc.player) ?? { kings: 0, pawns: 0, total: 0 };
+    a.total += 1;
+    if (pc.type === 'king') a.kings += 1;
+    if (pc.type === 'pawn') a.pawns += 1;
+    armies.set(pc.player, a);
+  }
+
+  if (armies.size < 2) {
+    errors.push('Hex chess needs at least 2 armies with pieces.');
+    return { valid: false, errors };
+  }
+
+  let anyPawns = false;
+  let armyNumber = 0;
+  for (const [player, a] of armies) {
+    armyNumber += 1;
+    const label = `Army ${armyNumber}`;
+    if (a.kings !== 1) errors.push(`${label} must have exactly one king (has ${a.kings}).`);
+    if (a.pawns > 0) {
+      anyPawns = true;
+      const promo = (layout.promotionPositions?.[player] ?? []).filter(live);
+      if (promo.length === 0) {
+        errors.push(`${label} has pawns but no promotion tiles — the pawns' forward direction is undefined.`);
+      }
+    }
+  }
+
+  for (const [player, tiles] of Object.entries(layout.promotionPositions ?? {})) {
+    for (const t of tiles ?? []) {
+      if (!live(t)) errors.push(`A promotion tile for player ${Number(player) + 1} is on a wall or missing cell (${t}).`);
+    }
+  }
+
+  const options = layout.promotionOptions ?? ['knight', 'bishop', 'rook', 'queen'];
+  if (anyPawns && options.length === 0) {
+    errors.push('At least one promote-to option must be enabled when the board has pawns.');
   }
 
   return { valid: errors.length === 0, errors };
