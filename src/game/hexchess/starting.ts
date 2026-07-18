@@ -1,6 +1,7 @@
 import type { CubeCoord } from '@/types/game';
-import { rotateCube } from '@/game/coordinates';
+import { rotateCube, parseCoordKey } from '@/game/coordinates';
 import { ROTATION_STEPS } from './directions';
+import { buildGeometry } from './geometry';
 import type {
   HexChessConfig,
   HexChessState,
@@ -122,6 +123,7 @@ const V1_LAYOUT: (HexPieceType | null)[] = [
 ];
 
 export function createInitialState(config: HexChessConfig): HexChessState {
+  if (config.layout) return createInitialStateFromLayout(config);
   const pieces: HexPiece[] = [];
 
   for (const seat of config.seats) {
@@ -152,5 +154,53 @@ export function createInitialState(config: HexChessConfig): HexChessState {
     moveHistory: [],
     positionHashes: {},
     result: null,
+  };
+}
+
+/**
+ * Builds the initial state for a custom board. Each layout 'pawn' becomes an
+ * engine `soldier` (point-forward army) or `pawn` (edge-forward army), so
+ * move generation keeps its type-based dispatch. Piece ids are deterministic
+ * — per-(seat, type) counters over lexicographically sorted cell keys — so
+ * replays reconstruct identically from the config.
+ */
+function createInitialStateFromLayout(config: HexChessConfig): HexChessState {
+  const snapshot = config.layout!;
+  const geom = buildGeometry(snapshot);
+  const seats = config.seats;
+  const seatSet = new Set(seats);
+  const entries = Object.entries(snapshot.pieces).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const counters = new Map<string, number>();
+  const pieces: HexPiece[] = [];
+  for (const [key, pc] of entries) {
+    if (!seatSet.has(pc.player)) continue;
+    const fwd = geom.forward[pc.player];
+    const engineType: HexPieceType = pc.type === 'pawn'
+      ? (fwd?.kind === 'edge' ? 'pawn' : 'soldier')
+      : pc.type;
+    const counterKey = `${pc.player}-${engineType}`;
+    const n = counters.get(counterKey) ?? 0;
+    counters.set(counterKey, n + 1);
+    pieces.push({
+      id: `${pc.player}-${engineType}-${n}`,
+      player: pc.player,
+      type: engineType,
+      cell: parseCoordKey(key),
+      hasMoved: false,
+    });
+  }
+  return {
+    mode: 'hexchess',
+    pieces,
+    currentPlayer: seats[0],
+    turnNumber: 1,
+    activePlayers: [...seats],
+    eliminated: [],
+    enPassantTarget: null,
+    pendingPromotion: null,
+    moveHistory: [],
+    positionHashes: {},
+    result: null,
+    layout: snapshot,
   };
 }
