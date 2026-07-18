@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { api } from '../../../../convex/_generated/api';
 import { AuthGuard } from '@/components/auth';
@@ -28,6 +28,7 @@ import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 import { saveCompletedGame } from '@/game/persistence';
 import type { PlayerIndex } from '@/types/game';
 import { playYourTurn, playGameOver } from '@/audio/soundEffects';
+import { OnlineHexChessContainer } from '@/components/hexchess/OnlineHexChessContainer';
 
 const RANK_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
 
@@ -353,10 +354,28 @@ function OnlineGameContent() {
   );
 }
 
+function OnlineGameRouter() {
+  const params = useParams();
+  const gameId = params.id as Id<"onlineGames">;
+  const onlineGame = useQuery(api.onlineGames.getLobby, { gameId });
+
+  if (!onlineGame) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+  if (((onlineGame as any).gameType ?? 'sternhalma') === 'hexchess') {
+    return <OnlineHexChessContainer gameId={gameId} />;
+  }
+  return <OnlineGameContent />;
+}
+
 export default function OnlineGamePage() {
   return (
     <AuthGuard>
-      <OnlineGameContent />
+      <OnlineGameRouter />
     </AuthGuard>
   );
 }

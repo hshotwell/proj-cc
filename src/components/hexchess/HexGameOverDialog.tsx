@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { HexChessState, HexChessConfig } from '@/game/hexchess';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
 
@@ -8,13 +9,16 @@ interface HexGameOverDialogProps {
   config: HexChessConfig;
   onNewGame: () => void;
   onHome: () => void;
+  onPlayAgain?: () => void;
+  replayHref?: string;
+  reviewHref?: string;
 }
 
 function reasonLabel(reason: string): string {
   return reason === 'king-capture' ? 'last player standing' : reason;
 }
 
-export function HexGameOverDialog({ state, config, onNewGame, onHome }: HexGameOverDialogProps) {
+export function HexGameOverDialog({ state, config, onNewGame, onHome, onPlayAgain, replayHref, reviewHref }: HexGameOverDialogProps) {
   if (!state.result) return null;
 
   const { winner, reason } = state.result;
@@ -62,7 +66,7 @@ export function HexGameOverDialog({ state, config, onNewGame, onHome }: HexGameO
             })}
           </ol>
         )}
-        <div className="mt-3 flex gap-2 justify-end">
+        <div className="mt-3 flex flex-wrap gap-2 justify-end">
           <button
             type="button"
             className="px-3 py-1 text-sm rounded bg-gray-200 hover:bg-gray-300"
@@ -70,6 +74,31 @@ export function HexGameOverDialog({ state, config, onNewGame, onHome }: HexGameO
           >
             Home
           </button>
+          {replayHref && (
+            <Link
+              href={replayHref}
+              className="px-3 py-1 text-sm rounded bg-amber-500 text-white hover:bg-amber-400"
+            >
+              Replay
+            </Link>
+          )}
+          {reviewHref && (
+            <Link
+              href={reviewHref}
+              className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Review
+            </Link>
+          )}
+          {onPlayAgain && (
+            <button
+              type="button"
+              className="px-3 py-1 text-sm rounded bg-gray-900 text-white hover:bg-gray-800"
+              onClick={onPlayAgain}
+            >
+              Play Again
+            </button>
+          )}
           <button
             type="button"
             className="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"

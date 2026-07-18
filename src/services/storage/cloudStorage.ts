@@ -56,6 +56,16 @@ export const cloudLayoutStorage: LayoutStorageProvider = {
         goalPositions: layout.goalPositions,
         walls: layout.walls,
         isDefault: layout.isDefault ?? false,
+        ...(layout.gameMode !== undefined ? { gameMode: layout.gameMode } : {}),
+        ...(layout.hexPieces !== undefined ? { hexPieces: layout.hexPieces } : {}),
+        ...(layout.promotionPositions !== undefined ? { promotionPositions: layout.promotionPositions } : {}),
+        ...(layout.promotionOptions !== undefined ? { promotionOptions: layout.promotionOptions } : {}),
+        ...(layout.rotated30 !== undefined ? { rotated30: layout.rotated30 } : {}),
+        ...(layout.defaultColors !== undefined ? { defaultColors: layout.defaultColors } : {}),
+        ...(layout.playerCountConfig !== undefined ? { playerCountConfig: layout.playerCountConfig } : {}),
+        ...(layout.pieceSpecialties !== undefined ? { pieceSpecialties: layout.pieceSpecialties } : {}),
+        ...(layout.powerups !== undefined ? { powerups: layout.powerups } : {}),
+        ...(layout.puzzleGoalMoves !== undefined ? { puzzleGoalMoves: layout.puzzleGoalMoves } : {}),
       });
     } catch (e) {
       console.error('Failed to save layout to cloud:', e);

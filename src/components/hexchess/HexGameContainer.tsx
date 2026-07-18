@@ -164,6 +164,14 @@ export function HexGameContainer() {
     window.location.href = '/play';
   };
 
+  const handlePlayAgain = () => {
+    const s = useHexChessStore.getState();
+    if (!s.config) return;
+    const newId = Math.random().toString(36).substring(2, 10);
+    s.createGame({ ...s.config, id: newId });
+    window.location.href = `/hexchess/${newId}`;
+  };
+
   const handleHome = () => {
     window.location.href = '/home';
   };
@@ -247,6 +255,9 @@ export function HexGameContainer() {
         config={store.config}
         onNewGame={handleNewGame}
         onHome={handleHome}
+        onPlayAgain={handlePlayAgain}
+        replayHref={`/hexchess/replay/${store.config.id}`}
+        reviewHref={`/hexchess/review/${store.config.id}`}
       />
 
       {/* Settings popup — renders only when settingsMenuOpen */}

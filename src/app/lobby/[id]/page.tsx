@@ -14,8 +14,16 @@ import { SpecialSwatch, ColorSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { areTooSimilar } from '@/game/colors';
 import { validateLayout } from '@/game/layoutValidation';
+import { TRADITIONAL_HEX_LAYOUT } from '@/game/hexchess/traditionalLayout';
 
 const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...NEUTRAL_COLORS, ...EXTRA_COLORS_NO_GEMS, ...GEM_COLORS, ...ROW4_DISPLAY_ORDER, ...ROW5_DISPLAY_ORDER];
+
+// Hex chess allows only the plain color rows — the piece-skin rows are
+// sternhalma-specific (mirrors src/app/play/page.tsx).
+const HEX_CHESS_COLOR_SET = new Set(
+  [...COLOR_DISPLAY_ORDER, ...NEUTRAL_COLORS].map((c) => c.toLowerCase()),
+);
+const isHexChessColor = (color: string): boolean => HEX_CHESS_COLOR_SET.has(color.toLowerCase());
 const SLOT_COLORS_SET = new Set(["#ef4444", "#3b82f6", "#22d3ee", "#22c55e", "#facc15", "#a855f7"]);
 const DEFAULT_COLORS = COLOR_DISPLAY_ORDER;
 const METALLIC_COLORS_LIST = ROW3_DISPLAY_ORDER;
@@ -85,6 +93,7 @@ function LobbyContent() {
   const cancelSlotInviteMutation = useMutation(api.onlineGames.cancelSlotInvite);
   const reorderPlayers = useMutation(api.onlineGames.reorderPlayers);
   const setGameModeMutation = useMutation(api.onlineGames.setGameMode);
+  const setGameTypeMutation = useMutation(api.onlineGames.setGameType);
   const setTeamModeMutation = useMutation(api.onlineGames.setTeamMode);
   const setLayoutMutation = useMutation(api.onlineGames.setLayout);
   const lobbyBoardsRaw = useQuery(
@@ -108,6 +117,8 @@ function LobbyContent() {
     if (!game || game.status !== 'lobby' || favColorApplied.current) return;
     const { favoriteColor } = useSettingsStore.getState();
     if (!favoriteColor) return;
+    // Piece-skin favorites don't apply in hex chess lobbies.
+    if (((game as any).gameType ?? 'sternhalma') === 'hexchess' && !isHexChessColor(favoriteColor)) return;
 
     const players = game.players as any[];
     const mySlot = players.find((p: any) => p.userId === user?.id);
@@ -173,6 +184,9 @@ function LobbyContent() {
   }
 
   const players = game.players as any[];
+  const gameType = ((game as any).gameType ?? 'sternhalma') as 'sternhalma' | 'hexchess';
+  const isHexChess = gameType === 'hexchess';
+  const selectedBuiltinLayoutId = (game as any).selectedBuiltinLayoutId as string | undefined;
   const mySlot = players.find((p: any) => p.userId === user?.id);
   const hasEmptySlots = players.some((p: any) => p.type === 'empty');
 
@@ -269,11 +283,20 @@ function LobbyContent() {
 
   const handleSetLayout = async (selectedLayoutId: Id<'boardLayouts'> | null) => {
     try {
-      await setLayoutMutation({ gameId, selectedLayoutId });
+      await setLayoutMutation({ gameId, selectedLayoutId, builtinLayoutId: null });
       setShowBoardSelector(false);
       setLayoutResetNotice(false);
     }
     catch (e) { console.error('Failed to set layout:', e); }
+  };
+
+  const handleSetBuiltinLayout = async (builtinLayoutId: string) => {
+    try {
+      await setLayoutMutation({ gameId, selectedLayoutId: null, builtinLayoutId });
+      setShowBoardSelector(false);
+      setLayoutResetNotice(false);
+    }
+    catch (e) { console.error('Failed to set built-in board:', e); }
   };
 
   const handleLeave = async () => {
@@ -300,8 +323,34 @@ function LobbyContent() {
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Game Setup</h2>
 
-          {/* Player Count (host only) */}
-          {isHost && (
+          {/* Game type */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Game</label>
+            <div className="flex gap-2">
+              {([
+                { value: 'sternhalma' as const, label: 'Sternhalma' },
+                { value: 'hexchess' as const, label: 'Hex Chess' },
+              ]).map(({ value, label }) => (
+                <button
+                  key={value}
+                  disabled={!isHost}
+                  onClick={() => isHost && void setGameTypeMutation({ gameId, gameType: value }).catch(console.error)}
+                  className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
+                    gameType === value
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : isHost
+                        ? 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        : 'border-gray-200 bg-white text-gray-400 cursor-default'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Player Count (host only; hidden when a hex chess board fixes the seats) */}
+          {isHost && (!isHexChess || (!selectedBuiltinLayoutId && !(game as any).selectedLayoutId)) && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Players</label>
               <div className="flex gap-2">
@@ -322,7 +371,8 @@ function LobbyContent() {
             </div>
           )}
 
-          {/* Game Mode */}
+          {/* Game Mode (sternhalma only) */}
+          {!isHexChess && (
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Game Mode</label>
             <div className="flex gap-2 flex-wrap">
@@ -350,9 +400,10 @@ function LobbyContent() {
               ))}
             </div>
           </div>
+          )}
 
-          {/* Team Mode (4 or 6 players only) */}
-          {(game.playerCount === 4 || game.playerCount === 6) && (
+          {/* Team Mode (sternhalma, 4 or 6 players only) */}
+          {!isHexChess && (game.playerCount === 4 || game.playerCount === 6) && (
             <div className="mb-4 flex items-center gap-2">
               <input
                 id="teamMode"
@@ -379,9 +430,11 @@ function LobbyContent() {
             )}
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-700">
-                {(game as any).selectedLayoutId
-                  ? ((lobbyBoards ?? []) as any[]).find((b: any) => b._id === (game as any).selectedLayoutId)?.name ?? 'Custom Board'
-                  : 'Standard Board'}
+                {selectedBuiltinLayoutId === TRADITIONAL_HEX_LAYOUT.id
+                  ? TRADITIONAL_HEX_LAYOUT.name
+                  : (game as any).selectedLayoutId
+                    ? ((lobbyBoards ?? []) as any[]).find((b: any) => b._id === (game as any).selectedLayoutId)?.name ?? 'Custom Board'
+                    : 'Standard Board'}
               </span>
               {isHost && (
                 <button
@@ -397,14 +450,31 @@ function LobbyContent() {
                 <button
                   onClick={() => void handleSetLayout(null)}
                   className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 ${
-                    !(game as any).selectedLayoutId ? 'font-medium text-blue-700 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
+                    !(game as any).selectedLayoutId && !selectedBuiltinLayoutId ? 'font-medium text-blue-700 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   Standard Board
-                  <span className="ml-2 text-xs text-gray-400">2–6 players · 121 cells</span>
+                  <span className="ml-2 text-xs text-gray-400">
+                    {isHexChess ? '2–6 players · star board' : '2–6 players · 121 cells'}
+                  </span>
                 </button>
+                {isHexChess && (
+                  <button
+                    onClick={() => void handleSetBuiltinLayout(TRADITIONAL_HEX_LAYOUT.id)}
+                    className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 ${
+                      selectedBuiltinLayoutId === TRADITIONAL_HEX_LAYOUT.id
+                        ? 'font-medium text-blue-700 bg-blue-50'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {TRADITIONAL_HEX_LAYOUT.name}
+                    <span className="ml-2 text-xs text-gray-400">2 players · 91 cells</span>
+                  </button>
+                )}
                 {((lobbyBoards ?? []) as any[]).length > 0 && (() => {
-                  const boards = (lobbyBoards ?? []) as any[];
+                  const boards = ((lobbyBoards ?? []) as any[]).filter(
+                    (b: any) => (b.gameMode ?? 'sternhalma') === gameType
+                  );
                   const byOwner = new Map<string, { ownerUsername: string; boards: any[] }>();
                   for (const b of boards) {
                     const entry = byOwner.get(b.ownerId) ?? { ownerUsername: b.ownerUsername, boards: [] as any[] };
@@ -455,15 +525,17 @@ function LobbyContent() {
                   <option value="medium">Medium</option>
                   <option value="hard">Hard</option>
                 </select>
-                <select
-                  value={aiPersonality}
-                  onChange={(e) => setAiPersonality(e.target.value)}
-                  className="px-3 py-1.5 border rounded-lg text-sm"
-                >
-                  <option value="generalist">Generalist</option>
-                  <option value="defensive">Defensive</option>
-                  <option value="aggressive">Aggressive</option>
-                </select>
+                {!isHexChess && (
+                  <select
+                    value={aiPersonality}
+                    onChange={(e) => setAiPersonality(e.target.value)}
+                    className="px-3 py-1.5 border rounded-lg text-sm"
+                  >
+                    <option value="generalist">Generalist</option>
+                    <option value="defensive">Defensive</option>
+                    <option value="aggressive">Aggressive</option>
+                  </select>
+                )}
               </div>
             </div>
           )}
@@ -632,16 +704,19 @@ function LobbyContent() {
                   />
                 );
               })}
-              <ColorPicker
-                value={mySlot.color}
-                onChange={(color) => {
-                  if (!takenColors.some((b) => areTooSimilar(color, b))) {
-                    void handleColorSelect(color);
-                  }
-                }}
-                blockedColors={takenColors}
-              />
+              {!isHexChess && (
+                <ColorPicker
+                  value={mySlot.color}
+                  onChange={(color) => {
+                    if (!takenColors.some((b) => areTooSimilar(color, b))) {
+                      void handleColorSelect(color);
+                    }
+                  }}
+                  blockedColors={takenColors}
+                />
+              )}
             </div>
+            {!isHexChess && (<>
             <div className="flex gap-2 flex-wrap items-center mt-2">
               {METALLIC_COLORS_LIST.map((color, idx) => {
                 if (color === null) return <div key={`blank-${idx}`} className="w-7 h-7 flex-shrink-0" />;
@@ -758,6 +833,7 @@ function LobbyContent() {
                 );
               })}
             </div>
+            </>)}
           </div>
         )}
 

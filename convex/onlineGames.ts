@@ -1,9 +1,42 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { auth } from "./auth";
+import { COLOR_DISPLAY_ORDER, NEUTRAL_COLORS } from "../src/game/constants";
+import { TRADITIONAL_HEX_LAYOUT } from "../src/game/hexchess/traditionalLayout";
 
 // Default colors for player slots
 const SLOT_COLORS = ["#ef4444", "#3b82f6", "#22d3ee", "#22c55e", "#facc15", "#a855f7"];
+
+// Plain colors allowed in hex chess (piece-skin rows are sternhalma-only).
+const HEX_CHESS_COLORS = new Set(
+  [...COLOR_DISPLAY_ORDER, ...NEUTRAL_COLORS].map((c) => c.toLowerCase())
+);
+const HEX_CHESS_2P_DEFAULTS = ["#ffffff", "#1a1a1a"];
+
+const BUILTIN_HEX_LAYOUT_IDS = new Set([TRADITIONAL_HEX_LAYOUT.id]);
+
+function hexArmyCount(hexPieces: Record<string, { player: number }> | undefined): number {
+  return new Set(Object.values(hexPieces ?? {}).map((p) => p.player)).size;
+}
+
+/** Rebuild slots for a new player count, preserving existing humans in order. */
+function rebuildSlots(existing: any[], playerCount: number): any[] {
+  const humans = existing.filter((p: any) => p.type === "human" && p.userId);
+  const players = [];
+  for (let i = 0; i < playerCount; i++) {
+    const human = humans[i];
+    if (human) {
+      // Preserve the human player's chosen color; only reset ready state
+      players.push({ ...human, slot: i, isReady: false });
+    } else {
+      // Keep the slot's existing color when possible (e.g. hex chess
+      // white/black defaults survive board changes).
+      const color = existing[i]?.color ?? SLOT_COLORS[i];
+      players.push({ slot: i, type: "empty" as const, color, isReady: false });
+    }
+  }
+  return players;
+}
 
 const MAX_ACTIVE_GAMES = 10;
 
@@ -54,6 +87,13 @@ async function resolveGameStart(ctx: any, game: any): Promise<Record<string, any
         goalPositions: layout.goalPositions,
         walls: layout.walls,
         isDefault: layout.isDefault,
+        gameMode: (layout as any).gameMode,
+        hexPieces: (layout as any).hexPieces,
+        promotionPositions: (layout as any).promotionPositions,
+        promotionOptions: (layout as any).promotionOptions,
+        rotated30: (layout as any).rotated30,
+        defaultColors: (layout as any).defaultColors,
+        playerCountConfig: (layout as any).playerCountConfig,
       };
     } else {
       console.warn(`[resolveGameStart] selectedLayoutId ${game.selectedLayoutId} not found, falling back to standard board`);
@@ -190,25 +230,7 @@ export const updateBoardConfig = mutation({
     if (game.status !== "lobby") throw new Error("Game is not in lobby");
 
     // Rebuild player slots preserving existing humans
-    const existingHumans = (game.players as any[]).filter(
-      (p: any) => p.type === "human" && p.userId
-    );
-
-    const players = [];
-    for (let i = 0; i < playerCount; i++) {
-      const existingHuman = existingHumans.find((_: any, idx: number) => idx === i);
-      if (existingHuman) {
-        // Preserve the human player's chosen color; only reset ready state
-        players.push({ ...existingHuman, slot: i, isReady: false });
-      } else {
-        players.push({
-          slot: i,
-          type: "empty" as const,
-          color: SLOT_COLORS[i],
-          isReady: false,
-        });
-      }
-    }
+    const players = rebuildSlots(game.players as any[], playerCount);
 
     await ctx.db.patch(gameId, {
       boardType,
@@ -379,6 +401,10 @@ export const selectColor = mutation({
       (p: any) => p.color === color && p.userId !== userId
     );
     if (colorTaken) throw new Error("Color already taken");
+
+    if ((game.gameType ?? "sternhalma") === "hexchess" && !HEX_CHESS_COLORS.has(color.toLowerCase())) {
+      throw new Error("That color is not available in hex chess");
+    }
 
     // Update this player's color
     const updated = players.map((p: any) =>
@@ -563,8 +589,13 @@ export const submitTurn = mutation({
     gameId: v.id("onlineGames"),
     moves: v.any(),
     playerFinished: v.optional(v.boolean()),
+    // Hex chess extensions: the client computes turn advancement and results
+    // (the server has no hex chess rules — same trust model as sternhalma).
+    nextPlayerIndex: v.optional(v.number()),
+    result: v.optional(v.any()),
+    resign: v.optional(v.boolean()),
   },
-  handler: async (ctx, { gameId, moves, playerFinished }) => {
+  handler: async (ctx, { gameId, moves, playerFinished, nextPlayerIndex, result, resign }) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -576,20 +607,40 @@ export const submitTurn = mutation({
     const currentPlayerIndex = game.currentPlayerIndex ?? 0;
     const currentSlot = players[currentPlayerIndex];
 
-    // Validate: caller must be the current player, OR the host submitting an AI turn
-    const isCurrentPlayer = currentSlot.type === "human" && currentSlot.userId === userId;
-    const isHostForAI = currentSlot.type === "ai" && game.hostId === userId;
-    if (!isCurrentPlayer && !isHostForAI) {
-      throw new Error("Not your turn");
+    let turnPlayerIndex = currentPlayerIndex;
+    if (resign) {
+      // Resignation is allowed from any participating human at any time
+      // (the client only offers it to living seats).
+      const slotIdx = players.findIndex((p: any) => p.userId === userId);
+      if (slotIdx === -1) throw new Error("Not a participant");
+      turnPlayerIndex = slotIdx;
+    } else {
+      // Validate: caller must be the current player, OR the host submitting an AI turn
+      const isCurrentPlayer = currentSlot.type === "human" && currentSlot.userId === userId;
+      const isHostForAI = currentSlot.type === "ai" && game.hostId === userId;
+      if (!isCurrentPlayer && !isHostForAI) {
+        throw new Error("Not your turn");
+      }
     }
 
     const turns = (game.turns as any[]) || [];
     const finishedPlayers = (game.finishedPlayers as number[]) || [];
 
     turns.push({
-      playerIndex: currentPlayerIndex,
+      playerIndex: turnPlayerIndex,
       moves,
     });
+
+    if (game.gameType === "hexchess") {
+      const finished = result != null;
+      await ctx.db.patch(gameId, {
+        turns,
+        currentPlayerIndex: nextPlayerIndex ?? currentPlayerIndex,
+        status: finished ? "finished" : game.status,
+        winner: finished && typeof result.winner === "number" ? result.winner : game.winner,
+      });
+      return;
+    }
 
     // Handle player finishing
     if (playerFinished && !finishedPlayers.includes(currentPlayerIndex)) {
@@ -661,20 +712,26 @@ export const acceptRematch = mutation({
     const allAccepted = humanPlayers.every((p: any) => accepted.includes(p.userId));
 
     if (allAccepted) {
-      // Reorder players by finish placement — first finisher goes first in rematch
+      // Reorder players by finish placement — first finisher goes first in
+      // rematch. Hex chess keeps the original order (finish placement is a
+      // sternhalma concept).
       const finishedSlots = (game.finishedPlayers as number[]) || [];
       const orderedPlayers: any[] = [];
 
-      // Add finished players in their finish order
-      for (const slotIdx of finishedSlots) {
-        if (players[slotIdx]) {
-          orderedPlayers.push(players[slotIdx]);
+      if (game.gameType === "hexchess") {
+        orderedPlayers.push(...players);
+      } else {
+        // Add finished players in their finish order
+        for (const slotIdx of finishedSlots) {
+          if (players[slotIdx]) {
+            orderedPlayers.push(players[slotIdx]);
+          }
         }
-      }
-      // Append any unfinished players (edge case: abandoned games)
-      for (let i = 0; i < players.length; i++) {
-        if (!finishedSlots.includes(i) && players[i]) {
-          orderedPlayers.push(players[i]);
+        // Append any unfinished players (edge case: abandoned games)
+        for (let i = 0; i < players.length; i++) {
+          if (!finishedSlots.includes(i) && players[i]) {
+            orderedPlayers.push(players[i]);
+          }
         }
       }
 
@@ -699,6 +756,8 @@ export const acceptRematch = mutation({
         gameMode: game.gameMode ?? "normal",
         teamMode: game.teamMode ?? false,
         selectedLayoutId: game.selectedLayoutId,
+        gameType: game.gameType,
+        selectedBuiltinLayoutId: game.selectedBuiltinLayoutId,
       });
 
       await ctx.db.patch(gameId, {
@@ -938,12 +997,55 @@ export const setTeamMode = mutation({
   },
 });
 
+export const setGameType = mutation({
+  args: {
+    gameId: v.id("onlineGames"),
+    gameType: v.union(v.literal("sternhalma"), v.literal("hexchess")),
+  },
+  handler: async (ctx, { gameId, gameType }) => {
+    const userId = await auth.getUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    const game = await ctx.db.get(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.hostId !== userId) throw new Error("Only the host can change the game type");
+    if (game.status !== "lobby") throw new Error("Game is not in lobby");
+    if ((game.gameType ?? "sternhalma") === gameType) return;
+
+    const players = (game.players as any[]).map((p, i) => {
+      let color = p.color;
+      if (gameType === "hexchess" && !HEX_CHESS_COLORS.has(String(color).toLowerCase())) {
+        color = SLOT_COLORS[i];
+      }
+      return { ...p, color, isReady: false };
+    });
+    // Classic chess defaults for a 2-player hex chess lobby, when both colors
+    // are still slot defaults (don't clobber deliberate choices).
+    if (gameType === "hexchess" && players.length === 2) {
+      const bothDefault = players.every((p) => SLOT_COLORS.includes(p.color));
+      if (bothDefault) {
+        players[0] = { ...players[0], color: HEX_CHESS_2P_DEFAULTS[0] };
+        players[1] = { ...players[1], color: HEX_CHESS_2P_DEFAULTS[1] };
+      }
+    }
+
+    await ctx.db.patch(gameId, {
+      gameType,
+      players,
+      selectedLayoutId: undefined,
+      selectedBuiltinLayoutId: undefined,
+      gameMode: "normal",
+      teamMode: false,
+    });
+  },
+});
+
 export const setLayout = mutation({
   args: {
     gameId: v.id("onlineGames"),
     selectedLayoutId: v.union(v.id("boardLayouts"), v.null()),
+    builtinLayoutId: v.optional(v.union(v.string(), v.null())),
   },
-  handler: async (ctx, { gameId, selectedLayoutId }) => {
+  handler: async (ctx, { gameId, selectedLayoutId, builtinLayoutId }) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
     const game = await ctx.db.get(gameId);
@@ -951,8 +1053,20 @@ export const setLayout = mutation({
     if (game.hostId !== userId) throw new Error("Only the host can change the board");
     if (game.status !== "lobby") throw new Error("Game is not in lobby");
 
+    if (builtinLayoutId !== undefined && builtinLayoutId !== null) {
+      if (!BUILTIN_HEX_LAYOUT_IDS.has(builtinLayoutId)) throw new Error("Unknown built-in board");
+      const count = hexArmyCount(TRADITIONAL_HEX_LAYOUT.hexPieces as any);
+      await ctx.db.patch(gameId, {
+        selectedBuiltinLayoutId: builtinLayoutId,
+        selectedLayoutId: undefined,
+        playerCount: count,
+        players: rebuildSlots(game.players as any[], count),
+      });
+      return;
+    }
+
     if (selectedLayoutId === null) {
-      await ctx.db.patch(gameId, { selectedLayoutId: undefined });
+      await ctx.db.patch(gameId, { selectedLayoutId: undefined, selectedBuiltinLayoutId: undefined });
       return;
     }
 
@@ -970,6 +1084,19 @@ export const setLayout = mutation({
       throw new Error("Layout must belong to a player in the lobby");
     }
 
+    if ((layout as any).gameMode === "hexchess") {
+      // Hex chess boards: armies fixed by the layout's pieces.
+      const count = hexArmyCount((layout as any).hexPieces);
+      if (count < 2) throw new Error("Hex chess board needs at least two armies");
+      await ctx.db.patch(gameId, {
+        selectedLayoutId,
+        selectedBuiltinLayoutId: undefined,
+        playerCount: count,
+        players: rebuildSlots(players, count),
+      });
+      return;
+    }
+
     // Basic server-side validation: layout must have at least one player with starting positions
     const startingPositions = layout.startingPositions as Record<string, string[]> | undefined;
     const hasPlayers = startingPositions
@@ -979,7 +1106,7 @@ export const setLayout = mutation({
       throw new Error("Layout has no starting positions and cannot be used");
     }
 
-    await ctx.db.patch(gameId, { selectedLayoutId });
+    await ctx.db.patch(gameId, { selectedLayoutId, selectedBuiltinLayoutId: undefined });
   },
 });
 
@@ -1017,9 +1144,13 @@ export const getLobbyBoards = query({
       userMap.set(uid, username);
     }
 
-    // Determine valid player counts from each layout's startingPositions keys
+    // Determine valid player counts: sternhalma boards from startingPositions
+    // keys, hex chess boards from the number of armies in hexPieces.
     return allLayouts.map((layout) => {
-      const counts = Object.keys(layout.startingPositions ?? {}).map(Number);
+      const isHex = (layout as any).gameMode === "hexchess";
+      const counts = isHex
+        ? [hexArmyCount((layout as any).hexPieces)]
+        : Object.keys(layout.startingPositions ?? {}).map(Number);
       return {
         _id: layout._id,
         layoutId: layout.layoutId,
@@ -1032,6 +1163,13 @@ export const getLobbyBoards = query({
         goalPositions: layout.goalPositions,
         walls: layout.walls,
         isDefault: layout.isDefault,
+        gameMode: (layout as any).gameMode,
+        hexPieces: (layout as any).hexPieces,
+        promotionPositions: (layout as any).promotionPositions,
+        promotionOptions: (layout as any).promotionOptions,
+        rotated30: (layout as any).rotated30,
+        defaultColors: (layout as any).defaultColors,
+        playerCountConfig: (layout as any).playerCountConfig,
       };
     });
   },

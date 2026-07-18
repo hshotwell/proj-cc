@@ -2,6 +2,35 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { auth } from "./auth";
 
+// BoardLayout fields carried through cloud sync untouched (mode + hex chess
+// + misc optional fields). Keep in sync with src/types/game.ts BoardLayout.
+const LAYOUT_EXTRA_FIELDS = [
+  "gameMode", "hexPieces", "promotionPositions", "promotionOptions",
+  "rotated30", "defaultColors", "playerCountConfig", "pieceSpecialties",
+  "powerups", "puzzleGoalMoves",
+] as const;
+
+const layoutExtraArgs = {
+  gameMode: v.optional(v.union(v.literal("sternhalma"), v.literal("hexchess"))),
+  hexPieces: v.optional(v.any()),
+  promotionPositions: v.optional(v.any()),
+  promotionOptions: v.optional(v.any()),
+  rotated30: v.optional(v.boolean()),
+  defaultColors: v.optional(v.any()),
+  playerCountConfig: v.optional(v.any()),
+  pieceSpecialties: v.optional(v.any()),
+  powerups: v.optional(v.any()),
+  puzzleGoalMoves: v.optional(v.number()),
+};
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function pickExtraFields(source: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    LAYOUT_EXTRA_FIELDS.filter((f) => (source as any)[f] !== undefined).map((f) => [f, (source as any)[f]])
+  );
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 // List all layouts for the current user
 export const listLayouts = query({
   args: {},
@@ -22,6 +51,7 @@ export const listLayouts = query({
       goalPositions: l.goalPositions,
       walls: l.walls,
       isDefault: l.isDefault,
+      ...pickExtraFields(l),
     }));
   },
 });
@@ -36,8 +66,9 @@ export const saveLayout = mutation({
     goalPositions: v.any(),
     walls: v.optional(v.any()),
     isDefault: v.boolean(),
+    ...layoutExtraArgs,
   },
-  handler: async (ctx, { layoutId, name, cells, startingPositions, goalPositions, walls, isDefault }) => {
+  handler: async (ctx, { layoutId, name, cells, startingPositions, goalPositions, walls, isDefault, ...extra }) => {
     const userId = await auth.getUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -69,6 +100,7 @@ export const saveLayout = mutation({
         goalPositions,
         walls,
         isDefault,
+        ...pickExtraFields(extra),
       });
     } else {
       await ctx.db.insert("boardLayouts", {
@@ -80,6 +112,7 @@ export const saveLayout = mutation({
         goalPositions,
         walls,
         isDefault,
+        ...pickExtraFields(extra),
       });
     }
 
@@ -97,6 +130,7 @@ export const updateLayout = mutation({
     goalPositions: v.optional(v.any()),
     walls: v.optional(v.any()),
     isDefault: v.optional(v.boolean()),
+    ...layoutExtraArgs,
   },
   handler: async (ctx, { layoutId, ...updates }) => {
     const userId = await auth.getUserId(ctx);
@@ -134,6 +168,7 @@ export const updateLayout = mutation({
     if (updates.goalPositions !== undefined) patch.goalPositions = updates.goalPositions;
     if (updates.walls !== undefined) patch.walls = updates.walls;
     if (updates.isDefault !== undefined) patch.isDefault = updates.isDefault;
+    Object.assign(patch, pickExtraFields(updates));
 
     await ctx.db.patch(existing._id, patch);
 

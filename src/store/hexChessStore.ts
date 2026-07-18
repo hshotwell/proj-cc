@@ -12,11 +12,11 @@ import {
   geometryOf,
   uprightRotationDeg,
 } from '@/game/hexchess';
-import { eliminatePlayer } from '@/game/hexchess/moves';
+import { applyResign } from '@/game/hexchess/onlineState';
 import { cubeEquals, parseCoordKey, coordKey, cubeToPixel } from '@/game/coordinates';
 import { ROTATION_FOR_PLAYER } from '@/game/constants';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
-import { kingOf, isEliminated, livingPlayers, nextLivingPlayer } from '@/game/hexchess/board';
+import { kingOf, isEliminated, livingPlayers } from '@/game/hexchess/board';
 import { saveHexChessGame, loadHexChessGame } from '@/game/hexchess/persistence';
 import { playStep, playCapture, playCheck, playCheckmate } from '@/audio/soundEffects';
 
@@ -206,16 +206,7 @@ export const useHexChessStore = create<HexChessStoreState>((set, get) => ({
     if (!state || state.result !== null) return;
 
     const resigningSeat = seat ?? state.currentPlayer;
-    let nextState: HexChessState;
-    if (state.activePlayers.length === 2) {
-      // 2-player: resignation ends the game, opponent wins.
-      const winner = nextLivingPlayer(state, resigningSeat);
-      nextState = { ...state, result: { winner, reason: 'resignation' } };
-    } else {
-      // Multiplayer: the resigner is eliminated (army freezes grey) and the
-      // game continues; eliminatePlayer sets the result if one seat remains.
-      nextState = eliminatePlayer(state, resigningSeat);
-    }
+    const nextState = applyResign(state, resigningSeat);
     set({ state: nextState });
     if (config) saveHexChessGame(config, nextState);
   },

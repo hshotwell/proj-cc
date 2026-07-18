@@ -45,6 +45,17 @@ export default defineSchema({
     goalPositions: v.any(),
     walls: v.optional(v.any()),
     isDefault: v.boolean(),
+    // Mode & hex chess passthrough fields (see src/types/game.ts BoardLayout)
+    gameMode: v.optional(v.union(v.literal("sternhalma"), v.literal("hexchess"))),
+    hexPieces: v.optional(v.any()),
+    promotionPositions: v.optional(v.any()),
+    promotionOptions: v.optional(v.any()),
+    rotated30: v.optional(v.boolean()),
+    defaultColors: v.optional(v.any()),
+    playerCountConfig: v.optional(v.any()),
+    pieceSpecialties: v.optional(v.any()),
+    powerups: v.optional(v.any()),
+    puzzleGoalMoves: v.optional(v.number()),
   })
     .index("by_userId", ["userId"])
     .index("by_userId_layoutId", ["userId", "layoutId"]),
@@ -111,6 +122,8 @@ export default defineSchema({
     )),
     teamMode: v.optional(v.boolean()),
     selectedLayoutId: v.optional(v.id("boardLayouts")),
+    gameType: v.optional(v.union(v.literal("sternhalma"), v.literal("hexchess"))),
+    selectedBuiltinLayoutId: v.optional(v.string()),
     rematchRequestedBy: v.optional(v.id("users")),
     rematchAcceptedBy: v.optional(v.any()),
     rematchDeclinedBy: v.optional(v.id("users")),

@@ -3,13 +3,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CubeCoord, PlayerIndex } from '@/types/game';
-import type { FlaggedMove } from '@/types/review';
+import type { FlaggedMove, FlaggedHexMove } from '@/types/review';
 
 interface AIReviewStore {
   captureMode: null | 'from' | 'to';
   captureFrom: CubeCoord | null;
   captureTo: CubeCoord | null;
   flags: FlaggedMove[];
+  hexFlags: FlaggedHexMove[];
   activeGameId: string | null;
 
   startCapture: () => void;
@@ -21,6 +22,10 @@ interface AIReviewStore {
   clearFlags: () => void;
   setActiveGameId: (id: string | null) => void;
   exportText: (gameId?: string) => string;
+  addHexFlag: (flag: Omit<FlaggedHexMove, 'id' | 'timestamp'>) => void;
+  removeHexFlag: (id: string) => void;
+  updateHexFlag: (id: string, patch: Partial<Pick<FlaggedHexMove, 'suggestedMove' | 'note'>>) => void;
+  exportHexText: (gameId?: string) => string;
 }
 
 export const useAIReviewStore = create<AIReviewStore>()(
@@ -30,6 +35,7 @@ export const useAIReviewStore = create<AIReviewStore>()(
       captureFrom: null,
       captureTo: null,
       flags: [],
+      hexFlags: [],
       activeGameId: null,
 
       startCapture: () => set({ captureMode: 'from', captureFrom: null, captureTo: null }),
@@ -98,10 +104,53 @@ export const useAIReviewStore = create<AIReviewStore>()(
         }
         return lines.join('\n');
       },
+
+      addHexFlag: (flag) =>
+        set((s) => ({
+          hexFlags: [...s.hexFlags, { ...flag, id: crypto.randomUUID(), timestamp: Date.now() }],
+        })),
+
+      removeHexFlag: (id) =>
+        set((s) => ({ hexFlags: s.hexFlags.filter((f) => f.id !== id) })),
+
+      updateHexFlag: (id, patch) =>
+        set((s) => ({
+          hexFlags: s.hexFlags.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+        })),
+
+      exportHexText: (gameId?: string) => {
+        const { hexFlags } = get();
+        const filtered = gameId ? hexFlags.filter((f) => f.gameId === gameId) : hexFlags;
+        if (filtered.length === 0) return '(no flags recorded)';
+        const lines: string[] = [
+          '=== HEX CHESS MOVE REVIEW EXPORT ===',
+          `Exported: ${new Date().toISOString()}`,
+          `Flags: ${filtered.length}`,
+          '',
+        ];
+        for (let i = 0; i < filtered.length; i++) {
+          const f = filtered[i];
+          const cap = f.actualMove.capture ? ` x ${f.actualMove.capture}` : '';
+          const promo = f.actualMove.promotion ? ` =${f.actualMove.promotion}` : '';
+          lines.push(`--- Flag ${i + 1} ---`);
+          lines.push(`Turn ${f.turnNumber} | Seat ${f.seat}${f.difficulty ? ` | ${f.difficulty} AI` : ''}`);
+          lines.push(`Actual move:   ${f.actualMove.pieceType} (${f.actualMove.from.q},${f.actualMove.from.r}) → (${f.actualMove.to.q},${f.actualMove.to.r})${cap}${promo}`);
+          if (f.suggestedMove) {
+            lines.push(`Suggested:     (${f.suggestedMove.from.q},${f.suggestedMove.from.r}) → (${f.suggestedMove.to.q},${f.suggestedMove.to.r})`);
+          }
+          if (f.note) lines.push(`Note:          ${f.note}`);
+          lines.push('Board after move:');
+          for (const [cell, piece] of Object.entries(f.boardAfter.pieces)) {
+            lines.push(`  (${cell}): P${piece.player} ${piece.type}`);
+          }
+          lines.push('');
+        }
+        return lines.join('\n');
+      },
     }),
     {
       name: 'chinese-checkers-ai-review',
-      partialize: (s) => ({ flags: s.flags }),
+      partialize: (s) => ({ flags: s.flags, hexFlags: s.hexFlags }),
     }
   )
 );
