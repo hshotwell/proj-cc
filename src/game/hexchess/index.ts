@@ -5,7 +5,7 @@ export { confirmPromotion } from './promotion';
 export { hashState, updateHash, initZobristTable } from './zobrist';
 export {
   deriveForward, buildGeometry, standardGeometry, geometryOf, isOpenCell,
-  snapshotFromLayout, hexSeatsOfSnapshot,
+  snapshotFromLayout, hexSeatsOfSnapshot, uprightRotationDeg,
 } from './geometry';
 export type { HexLayoutSnapshot, HexLayoutPieceType, HexPromotionOption, ForwardSpec, HexBoardGeometry } from './geometry';
 export type { HashDelta } from './zobrist';

@@ -124,6 +124,20 @@ export function deriveForward(
   return best;
 }
 
+/**
+ * The display rotation (degrees) that makes `dir` point straight up on
+ * screen — used to orient a board so an army's forward direction faces away
+ * from its player (army at the bottom). Normalized to (-180, 180].
+ */
+export function uprightRotationDeg(dir: CubeCoord): number {
+  const p = cubeToPixel(dir, 1);
+  const angle = (Math.atan2(p.y, p.x) * 180) / Math.PI;
+  let rot = -90 - angle;
+  while (rot <= -180) rot += 360;
+  while (rot > 180) rot -= 360;
+  return Math.round(rot * 1000) / 1000;
+}
+
 /** Clockwise seat order used everywhere (matches ACTIVE_PLAYERS). */
 const CLOCKWISE_SEATS: HexPlayerIndex[] = [0, 4, 3, 2, 1, 5];
 

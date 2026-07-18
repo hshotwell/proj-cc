@@ -10,9 +10,10 @@ import {
   confirmPromotion as applyConfirmPromotion,
   isInCheck,
   geometryOf,
+  uprightRotationDeg,
 } from '@/game/hexchess';
 import { eliminatePlayer } from '@/game/hexchess/moves';
-import { cubeEquals, parseCoordKey, coordKey } from '@/game/coordinates';
+import { cubeEquals, parseCoordKey, coordKey, cubeToPixel } from '@/game/coordinates';
 import { ROTATION_FOR_PLAYER } from '@/game/constants';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
 import { kingOf, isEliminated, livingPlayers, nextLivingPlayer } from '@/game/hexchess/board';
@@ -455,10 +456,40 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     }
   }
 
-  // Hex chess rotation. Seat indices equal CC home triangles, so the shared
-  // ROTATION_FOR_PLAYER map brings any seat's arm to the bottom. Pick the
-  // initial rotation to face the first human seat.
-  const rotationForSeat = (p: HexPlayerIndex): number => ROTATION_FOR_PLAYER[p as PlayerIndex];
+  // Hex chess rotation: orient the board so a seat's army sits at the BOTTOM
+  // with its forward direction pointing up — derived from geometry, so it
+  // works on custom boards wherever the armies are placed. (On the standard
+  // star this reproduces the old per-corner ROTATION_FOR_PLAYER angles.)
+  // The rotated30 display offset is applied on top by Board.tsx, so the base
+  // rotation compensates for it.
+  const rotationOffset = state.layout?.rotated30 ? 30 : 0;
+  const rotationForSeat = (p: HexPlayerIndex): number => {
+    const fwd = geom.forward[p];
+    if (fwd) return uprightRotationDeg(fwd.dir) - rotationOffset;
+    if (state.layout) {
+      // Army without a derived forward (no pawns/promotion tiles): point its
+      // starting centroid toward the bottom of the screen instead.
+      const own = Object.entries(state.layout.pieces)
+        .filter(([, pc]) => pc.player === p)
+        .map(([k]) => parseCoordKey(k));
+      if (own.length > 0) {
+        const centroid = (cells: CubeCoord[]) => {
+          let x = 0, y = 0;
+          for (const c of cells) { const px = cubeToPixel(c, 1); x += px.x; y += px.y; }
+          return { x: x / cells.length, y: y / cells.length };
+        };
+        const board = centroid(Array.from(geom.cells).map(parseCoordKey));
+        const army = centroid(own);
+        const angle = (Math.atan2(army.y - board.y, army.x - board.x) * 180) / Math.PI;
+        let rot = 90 - angle - rotationOffset;
+        while (rot <= -180) rot += 360;
+        while (rot > 180) rot -= 360;
+        return Math.round(rot * 1000) / 1000;
+      }
+      return 0;
+    }
+    return ROTATION_FOR_PLAYER[p as PlayerIndex];
+  };
   const firstHumanSeat = config.seats.find(s => !config.ai || !config.ai[s]);
   const initialFocusPlayer: HexPlayerIndex = firstHumanSeat ?? config.seats[0];
   const activeRotation = rotationForSeat(state.currentPlayer);
@@ -492,6 +523,6 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     ) as Record<number, string>,
     gameId: config.id,
     walls: Array.from(geom.walls).map(parseCoordKey),
-    rotationOffset: state.layout?.rotated30 ? 30 : 0,
+    rotationOffset,
   };
 }

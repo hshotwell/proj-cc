@@ -14,6 +14,7 @@ import { useLayoutStore } from '@/store/layoutStore';
 import { useHexChessStore } from '@/store/hexChessStore';
 import type { HexChessConfig, HexPlayerIndex } from '@/game/hexchess';
 import { snapshotFromLayout, hexSeatsOfSnapshot } from '@/game/hexchess';
+import { TRADITIONAL_HEX_LAYOUT } from '@/game/hexchess/traditionalLayout';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { HowToPlayHexChess } from '@/components/hexchess/HowToPlayHexChess';
 import { areTooSimilar } from '@/game/colors';
@@ -377,6 +378,12 @@ export default function PlayPage() {
     ? (hexSeats as PlayerIndex[])
     : selectedLayout ? effectiveLayoutPlayers : activePlayers;
   const validLayouts = layouts.filter(l => (l.gameMode ?? 'sternhalma') === gameMode && validateLayout(l).valid);
+  // Built-in boards always offered to every player, ahead of saved layouts.
+  const builtinLayouts: BoardLayout[] = gameMode === 'hexchess' ? [TRADITIONAL_HEX_LAYOUT] : [];
+  const pickerLayouts = [
+    ...builtinLayouts,
+    ...validLayouts.filter(l => !builtinLayouts.some(b => b.id === l.id)),
+  ];
 
 
   // Seed colors when a custom hex board is chosen: favorite color (first
@@ -772,11 +779,11 @@ export default function PlayPage() {
                 </div>
               </button>
 
-              {/* Custom layouts */}
-              {validLayouts.length === 0 ? (
+              {/* Built-in + custom layouts */}
+              {pickerLayouts.length === 0 ? (
                 <p className="text-sm text-gray-400 px-2 py-1">No custom layouts yet.</p>
               ) : (
-                validLayouts.map((layout) => (
+                pickerLayouts.map((layout) => (
                   <button
                     key={layout.id}
                     onClick={() => { setSelectedLayout(layout); setShowBoardSelector(false); }}

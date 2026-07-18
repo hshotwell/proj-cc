@@ -353,3 +353,84 @@ describe('selectHexChessBoardView — multiplayer', () => {
     expect(cells).toEqual(['-8,4', '0,0']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Custom-board orientation: the human's army sits at the bottom (forward up)
+// ---------------------------------------------------------------------------
+
+import type { HexLayoutSnapshot } from '@/game/hexchess';
+
+function customLayoutState(opts: { rotated30?: boolean }): { state: HexChessState; config: HexChessConfig } {
+  const cells: string[] = [];
+  for (let q = -4; q <= 4; q++) for (let r = -4; r <= 4; r++) {
+    if (Math.abs(-q - r) <= 4) cells.push(`${q},${r}`);
+  }
+  const layout: HexLayoutSnapshot = {
+    layoutId: 'o', layoutName: 'o', cells, walls: [],
+    pieces: {
+      '-4,0': { player: 0, type: 'king' },
+      '-2,0': { player: 0, type: 'pawn' },
+      '4,0': { player: 2, type: 'king' },
+      '2,0': { player: 2, type: 'pawn' },
+    },
+    // Horizontal board: white (0) promotes right -> forward edge (1,0);
+    // black (2) promotes left -> forward edge (-1,0).
+    promotionPositions: { 0: ['4,-2', '4,-1', '4,0'], 2: ['-4,0', '-4,1', '-4,2'] },
+    promotionOptions: ['queen'],
+    rotated30: opts.rotated30,
+  };
+  const config: HexChessConfig = {
+    id: 'o-game', seats: [0, 2],
+    players: {
+      0: { color: '#ffffff', name: 'W', isAI: false },
+      2: { color: '#1a1a1a', name: 'B', isAI: true },
+    },
+    layoutPreset: 'custom', ai: { 2: 'easy' }, layout,
+  };
+  const state: HexChessState = {
+    mode: 'hexchess',
+    pieces: [
+      { id: '0-king-0', player: 0, type: 'king', cell: cubeCoord(-4, 0), hasMoved: false },
+      { id: '2-king-0', player: 2, type: 'king', cell: cubeCoord(4, 0), hasMoved: false },
+    ],
+    currentPlayer: 0, turnNumber: 1, activePlayers: [0, 2], eliminated: [],
+    enPassantTarget: null, pendingPromotion: null, moveHistory: [],
+    positionHashes: {}, result: null, layout,
+  };
+  return { state, config };
+}
+
+function viewFor(state: HexChessState, config: HexChessConfig) {
+  return selectHexChessBoardView({
+    state, gameId: config.id, config,
+    selectedPieceId: null, legalMoveTargets: [], lastMove: null,
+  } as never)!;
+}
+
+describe('selectHexChessBoardView — custom-board orientation', () => {
+  it('rotates so the human army sits at the bottom with forward pointing up', () => {
+    const { state, config } = customLayoutState({});
+    const view = viewFor(state, config);
+    // White forward is the (1,0) edge (pixel angle 0deg); pointing it up needs -90.
+    expect(view.initialRotation).toBe(-90);
+    // Active rotation for the AI seat 2 (forward (-1,0), angle 180) would be 90.
+    // currentPlayer is 0 here so activeRotation matches white's -90.
+    expect(view.activeRotation).toBe(-90);
+  });
+
+  it('compensates for the 30-degree display offset', () => {
+    const { state, config } = customLayoutState({ rotated30: true });
+    const view = viewFor(state, config);
+    expect(view.rotationOffset).toBe(30);
+    // cumulative + offset must land at -90: -120 + 30 = -90.
+    expect(view.initialRotation).toBe(-120);
+  });
+
+  it('hotseat (all human) defaults to the first seat (white) at the bottom', () => {
+    const { state, config } = customLayoutState({});
+    config.ai = null;
+    config.players[2]!.isAI = false;
+    const view = viewFor(state, config);
+    expect(view.initialRotation).toBe(-90); // white's orientation
+  });
+});

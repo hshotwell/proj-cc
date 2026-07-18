@@ -17,6 +17,7 @@ import { BoardCell } from '@/components/board/BoardCell';
 import { Piece } from '@/components/board/Piece';
 import { hexChessTileColor } from '@/components/board/hexChessTiles';
 import { HexPieceGrid, HEX_PIECE_ICONS } from '@/components/editor/HexPieceGrid';
+import { TRADITIONAL_HEX_LAYOUT } from '@/game/hexchess/traditionalLayout';
 import { playStep, playJump } from '@/audio/soundEffects';
 import { deriveForward } from '@/game/hexchess';
 import type { HexLayoutPieceType, HexPromotionOption, ForwardSpec } from '@/game/hexchess';
@@ -1496,6 +1497,17 @@ export default function EditorPage() {
                   }`}>
                     <button onClick={() => handleLoad(DEFAULT_STAR_LAYOUT)} className="flex-1 text-left truncate flex items-center gap-1">
                       Default Star <HexStar size={11} className={dm('text-yellow-400', 'text-yellow-500')} />
+                    </button>
+                  </div>
+                  {/* Traditional Hex Chess — built-in, never deletable */}
+                  <div className={`flex items-center p-1.5 rounded text-xs cursor-pointer ${
+                    selectedLayoutId === TRADITIONAL_HEX_LAYOUT.id
+                      ? dm('bg-blue-900/30 border border-blue-700', 'bg-blue-50 border border-blue-200')
+                      : dm('bg-gray-700 hover:bg-gray-600', 'bg-gray-50 hover:bg-gray-100')
+                  }`}>
+                    <button onClick={() => handleLoad(TRADITIONAL_HEX_LAYOUT)} className="flex-1 text-left truncate flex items-center gap-1">
+                      Traditional Hex Chess
+                      <span className="text-[10px] font-bold text-amber-600 shrink-0" title="Hex Chess board">HC</span>
                     </button>
                   </div>
                   {/* User saved layouts */}
