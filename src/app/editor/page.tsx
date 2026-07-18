@@ -15,11 +15,22 @@ import { SettingsPopup } from '@/components/SettingsPopup';
 import { SettingsButton } from '@/components/SettingsButton';
 import { BoardCell } from '@/components/board/BoardCell';
 import { Piece } from '@/components/board/Piece';
+import { hexChessTileColor } from '@/components/board/hexChessTiles';
 import { playStep, playJump } from '@/audio/soundEffects';
+import type { HexLayoutPieceType, HexPromotionOption } from '@/game/hexchess';
 
 type EditorMode = 'cells' | 'starting' | 'goals' | 'special';
+type EditorGameMode = 'sternhalma' | 'hexchess';
+type HexEditorMode = 'cells' | 'pieces' | 'promotions';
 type SpecialBrush = 'turbo' | 'ghost' | 'big';
 type SymmetryMode = 'none' | 'x' | 'y' | 'xy' | '6way';
+
+// 9 army colors: chess classics first, then CC player colors in display order.
+export const EDITOR_ARMY_COLORS: string[] = [
+  '#ffffff', '#1a1a1a', '#888888',
+  PLAYER_COLORS[0], PLAYER_COLORS[4], PLAYER_COLORS[3],
+  PLAYER_COLORS[2], PLAYER_COLORS[1], PLAYER_COLORS[5],
+];
 
 // Generate all possible hex positions within a radius
 function generateAllPositions(radius: number): string[] {
@@ -178,6 +189,102 @@ export default function EditorPage() {
   const [mirrorGoals, setMirrorGoals] = useState(true);
   const [playerCountConfig, setPlayerCountConfig] = useState<Partial<Record<PlayerCount, PlayerIndex[]>>>({});
 
+  // --- Hex chess editing mode ---
+  const [editorGameMode, setEditorGameMode] = useState<EditorGameMode>('sternhalma');
+  const [hexMode, setHexMode] = useState<HexEditorMode>('cells');
+  const [hexPieces, setHexPieces] = useState<Map<string, { player: PlayerIndex; type: HexLayoutPieceType }>>(new Map());
+  const [promotionPositions, setPromotionPositions] = useState<Record<number, Set<string>>>({
+    0: new Set(), 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set(), 5: new Set(),
+  });
+  const [promotionOptions, setPromotionOptions] = useState<Set<HexPromotionOption>>(
+    () => new Set<HexPromotionOption>(['knight', 'bishop', 'rook', 'queen']));
+  const [rotated30, setRotated30] = useState(false);
+  // seat -> chosen display color, both modes (saved as layout.defaultColors)
+  const [armyColors, setArmyColors] = useState<Partial<Record<PlayerIndex, string>>>({});
+  // Pieces-tab brush: piece type + army color chosen together from the 9-color grid
+  const [hexBrush, setHexBrush] = useState<{ type: HexLayoutPieceType; color: string }>({ type: 'pawn', color: '#ffffff' });
+  // Promotions-tab selected army (null until an army exists)
+  const [promoArmy, setPromoArmy] = useState<PlayerIndex | null>(null);
+
+  // A color IS an army in hex chess. Seats currently holding pieces:
+  const usedSeats = useMemo(() => {
+    const s = new Set<PlayerIndex>();
+    for (const pc of hexPieces.values()) s.add(pc.player);
+    return s;
+  }, [hexPieces]);
+
+  const seatForColor = (color: string): PlayerIndex | null => {
+    for (const [seat, c] of Object.entries(armyColors)) {
+      if (c === color) return Number(seat) as PlayerIndex;
+    }
+    return null;
+  };
+
+  /** First use of a color claims the lowest free seat (max 6 armies). */
+  const claimSeatForColor = (color: string): PlayerIndex | null => {
+    const existing = seatForColor(color);
+    if (existing !== null) return existing;
+    const free = PLAYER_DISPLAY_ORDER.find(p => !usedSeats.has(p) && armyColors[p] === undefined);
+    if (free === undefined) return null;
+    setArmyColors(prev => ({ ...prev, [free]: color }));
+    return free;
+  };
+
+  // Free a seat's color claim once its last piece AND promotion tiles are gone
+  // (hexchess mode only — sternhalma color choices are explicit assignments).
+  useEffect(() => {
+    if (editorGameMode !== 'hexchess') return;
+    setArmyColors(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const seatStr of Object.keys(prev)) {
+        const seat = Number(seatStr) as PlayerIndex;
+        if (!usedSeats.has(seat) && promotionPositions[seat].size === 0) {
+          delete next[seat];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [editorGameMode, usedSeats, promotionPositions]);
+
+  /** Painting for the hexchess pieces/promotions tabs. */
+  const applyHexActionToCell = (key: string, symmetricKeys: string[], action: 'add' | 'remove') => {
+    if (hexMode === 'pieces') {
+      if (!activeCells.has(key) || walls.has(key)) return;
+      const seat = action === 'add' ? claimSeatForColor(hexBrush.color) : seatForColor(hexBrush.color);
+      if (action === 'add' && seat === null) {
+        alert('Maximum of 6 armies — erase one color completely to free a slot.');
+        return;
+      }
+      setHexPieces(prev => {
+        const next = new Map(prev);
+        for (const symKey of symmetricKeys) {
+          if (!activeCells.has(symKey) || walls.has(symKey)) continue;
+          if (action === 'remove') next.delete(symKey);
+          else if (seat !== null) next.set(symKey, { player: seat, type: hexBrush.type });
+        }
+        return next;
+      });
+      return;
+    }
+    if (hexMode === 'promotions') {
+      if (promoArmy === null) return;
+      if (!activeCells.has(key) || walls.has(key)) return;
+      setPromotionPositions(prev => {
+        const next = { ...prev };
+        const set = new Set(next[promoArmy]);
+        for (const symKey of symmetricKeys) {
+          if (!activeCells.has(symKey) || walls.has(symKey)) continue;
+          if (action === 'remove') set.delete(symKey);
+          else set.add(symKey);
+        }
+        next[promoArmy] = set;
+        return next;
+      });
+    }
+  };
+
   // Paint mode state for click-and-drag
   const [isPainting, setIsPainting] = useState(false);
   const [paintAction, setPaintAction] = useState<'add' | 'remove'>('add');
@@ -218,12 +325,21 @@ export default function EditorPage() {
   const hasPieceAt = (key: string): boolean =>
     ALL_PLAYERS.some((p) => startingPositions[p].has(key));
 
+  // Whether the current tab paints board cells/walls (shared by both game modes)
+  const inCellsMode = editorGameMode === 'hexchess' ? hexMode === 'cells' : mode === 'cells';
+
   // Determine if a cell should be "added" or "removed" based on current state
   const getCellState = (key: string): boolean => {
-    if (mode === 'cells') {
+    if (inCellsMode) {
       if (cellBrush === 'wall') return walls.has(key);
       return activeCells.has(key);
-    } else if (mode === 'starting') {
+    }
+    if (editorGameMode === 'hexchess') {
+      if (hexMode === 'pieces') return hexPieces.has(key);
+      if (hexMode === 'promotions') return promoArmy !== null && promotionPositions[promoArmy].has(key);
+      return false;
+    }
+    if (mode === 'starting') {
       for (const player of ALL_PLAYERS) {
         if (startingPositions[player].has(key)) return true;
       }
@@ -248,17 +364,16 @@ export default function EditorPage() {
     //  - normal cells (nodes) → step, both add & remove
     //  - any piece (wall, starting, goal, special) placed → jump
     //  - piece removed → step
-    const requiresActiveCell =
-      mode === 'starting' || mode === 'goals' || mode === 'special';
+    const requiresActiveCell = !inCellsMode;
     const isNoOp = requiresActiveCell && !activeCells.has(key);
     if (!isNoOp) {
-      const isNodeBrush = mode === 'cells' && cellBrush === 'normal';
+      const isNodeBrush = inCellsMode && cellBrush === 'normal';
       if (isNodeBrush) playStep();
       else if (action === 'add') playJump();
       else playStep();
     }
 
-    if (mode === 'cells' && cellBrush === 'normal') {
+    if (inCellsMode && cellBrush === 'normal') {
       setActiveCells((prev) => {
         const newSet = new Set(prev);
         for (const symKey of symmetricKeys) {
@@ -287,19 +402,59 @@ export default function EditorPage() {
               newWalls.delete(symKey);
               return newWalls;
             });
+            // Hex chess layers: pieces and promotion tiles vanish with the cell
+            setHexPieces((hp) => {
+              if (!hp.has(symKey)) return hp;
+              const next = new Map(hp);
+              next.delete(symKey);
+              return next;
+            });
+            setPromotionPositions((pp) => {
+              const next = { ...pp };
+              for (const player of ALL_PLAYERS) {
+                if (next[player].has(symKey)) {
+                  const ps = new Set(next[player]);
+                  ps.delete(symKey);
+                  next[player] = ps;
+                }
+              }
+              return next;
+            });
           } else {
             newSet.add(symKey);
           }
         }
         return newSet;
       });
-    } else if (mode === 'cells' && cellBrush === 'wall') {
+    } else if (inCellsMode && cellBrush === 'wall') {
       // Activate any inactive symmetric cells when adding a wall
       if (action === 'add') {
         setActiveCells((prev) => {
           const newSet = new Set(prev);
           for (const symKey of symmetricKeys) newSet.add(symKey);
           return newSet;
+        });
+        // Hex chess layers: pieces and promotion tiles vanish under new walls
+        setHexPieces((hp) => {
+          const next = new Map(hp);
+          let changed = false;
+          for (const symKey of symmetricKeys) {
+            if (next.has(symKey)) { next.delete(symKey); changed = true; }
+          }
+          return changed ? next : hp;
+        });
+        setPromotionPositions((pp) => {
+          const next = { ...pp };
+          for (const symKey of symmetricKeys) {
+            for (const player of ALL_PLAYERS) {
+              if (next[player].has(symKey)) {
+                const ps = new Set(next[player]);
+                ps.delete(symKey);
+                next[player] = ps;
+              }
+            }
+          }
+          return next;
         });
         // Clear starting/goal positions where we placed walls
         setStartingPositions((prev) => {
@@ -340,6 +495,9 @@ export default function EditorPage() {
         }
         return newWalls;
       });
+    } else if (editorGameMode === 'hexchess') {
+      // Pieces / promotions tab painting — handled by the hexchess tabs
+      applyHexActionToCell(key, symmetricKeys, action);
     } else if (mode === 'starting') {
       if (!activeCells.has(key)) return;
 
@@ -550,26 +708,44 @@ export default function EditorPage() {
     return ALL_PLAYERS.map((p) => startingPositions[p].size);
   }, [startingPositions]);
 
+  // Builds the BoardLayout for the current editor state. Cells and walls are
+  // shared across the mode toggle; only the ACTIVE mode's layers are written.
+  const buildLayout = (layoutId: string): BoardLayout => ({
+    id: layoutId,
+    name: layoutName,
+    cells: Array.from(activeCells),
+    walls: Array.from(walls),
+    createdAt: Date.now(),
+    gameMode: editorGameMode,
+    rotated30: rotated30 || undefined,
+    defaultColors: Object.keys(armyColors).length > 0 ? { ...armyColors } : undefined,
+    ...(editorGameMode === 'hexchess'
+      ? {
+          startingPositions: {},
+          hexPieces: Object.fromEntries(hexPieces),
+          promotionPositions: Object.fromEntries(
+            ALL_PLAYERS.filter((p) => promotionPositions[p].size > 0)
+              .map((p) => [p, Array.from(promotionPositions[p])]),
+          ) as BoardLayout['promotionPositions'],
+          promotionOptions: Array.from(promotionOptions),
+        }
+      : {
+          startingPositions: Object.fromEntries(
+            ALL_PLAYERS.map((p) => [p, Array.from(startingPositions[p])])
+          ) as Record<PlayerIndex, string[]>,
+          goalPositions: Object.fromEntries(
+            ALL_PLAYERS.map((p) => [p, Array.from(goalPositions[p])])
+          ) as Record<PlayerIndex, string[]>,
+          powerups: editorPowerups.size > 0 ? Object.fromEntries(editorPowerups) : undefined,
+          pieceSpecialties: pieceSpecialties.size > 0 ? Object.fromEntries(pieceSpecialties) : undefined,
+          playerCountConfig: Object.keys(playerCountConfig).length > 0 ? playerCountConfig : undefined,
+        }),
+  });
+
   const handleSave = () => {
     const existingLayout = layouts.find((l) => l.name === layoutName);
     const layoutId = existingLayout ? existingLayout.id : `layout-${Date.now()}`;
-
-    const layout: BoardLayout = {
-      id: layoutId,
-      name: layoutName,
-      cells: Array.from(activeCells),
-      startingPositions: Object.fromEntries(
-        ALL_PLAYERS.map((p) => [p, Array.from(startingPositions[p])])
-      ) as Record<PlayerIndex, string[]>,
-      goalPositions: Object.fromEntries(
-        ALL_PLAYERS.map((p) => [p, Array.from(goalPositions[p])])
-      ) as Record<PlayerIndex, string[]>,
-      walls: Array.from(walls),
-      powerups: editorPowerups.size > 0 ? Object.fromEntries(editorPowerups) : undefined,
-      pieceSpecialties: pieceSpecialties.size > 0 ? Object.fromEntries(pieceSpecialties) : undefined,
-      playerCountConfig: Object.keys(playerCountConfig).length > 0 ? playerCountConfig : undefined,
-      createdAt: Date.now(),
-    };
+    const layout = buildLayout(layoutId);
     saveLayout(layout);
     setSelectedLayoutId(layout.id);
     alert(existingLayout ? 'Layout updated!' : 'Layout saved!');
@@ -600,6 +776,18 @@ export default function EditorPage() {
       setEditorPowerups(new Map(Object.entries(layout.powerups || {})) as Map<string, SpecialBrush>);
       setPieceSpecialties(new Map(Object.entries(layout.pieceSpecialties || {})) as Map<string, SpecialBrush>);
       setPlayerCountConfig(layout.playerCountConfig ?? {});
+      // Hex chess layers + shared display fields (loading replaces both modes' layers)
+      setEditorGameMode(layout.gameMode ?? 'sternhalma');
+      setRotated30(!!layout.rotated30);
+      setArmyColors(layout.defaultColors ?? {});
+      setHexPieces(new Map(Object.entries(layout.hexPieces ?? {})));
+      setPromotionPositions(
+        Object.fromEntries(
+          ALL_PLAYERS.map((p) => [p, new Set(layout.promotionPositions?.[p] ?? [])])
+        ) as Record<number, Set<string>>
+      );
+      setPromotionOptions(new Set(layout.promotionOptions ?? ['knight', 'bishop', 'rook', 'queen']));
+      setPromoArmy(null);
       setLayoutName(layout.name);
       setSelectedLayoutId(layout.id);
     }
@@ -619,6 +807,15 @@ export default function EditorPage() {
     setEditorPowerups(new Map());
     setPieceSpecialties(new Map());
     setPlayerCountConfig({});
+    setHexPieces(new Map());
+    setPromotionPositions({
+      0: new Set(), 1: new Set(), 2: new Set(),
+      3: new Set(), 4: new Set(), 5: new Set(),
+    });
+    setPromotionOptions(new Set<HexPromotionOption>(['knight', 'bishop', 'rook', 'queen']));
+    setArmyColors({});
+    setPromoArmy(null);
+    setRotated30(false);
     setLayoutName('My Board');
     setSelectedLayoutId(null);
   };
@@ -626,25 +823,11 @@ export default function EditorPage() {
   const handleEditorRestart = useCallback(() => {
     const matchingLayout = layouts.find((l) => l.name === layoutName);
     if (matchingLayout) {
-      setActiveCells(new Set(matchingLayout.cells));
-      setStartingPositions(
-        Object.fromEntries(
-          ALL_PLAYERS.map((p) => [p, new Set(matchingLayout.startingPositions[p] || [])])
-        ) as Record<number, Set<string>>
-      );
-      setGoalPositions(
-        Object.fromEntries(
-          ALL_PLAYERS.map((p) => [p, new Set(matchingLayout.goalPositions?.[p] || [])])
-        ) as Record<number, Set<string>>
-      );
-      setWalls(new Set(matchingLayout.walls || []));
-      setEditorPowerups(new Map(Object.entries(matchingLayout.powerups || {})) as Map<string, SpecialBrush>);
-      setPieceSpecialties(new Map(Object.entries(matchingLayout.pieceSpecialties || {})) as Map<string, SpecialBrush>);
-      setPlayerCountConfig(matchingLayout.playerCountConfig ?? {});
-      setSelectedLayoutId(matchingLayout.id);
+      handleLoad(matchingLayout);
     } else {
       handleClear();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layouts, layoutName]);
 
   const handleFillAll = () => {
@@ -658,21 +841,7 @@ export default function EditorPage() {
   };
 
   const handleExport = () => {
-    const layout: BoardLayout = {
-      id: selectedLayoutId || `layout-${Date.now()}`,
-      name: layoutName,
-      cells: Array.from(activeCells),
-      startingPositions: Object.fromEntries(
-        ALL_PLAYERS.map((p) => [p, Array.from(startingPositions[p])])
-      ) as Record<PlayerIndex, string[]>,
-      goalPositions: Object.fromEntries(
-        ALL_PLAYERS.map((p) => [p, Array.from(goalPositions[p])])
-      ) as Record<PlayerIndex, string[]>,
-      walls: Array.from(walls),
-      powerups: editorPowerups.size > 0 ? Object.fromEntries(editorPowerups) : undefined,
-      pieceSpecialties: pieceSpecialties.size > 0 ? Object.fromEntries(pieceSpecialties) : undefined,
-      createdAt: Date.now(),
-    };
+    const layout = buildLayout(selectedLayoutId || `layout-${Date.now()}`);
     const json = JSON.stringify(layout, null, 2);
     console.log('Exported layout:', json);
     navigator.clipboard.writeText(json);
@@ -753,6 +922,22 @@ export default function EditorPage() {
           <Link href="/home" className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600 mb-2 transition-colors">
             ← Home
           </Link>
+          {/* Game-mode switch: which kind of board is being edited */}
+          <div className="flex gap-2 mb-2">
+            {(['sternhalma', 'hexchess'] as EditorGameMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setEditorGameMode(m)}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  editorGameMode === m
+                    ? 'bg-blue-600 text-white shadow'
+                    : dm('bg-gray-800 text-gray-300 hover:bg-gray-700', 'bg-white text-gray-600 hover:bg-gray-50 shadow')
+                }`}
+              >
+                {m === 'sternhalma' ? 'Sternhalma' : 'Hex Chess'}
+              </button>
+            ))}
+          </div>
           <div className={`rounded-lg shadow p-2 sm:p-4 relative ${dm('bg-gray-800', 'bg-white')}`}>
             <SettingsButton />
             <svg
@@ -844,6 +1029,8 @@ export default function EditorPage() {
                 </g>
               );
             })()}
+            {/* 30-degree display rotation (rotated30 layouts) — cube coords untouched */}
+            <g transform={rotated30 ? 'rotate(30)' : undefined}>
             {/* Symmetry lines */}
             {symmetryLines.map((line, index) => (
               <line
@@ -855,9 +1042,9 @@ export default function EditorPage() {
                 opacity={0.5}
               />
             ))}
-            {/* Triangle fills */}
+            {/* Triangle fills (sternhalma only) */}
             <g filter={(!hexCells && woodenBoard) ? 'url(#editor-wood-grain-subtle)' : undefined}>
-              {!hexCells && editorTriangles.map((tri) => {
+              {editorGameMode === 'sternhalma' && !hexCells && editorTriangles.map((tri) => {
                 const points = tri.vertices.map((vkey) => {
                   const pos = parseCoordKey(vkey);
                   const px = cubeToPixel(pos, HEX_SIZE);
@@ -918,8 +1105,8 @@ export default function EditorPage() {
                   />
                 );
               })}
-              {/* Border edges */}
-              {!hexCells && editorBorderEdges.map((edge) => {
+              {/* Border edges (sternhalma only) */}
+              {editorGameMode === 'sternhalma' && !hexCells && editorBorderEdges.map((edge) => {
                 const pa = cubeToPixel(parseCoordKey(edge.a), HEX_SIZE);
                 const pb = cubeToPixel(parseCoordKey(edge.b), HEX_SIZE);
                 return (
@@ -934,8 +1121,8 @@ export default function EditorPage() {
                 );
               })}
             </g>
-            {/* Hex connecting lines — drawn under cells */}
-            {hexCells && showTriangleLines && (
+            {/* Hex connecting lines — drawn under cells (sternhalma only) */}
+            {editorGameMode === 'sternhalma' && hexCells && showTriangleLines && (
               <g>
                 {editorAdjacentPairs.map(([aKey, bKey], i) => {
                   const pa = cubeToPixel(parseCoordKey(aKey), HEX_SIZE);
@@ -983,6 +1170,17 @@ export default function EditorPage() {
                   style={{ cursor: 'pointer', userSelect: 'none' }}
                 >
                   {isActive ? (
+                    editorGameMode === 'hexchess' ? (
+                      <polygon
+                        points={Array.from({ length: 6 }, (_, i) => {
+                          const angle = (Math.PI / 180) * (60 * i - 30);
+                          return `${x + HEX_SIZE * Math.cos(angle)},${y + HEX_SIZE * Math.sin(angle)}`;
+                        }).join(' ')}
+                        fill={hexChessTileColor(cubeCoord(q, r), darkMode)}
+                        stroke={darkMode ? '#2a2018' : '#a89878'}
+                        strokeWidth={0.8}
+                      />
+                    ) : (
                     <BoardCell
                       coord={cubeCoord(q, r)}
                       size={HEX_SIZE}
@@ -994,6 +1192,7 @@ export default function EditorPage() {
                       hexCells={hexCells}
                       showTriangleLines={showTriangleLines}
                     />
+                    )
                   ) : hexCells ? (
                     <polygon
                       points={Array.from({ length: 6 }, (_, i) => {
@@ -1016,7 +1215,7 @@ export default function EditorPage() {
                       opacity={0.4}
                     />
                   )}
-                  {isGoalForAnyPlayer && goalPlayerForThisCell !== undefined && (
+                  {editorGameMode === 'sternhalma' && isGoalForAnyPlayer && goalPlayerForThisCell !== undefined && (
                     <circle
                       cx={x}
                       cy={y}
@@ -1027,7 +1226,7 @@ export default function EditorPage() {
                       strokeWidth={2}
                     />
                   )}
-                  {piecePlayer !== undefined && (
+                  {editorGameMode === 'sternhalma' && piecePlayer !== undefined && (
                     <Piece
                       coord={cubeCoord(q, r)}
                       player={piecePlayer}
@@ -1167,8 +1366,8 @@ export default function EditorPage() {
                 );
               }
             })}
-            {/* Powerup indicators */}
-            {Array.from(editorPowerups.entries()).map(([key, variant]) => {
+            {/* Powerup indicators (sternhalma only) */}
+            {editorGameMode === 'sternhalma' && Array.from(editorPowerups.entries()).map(([key, variant]) => {
               const [pq, pr] = key.split(',').map(Number);
               const { x, y } = cubeToPixel(cubeCoord(pq, pr), HEX_SIZE);
               const label = variant === 'turbo' ? 'T' : variant === 'ghost' ? 'S' : 'B';
@@ -1184,8 +1383,8 @@ export default function EditorPage() {
                 </g>
               );
             })}
-            {/* Piece specialty badges */}
-            {Array.from(pieceSpecialties.entries()).map(([key, variant]) => {
+            {/* Piece specialty badges (sternhalma only) */}
+            {editorGameMode === 'sternhalma' && Array.from(pieceSpecialties.entries()).map(([key, variant]) => {
               const [pq, pr] = key.split(',').map(Number);
               const { x, y } = cubeToPixel(cubeCoord(pq, pr), HEX_SIZE);
               const label = variant === 'turbo' ? 'T' : variant === 'ghost' ? 'S' : 'B';
@@ -1200,6 +1399,7 @@ export default function EditorPage() {
                 </g>
               );
             })}
+            </g>
             </g>
             </svg>
           </div>
@@ -1255,6 +1455,9 @@ export default function EditorPage() {
                     >
                       <button onClick={() => handleLoad(layout)} className="flex-1 text-left truncate flex items-center gap-1 min-w-0">
                         <span className="truncate">{layout.name}</span>
+                        {layout.gameMode === 'hexchess' && (
+                          <span className="text-[10px] font-bold text-amber-600 shrink-0" title="Hex Chess board">HC</span>
+                        )}
                         {layout.isDefault && (
                           <span className="ml-1 text-xs text-green-600 shrink-0">(default)</span>
                         )}
@@ -1281,23 +1484,37 @@ export default function EditorPage() {
             <div className="w-64 shrink-0 flex flex-col gap-2 min-w-0">
               <div className={`text-xs font-medium ${dm('text-gray-300', 'text-gray-600')}`}>Edit Mode</div>
               <div className="flex gap-1 flex-wrap">
-                {(['cells', 'starting', 'goals', 'special'] as EditorMode[]).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMode(m)}
-                    className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
-                      mode === m
-                        ? 'bg-blue-600 text-white'
-                        : dm('bg-gray-700 text-gray-200 hover:bg-gray-600', 'bg-gray-100 text-gray-700 hover:bg-gray-200')
-                    }`}
-                  >
-                    {MODE_LABELS[m]}
-                  </button>
-                ))}
+                {editorGameMode === 'hexchess'
+                  ? (['cells', 'pieces', 'promotions'] as HexEditorMode[]).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setHexMode(m)}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
+                          hexMode === m
+                            ? 'bg-blue-600 text-white'
+                            : dm('bg-gray-700 text-gray-200 hover:bg-gray-600', 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        }`}
+                      >
+                        {m === 'cells' ? 'Cells' : m === 'pieces' ? 'Pieces' : 'Promotions'}
+                      </button>
+                    ))
+                  : (['cells', 'starting', 'goals', 'special'] as EditorMode[]).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setMode(m)}
+                        className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
+                          mode === m
+                            ? 'bg-blue-600 text-white'
+                            : dm('bg-gray-700 text-gray-200 hover:bg-gray-600', 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        }`}
+                      >
+                        {MODE_LABELS[m]}
+                      </button>
+                    ))}
               </div>
 
               {/* Mode-specific controls */}
-              {mode === 'cells' && (
+              {inCellsMode && (
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-1.5">
                     {(['normal', 'wall'] as const).map((brush) => (
@@ -1321,7 +1538,7 @@ export default function EditorPage() {
                           </svg>
                         )}
                         <div className={`text-xs mt-0.5 ${dm('text-gray-400', 'text-gray-600')}`}>
-                          {brush === 'normal' ? 'Nodes' : 'Wall'}
+                          {brush === 'normal' ? (editorGameMode === 'hexchess' ? 'Tiles' : 'Nodes') : 'Wall'}
                         </div>
                       </button>
                     ))}
@@ -1349,7 +1566,7 @@ export default function EditorPage() {
                 </div>
               )}
 
-              {(mode === 'starting' || mode === 'goals') && (
+              {editorGameMode === 'sternhalma' && (mode === 'starting' || mode === 'goals') && (
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-1.5 flex-wrap">
                     {PLAYER_DISPLAY_ORDER.map((player) => (
@@ -1392,7 +1609,7 @@ export default function EditorPage() {
                 </div>
               )}
 
-              {mode === 'special' && (
+              {editorGameMode === 'sternhalma' && mode === 'special' && (
                 <div className="flex flex-col gap-2">
                   <div className="flex gap-1.5">
                     {([
@@ -1442,7 +1659,7 @@ export default function EditorPage() {
               )}
 
               {/* Cells mode help */}
-              {mode === 'cells' && (
+              {inCellsMode && (
                 <div className={`text-xs rounded p-2 space-y-1 ${dm('bg-gray-700/50 text-gray-400', 'bg-gray-50 text-gray-500')}`}>
                   <p><span className={`font-medium ${dm('text-gray-200', 'text-gray-700')}`}>Gaps</span> between cells cannot be entered or jumped over.</p>
                   <p><span className={`font-medium ${dm('text-gray-200', 'text-gray-700')}`}>Walls</span> block landing but can be jumped over as if they were pieces.</p>
@@ -1450,7 +1667,7 @@ export default function EditorPage() {
               )}
 
               {/* Special mode help */}
-              {mode === 'special' && (
+              {editorGameMode === 'sternhalma' && mode === 'special' && (
                 <div className={`text-xs rounded p-2 space-y-1.5 ${dm('bg-gray-700/50 text-gray-400', 'bg-gray-50 text-gray-500')}`}>
                   <p><span className="font-medium text-red-400">T Turbo</span> — hops over the first piece/wall in a direction, landing the same distance beyond.</p>
                   <p><span className="font-medium text-green-400">S Spectral</span> — hops through an entire adjacent run of pieces/walls, landing in the first open cell after.</p>
@@ -1460,7 +1677,7 @@ export default function EditorPage() {
               )}
 
               {/* Player sets config (starting / goals mode) */}
-              {(mode === 'starting' || mode === 'goals') && (() => {
+              {editorGameMode === 'sternhalma' && (mode === 'starting' || mode === 'goals') && (() => {
                 const getCountConfig = (count: PlayerCount): PlayerIndex[] =>
                   playerCountConfig[count] ?? [...(ACTIVE_PLAYERS[count] as PlayerIndex[])];
 
@@ -1523,8 +1740,17 @@ export default function EditorPage() {
               {/* Stats */}
               <div className={`text-xs flex gap-3 ${dm('text-gray-500', 'text-gray-500')}`}>
                 <span>Cells: {activeCells.size}</span>
-                <span>Pieces: {pieceCounts.reduce((a, b) => a + b, 0)}</span>
-                <span>Goals: {ALL_PLAYERS.reduce((acc: number, p) => acc + goalPositions[p].size, 0)}</span>
+                {editorGameMode === 'hexchess' ? (
+                  <>
+                    <span>Pieces: {hexPieces.size}</span>
+                    <span>Armies: {usedSeats.size}/6</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Pieces: {pieceCounts.reduce((a, b) => a + b, 0)}</span>
+                    <span>Goals: {ALL_PLAYERS.reduce((acc: number, p) => acc + goalPositions[p].size, 0)}</span>
+                  </>
+                )}
                 <span>Walls: {walls.size}</span>
               </div>
             </div>
