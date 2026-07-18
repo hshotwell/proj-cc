@@ -13,6 +13,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useHexChessStore } from '@/store/hexChessStore';
 import type { HexChessConfig, HexPlayerIndex } from '@/game/hexchess';
+import { snapshotFromLayout, hexSeatsOfSnapshot } from '@/game/hexchess';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { HowToPlayHexChess } from '@/components/hexchess/HowToPlayHexChess';
 import { areTooSimilar } from '@/game/colors';
@@ -123,9 +124,9 @@ export default function PlayPage() {
     return { [p0]: HEX_CHESS_DEFAULT_COLORS[0], [p1]: HEX_CHESS_DEFAULT_COLORS[1] } as ColorMapping;
   };
   useEffect(() => {
+    setSelectedLayout(null);
+    setShowBoardSelector(false);
     if (gameMode === 'hexchess') {
-      setSelectedLayout(null);
-      setShowBoardSelector(false);
       setCustomColors(prev => {
         sternhalmaColorsRef.current = prev;
         return hexChessDefaultColors(selectedCount);
@@ -210,6 +211,14 @@ export default function PlayPage() {
   };
 
   const handleResetColors = () => {
+    if (gameMode === 'hexchess' && selectedLayout) {
+      const next: ColorMapping = {};
+      for (const seat of hexSeats) {
+        next[seat] = selectedLayout.defaultColors?.[seat] ?? PLAYER_COLORS[seat];
+      }
+      setCustomColors(next);
+      return;
+    }
     setCustomColors(gameMode === 'hexchess' ? hexChessDefaultColors(selectedCount) : {});
   };
 
@@ -228,7 +237,8 @@ export default function PlayPage() {
     if (gameMode === 'hexchess') {
       // Seats are CC player indices (seat = home triangle), in clockwise
       // turn order: 2 -> [0,2], 3 -> [0,3,1], 4 -> [4,3,1,5], 6 -> all.
-      const seats = ACTIVE_PLAYERS[selectedCount] as HexPlayerIndex[];
+      // Custom boards fix the seats to the layout's armies.
+      const seats = hexSeats;
       const hexGameId = Math.random().toString(36).substring(2, 10);
       const players: HexChessConfig['players'] = {};
       const aiMap: NonNullable<HexChessConfig['ai']> = {};
@@ -245,8 +255,8 @@ export default function PlayPage() {
         id: hexGameId,
         seats,
         players,
-        layoutPreset: 'v1-default',
-        soldierVariant: 'soldier',
+        layoutPreset: hexSnapshot ? 'custom' : 'v1-default',
+        ...(hexSnapshot ? { layout: hexSnapshot } : {}),
         ai: Object.keys(aiMap).length > 0 ? aiMap : null,
       };
       useHexChessStore.getState().createGame(hexConfig);
@@ -357,8 +367,41 @@ export default function PlayPage() {
     return layoutPlayers.slice(0, count);
   })();
 
-  const configPlayers = selectedLayout ? effectiveLayoutPlayers : activePlayers;
-  const validLayouts = layouts.filter(l => validateLayout(l).valid);
+  // Custom hex chess board: armies are fixed by the layout.
+  const hexSnapshot = gameMode === 'hexchess' && selectedLayout ? snapshotFromLayout(selectedLayout) : null;
+  const hexSeats: HexPlayerIndex[] = hexSnapshot
+    ? hexSeatsOfSnapshot(hexSnapshot)
+    : (ACTIVE_PLAYERS[selectedCount] as HexPlayerIndex[]);
+
+  const configPlayers = gameMode === 'hexchess'
+    ? (hexSeats as PlayerIndex[])
+    : selectedLayout ? effectiveLayoutPlayers : activePlayers;
+  const validLayouts = layouts.filter(l => (l.gameMode ?? 'sternhalma') === gameMode && validateLayout(l).valid);
+
+
+  // Seed colors when a custom hex board is chosen: favorite color (first
+  // human seat) > board default colors > CC per-corner defaults.
+  useEffect(() => {
+    if (gameMode !== 'hexchess') return;
+    if (!selectedLayout) {
+      setCustomColors(hexChessDefaultColors(selectedCount));
+      return;
+    }
+    const snapshot = snapshotFromLayout(selectedLayout);
+    const seats = hexSeatsOfSnapshot(snapshot);
+    const next: ColorMapping = {};
+    for (const seat of seats) {
+      next[seat] = selectedLayout.defaultColors?.[seat] ?? PLAYER_COLORS[seat];
+    }
+    const { favoriteColor } = useSettingsStore.getState();
+    if (favoriteColor && seats.length > 0) {
+      const firstSeat = seats[0];
+      const clash = seats.some(st => st !== firstSeat && areTooSimilar(favoriteColor, next[st] ?? PLAYER_COLORS[st]));
+      if (!clash) next[firstSeat] = favoriteColor;
+    }
+    setCustomColors(next);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameMode, selectedLayout?.id]);
 
   const renderPlayerRow = (playerIndex: PlayerIndex, players: PlayerIndex[]) => {
     const currentColor = getEffectiveColor(playerIndex);
@@ -615,8 +658,19 @@ export default function PlayPage() {
     );
   };
 
+  // Piece positions for a layout preview (hexchess stores pieces per cell).
+  const startsOf = (l: BoardLayout): Partial<Record<PlayerIndex, string[]>> => {
+    if ((l.gameMode ?? 'sternhalma') !== 'hexchess') return l.startingPositions;
+    const by: Partial<Record<PlayerIndex, string[]>> = {};
+    for (const [k, pc] of Object.entries(l.hexPieces ?? {})) {
+      (by[pc.player] ??= []).push(k);
+    }
+    return by;
+  };
+  const armiesOf = (l: BoardLayout): number => Object.keys(startsOf(l)).length;
+
   const previewCells = selectedLayout ? selectedLayout.cells : DEFAULT_BOARD_LAYOUT.cells;
-  const previewStarts = selectedLayout ? selectedLayout.startingPositions : DEFAULT_BOARD_LAYOUT.startingPositions;
+  const previewStarts = selectedLayout ? startsOf(selectedLayout) : DEFAULT_BOARD_LAYOUT.startingPositions;
   const previewWalls = selectedLayout?.walls;
 
   return (
@@ -690,21 +744,15 @@ export default function PlayPage() {
                 {selectedLayout ? `${selectedLayout.cells.length} cells` : '121 cells · classic Chinese Checkers'}
               </div>
             </div>
-            {gameMode !== 'hexchess' && (
-              <button
-                onClick={() => setShowBoardSelector(v => !v)}
-                className="px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
-              >
-                {showBoardSelector ? 'Close' : 'Select Board'}
-              </button>
-            )}
+            <button
+              onClick={() => setShowBoardSelector(v => !v)}
+              className="px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+            >
+              {showBoardSelector ? 'Close' : 'Select Board'}
+            </button>
           </div>
 
-          {gameMode === 'hexchess' ? (
-            <p className="mt-3 text-sm text-gray-500 italic">
-              Hex Chess v1 supports only the standard 121-cell board. Custom layouts coming later.
-            </p>
-          ) : showBoardSelector && (
+          {showBoardSelector && (
             <div className="mt-4 border-t border-gray-100 pt-4 space-y-2 max-h-80 overflow-y-auto">
               {/* Standard board option */}
               <button
@@ -718,7 +766,9 @@ export default function PlayPage() {
                 </div>
                 <div>
                   <div className="font-medium text-gray-900">Standard Board</div>
-                  <div className="text-xs text-gray-500">121 cells · 2–6 players</div>
+                  <div className="text-xs text-gray-500">
+                    {gameMode === 'hexchess' ? '121 cells · 2/3/4/6 armies' : '121 cells · 2–6 players'}
+                  </div>
                 </div>
               </button>
 
@@ -735,7 +785,7 @@ export default function PlayPage() {
                     }`}
                   >
                     <div className="flex-shrink-0">
-                      <BoardPreview cells={layout.cells} startingPositions={layout.startingPositions} walls={layout.walls} size={52} />
+                      <BoardPreview cells={layout.cells} startingPositions={startsOf(layout)} walls={layout.walls} size={52} />
                     </div>
                     <div className="min-w-0">
                       <div className="font-medium text-gray-900 truncate">
@@ -743,7 +793,7 @@ export default function PlayPage() {
                         {layout.isDefault && <span className="ml-1 text-xs text-green-600">(default)</span>}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {layout.cells.length} cells &middot; {Object.entries(layout.startingPositions).filter(([, p]) => p?.length).length} players
+                        {layout.cells.length} cells &middot; {armiesOf(layout)} {gameMode === 'hexchess' ? 'armies' : 'players'}
                       </div>
                     </div>
                   </button>
@@ -762,7 +812,15 @@ export default function PlayPage() {
         </div>
 
         {/* Player count */}
-        {!selectedLayout ? (
+        {gameMode === 'hexchess' && selectedLayout ? (
+          <div className="bg-white rounded-xl shadow p-4 mb-8">
+            <h2 className="text-sm font-semibold text-gray-900 mb-1">Armies</h2>
+            <p className="text-sm text-gray-500">
+              This board plays with its {hexSeats.length} designed armies.
+              {hexSeats.length >= 3 && ' Capture a king to eliminate that player — last one standing wins.'}
+            </p>
+          </div>
+        ) : !selectedLayout ? (
           <div className="mb-8">
             {gameMode === 'hexchess' && selectedCount !== 2 && (
               <p className="text-sm text-gray-500 italic mb-2">
