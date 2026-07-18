@@ -79,16 +79,20 @@ describe('chess piece icon components', () => {
     }
   });
 
-  it('all icons contain at least one path child', () => {
+  it('all icons contain at least one path descendant', () => {
+    // Simple mode wraps shapes in a <g> (for the optional outline), so search
+    // the element tree recursively rather than only direct children.
+    const containsPath = (node: unknown): boolean => {
+      if (node === null || typeof node !== 'object') return false;
+      if (Array.isArray(node)) return node.some(containsPath);
+      const el = node as { type?: string; props?: { children?: unknown } };
+      if (el.type === 'path') return true;
+      return el.props ? containsPath(el.props.children) : false;
+    };
     const icons = [KingIcon, QueenIcon, RookIcon, BishopIcon, KnightIcon];
     for (const Icon of icons) {
-      const el = renderIcon(Icon) as { props: { children: unknown } };
-      const children = el.props.children;
-      const childArray = Array.isArray(children) ? children : [children];
-      const hasPath = childArray.some(
-        (c: unknown) => c !== null && typeof c === 'object' && (c as { type?: string }).type === 'path',
-      );
-      expect(hasPath, `${Icon.name} should have at least one path element`).toBe(true);
+      const el = renderIcon(Icon);
+      expect(containsPath(el), `${Icon.name} should have at least one path element`).toBe(true);
     }
   });
 });
