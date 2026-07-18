@@ -76,7 +76,7 @@ describe('hexchess persistence', () => {
     expect(loaded).not.toBeNull();
     expect(loaded!.id).toBe('game-001');
     expect(loaded!.mode).toBe('hexchess');
-    expect(loaded!.schemaVersion).toBe(2);
+    expect(loaded!.schemaVersion).toBe(3);
     expect(loaded!.config).toEqual(config);
     expect(loaded!.state.mode).toBe('hexchess');
     expect(loaded!.state.pieces.length).toBe(state.pieces.length);
@@ -250,7 +250,7 @@ describe('v1 record migration', () => {
 
     const loaded = loadHexChessGame('mig-001')!;
     expect(loaded).not.toBeNull();
-    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.schemaVersion).toBe(3);
     expect(loaded.config.seats).toEqual([0, 2]);
     expect(loaded.config.players[2]!.name).toBe('Bob');
     expect(loaded.config.ai).toEqual({ 2: 'medium' });
@@ -277,5 +277,25 @@ describe('v1 record migration', () => {
     for (const p of state.pieces) {
       expect(replayedCells.get(p.id)).toBe(`${p.cell.q},${p.cell.r}`);
     }
+  });
+});
+
+describe('schemaVersion 3', () => {
+  it('writes schemaVersion 3 and loads v2 records as standard-board games', () => {
+    const config = makeConfig('v3-check');
+    const state = makeState(config);
+    saveHexChessGame(config, state);
+    const raw = JSON.parse(localStorage.getItem('hexchess-game-v3-check')!);
+    expect(raw.schemaVersion).toBe(3);
+
+    // Hand-craft a v2 record: same shape, schemaVersion 2, no layout fields.
+    raw.schemaVersion = 2;
+    delete raw.state.layout;
+    delete raw.config.layout;
+    localStorage.setItem('hexchess-game-v3-check', JSON.stringify(raw));
+    const loaded = loadHexChessGame('v3-check');
+    expect(loaded).not.toBeNull();
+    expect(loaded!.schemaVersion).toBe(3);
+    expect(loaded!.state.layout).toBeUndefined();
   });
 });

@@ -20,7 +20,7 @@ const MAX_SAVED_GAMES = 20;
 // ---------------------------------------------------------------------------
 
 export interface SavedHexChessGame {
-  schemaVersion: 2;
+  schemaVersion: 3;
   mode: 'hexchess';
   id: string;
   createdAt: number;
@@ -126,7 +126,7 @@ function migrateV1(record: any): SavedHexChessGame {
   };
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     mode: 'hexchess',
     id: record.id,
     createdAt: record.createdAt,
@@ -224,7 +224,7 @@ export function saveHexChessGame(config: HexChessConfig, state: HexChessState): 
   }
 
   const record: SavedHexChessGame = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     mode: 'hexchess',
     id,
     createdAt,
@@ -286,10 +286,11 @@ export function loadHexChessGame(id: string): SavedHexChessGame | null {
     const parsed = JSON.parse(raw) as SavedHexChessGame;
     // Basic sanity check
     if (parsed.mode !== 'hexchess' || !parsed.id) return null;
-    if ((parsed as { schemaVersion: number }).schemaVersion !== 2) {
-      return migrateV1(parsed);
-    }
-    return parsed;
+    const version = (parsed as { schemaVersion: number }).schemaVersion;
+    if (version === 3) return parsed;
+    // v2 records are shape-compatible: no layout fields = standard board.
+    if (version === 2) return { ...parsed, schemaVersion: 3 };
+    return migrateV1(parsed);
   } catch {
     return null;
   }
