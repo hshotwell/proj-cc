@@ -26,6 +26,15 @@ const METALLIC_COLORS_LIST = ROW3_DISPLAY_ORDER;
 const FLOWER_COLORS_LIST = ROW4_DISPLAY_ORDER;
 const EGG_COLORS_LIST = ROW5_DISPLAY_ORDER;
 
+// Hex chess only offers row-1 colors (player colors + neutrals) — the other
+// picker rows are sternhalma-specific piece skins. A favorite color from
+// those rows is ignored in hex chess and the mode/board default applies.
+const HEX_CHESS_COLOR_SET = new Set(
+  [...COLOR_DISPLAY_ORDER, ...NEUTRAL_COLORS].map((c) => c.toLowerCase()),
+);
+const isHexChessColor = (color: string): boolean =>
+  HEX_CHESS_COLOR_SET.has(color.toLowerCase());
+
 // Classic chess defaults for Hex Chess mode (white vs black from NEUTRAL_COLORS)
 const HEX_CHESS_DEFAULT_COLORS: [string, string] = ['#ffffff', '#1a1a1a'];
 
@@ -401,7 +410,7 @@ export default function PlayPage() {
       next[seat] = selectedLayout.defaultColors?.[seat] ?? PLAYER_COLORS[seat];
     }
     const { favoriteColor } = useSettingsStore.getState();
-    if (favoriteColor && seats.length > 0) {
+    if (favoriteColor && isHexChessColor(favoriteColor) && seats.length > 0) {
       const firstSeat = seats[0];
       const clash = seats.some(st => st !== firstSeat && areTooSimilar(favoriteColor, next[st] ?? PLAYER_COLORS[st]));
       if (!clash) next[firstSeat] = favoriteColor;
