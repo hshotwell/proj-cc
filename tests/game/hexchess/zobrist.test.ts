@@ -115,3 +115,26 @@ describe('multiplayer zobrist', () => {
     expect(hashState(dead3)).not.toBe(hashState(alive));
   });
 });
+
+describe('zobrist on custom boards', () => {
+  const bareState = (pieces: HexChessState['pieces']): HexChessState => ({
+    mode: 'hexchess', pieces, currentPlayer: 0, turnNumber: 1,
+    activePlayers: [0, 2], eliminated: [], enPassantTarget: null,
+    pendingPromotion: null, moveHistory: [], positionHashes: {}, result: null,
+  });
+
+  it('hashes pieces on cells outside the 121-star without collapsing', () => {
+    // (9,0) is outside the star but inside the radius-10 editor grid.
+    const st = bareState([
+      { id: '0-king-0', player: 0, type: 'king', cell: { q: 9, r: 0, s: -9 }, hasMoved: false },
+      { id: '2-king-0', player: 2, type: 'king', cell: { q: -9, r: 0, s: 9 }, hasMoved: false },
+    ]);
+    const h1 = hashState(st);
+    expect(h1).toMatch(/^[0-9a-f]{16}$/);
+    const moved = bareState([
+      { id: '0-king-0', player: 0, type: 'king', cell: { q: 9, r: -1, s: -8 }, hasMoved: true },
+      st.pieces[1],
+    ]);
+    expect(hashState(moved)).not.toBe(h1);
+  });
+});

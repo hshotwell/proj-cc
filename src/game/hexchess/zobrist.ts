@@ -11,7 +11,6 @@
  *   - epKey[cellIndex]                    — XOR'd for enPassantTarget
  */
 
-import { getDefaultBoardCells } from '@/game/defaultLayout';
 import { coordKey } from '@/game/coordinates';
 import type { HexChessState, HexPieceType } from './state';
 
@@ -75,9 +74,18 @@ export function initZobristTable(): void {
   const SEED = 0xdeadbeef;
   const next = mulberry32(SEED);
 
-  // Build stable cell list from the canonical board
-  const boardKeySet = getDefaultBoardCells();
-  const sortedKeys = Array.from(boardKeySet).sort();
+  // Build a stable cell list over the radius-10 hex grid — the editor's full
+  // canvas — so custom boards (whose cells can lie outside the 121-star) hash
+  // correctly. 331 cells. Old saves' stored positionHashes predate this
+  // universe and go stale; repetition counts simply restart (accepted).
+  const ZOBRIST_RADIUS = 10;
+  const allKeys: string[] = [];
+  for (let q = -ZOBRIST_RADIUS; q <= ZOBRIST_RADIUS; q++) {
+    for (let r = -ZOBRIST_RADIUS; r <= ZOBRIST_RADIUS; r++) {
+      if (Math.abs(-q - r) <= ZOBRIST_RADIUS) allKeys.push(`${q},${r}`);
+    }
+  }
+  const sortedKeys = allKeys.sort();
   const cellIndexMap = new Map<string, number>();
   sortedKeys.forEach((k, i) => cellIndexMap.set(k, i));
   const numCells = sortedKeys.length;
