@@ -18,7 +18,9 @@ import { Piece } from '@/components/board/Piece';
 import { hexChessTileColor } from '@/components/board/hexChessTiles';
 import { HexPieceGrid, HEX_PIECE_ICONS } from '@/components/editor/HexPieceGrid';
 import { playStep, playJump } from '@/audio/soundEffects';
-import type { HexLayoutPieceType, HexPromotionOption } from '@/game/hexchess';
+import { deriveForward } from '@/game/hexchess';
+import type { HexLayoutPieceType, HexPromotionOption, ForwardSpec } from '@/game/hexchess';
+import { HexPromotionsPanel } from '@/components/editor/HexPromotionsPanel';
 
 type EditorMode = 'cells' | 'starting' | 'goals' | 'special';
 type EditorGameMode = 'sternhalma' | 'hexchess';
@@ -207,6 +209,9 @@ export default function EditorPage() {
   // Promotions-tab selected army (null until an army exists)
   const [promoArmy, setPromoArmy] = useState<PlayerIndex | null>(null);
 
+  /** Display color for a player: explicit editor choice, else the default. */
+  const armyColor = (pl: PlayerIndex): string => armyColors[pl] ?? PLAYER_COLORS[pl];
+
   // A color IS an army in hex chess. Seats currently holding pieces:
   const usedSeats = useMemo(() => {
     const s = new Set<PlayerIndex>();
@@ -221,33 +226,45 @@ export default function EditorPage() {
     return null;
   };
 
-  /** First use of a color claims the lowest free seat (max 6 armies). */
+  /**
+   * First use of a color claims a seat (max 6 armies). Prefers untouched
+   * seats; falls back to reclaiming a seat whose color claim is stale (its
+   * pieces and promotion tiles were all erased), overwriting the old claim.
+   */
   const claimSeatForColor = (color: string): PlayerIndex | null => {
     const existing = seatForColor(color);
     if (existing !== null) return existing;
-    const free = PLAYER_DISPLAY_ORDER.find(p => !usedSeats.has(p) && armyColors[p] === undefined);
+    const free =
+      PLAYER_DISPLAY_ORDER.find(p => !usedSeats.has(p) && armyColors[p] === undefined) ??
+      PLAYER_DISPLAY_ORDER.find(p => !usedSeats.has(p) && promotionPositions[p].size === 0);
     if (free === undefined) return null;
     setArmyColors(prev => ({ ...prev, [free]: color }));
     return free;
   };
 
-  // Free a seat's color claim once its last piece AND promotion tiles are gone
-  // (hexchess mode only — sternhalma color choices are explicit assignments).
-  useEffect(() => {
-    if (editorGameMode !== 'hexchess') return;
-    setArmyColors(prev => {
-      let changed = false;
-      const next = { ...prev };
-      for (const seatStr of Object.keys(prev)) {
-        const seat = Number(seatStr) as PlayerIndex;
-        if (!usedSeats.has(seat) && promotionPositions[seat].size === 0) {
-          delete next[seat];
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [editorGameMode, usedSeats, promotionPositions]);
+  // Live forward-direction readout per army (updates as tiles are painted)
+  const armyForwards = useMemo(() => {
+    const out: Partial<Record<PlayerIndex, ForwardSpec | null>> = {};
+    for (const seat of PLAYER_DISPLAY_ORDER) {
+      const pieceCells = [...hexPieces.entries()]
+        .filter(([, pc]) => pc.player === seat)
+        .map(([k]) => parseCoordKey(k));
+      if (pieceCells.length === 0) continue;
+      const promoCells = [...promotionPositions[seat]].map(parseCoordKey);
+      out[seat] = deriveForward(pieceCells, promoCells);
+    }
+    return out;
+  }, [hexPieces, promotionPositions]);
+
+  const armiesInUse = useMemo(
+    () => PLAYER_DISPLAY_ORDER.filter(p => usedSeats.has(p)),
+    [usedSeats],
+  );
+
+  // The army whose promotion tiles are being edited/shown: the explicit
+  // selection when still valid, else the first army in use.
+  const effectivePromoArmy: PlayerIndex | null =
+    promoArmy !== null && usedSeats.has(promoArmy) ? promoArmy : (armiesInUse[0] ?? null);
 
   /** Painting for the hexchess pieces/promotions tabs. */
   const applyHexActionToCell = (key: string, symmetricKeys: string[], action: 'add' | 'remove') => {
@@ -270,17 +287,18 @@ export default function EditorPage() {
       return;
     }
     if (hexMode === 'promotions') {
-      if (promoArmy === null) return;
+      const army = effectivePromoArmy;
+      if (army === null) return;
       if (!activeCells.has(key) || walls.has(key)) return;
       setPromotionPositions(prev => {
         const next = { ...prev };
-        const set = new Set(next[promoArmy]);
+        const set = new Set(next[army]);
         for (const symKey of symmetricKeys) {
           if (!activeCells.has(symKey) || walls.has(symKey)) continue;
           if (action === 'remove') set.delete(symKey);
           else set.add(symKey);
         }
-        next[promoArmy] = set;
+        next[army] = set;
         return next;
       });
     }
@@ -337,7 +355,7 @@ export default function EditorPage() {
     }
     if (editorGameMode === 'hexchess') {
       if (hexMode === 'pieces') return hexPieces.has(key);
-      if (hexMode === 'promotions') return promoArmy !== null && promotionPositions[promoArmy].has(key);
+      if (hexMode === 'promotions') return effectivePromoArmy !== null && promotionPositions[effectivePromoArmy].has(key);
       return false;
     }
     if (mode === 'starting') {
@@ -828,7 +846,6 @@ export default function EditorPage() {
     } else {
       handleClear();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layouts, layoutName]);
 
   const handleFillAll = () => {
@@ -1055,7 +1072,7 @@ export default function EditorPage() {
                 let fill: string;
                 let isRgbaFill = false;
                 if (tri.playerOwners.length > 0) {
-                  const colors = tri.playerOwners.map((p) => PLAYER_COLORS[p]);
+                  const colors = tri.playerOwners.map((p) => armyColor(p));
                   if (woodenBoard) {
                     const woodBase = darkMode ? [0x4a, 0x30, 0x18] : [0x8b, 0x60, 0x38];
                     const n = colors.length;
@@ -1221,9 +1238,9 @@ export default function EditorPage() {
                       cx={x}
                       cy={y}
                       r={HEX_SIZE * 0.55}
-                      fill={mode === 'goals' && goalPlayerForThisCell === selectedPlayer ? PLAYER_COLORS[selectedPlayer] : 'none'}
+                      fill={mode === 'goals' && goalPlayerForThisCell === selectedPlayer ? armyColor(selectedPlayer) : 'none'}
                       fillOpacity={mode === 'goals' && goalPlayerForThisCell === selectedPlayer ? 0.3 : 0}
-                      stroke={PLAYER_COLORS[goalPlayerForThisCell]}
+                      stroke={armyColor(goalPlayerForThisCell)}
                       strokeWidth={2}
                     />
                   )}
@@ -1235,10 +1252,27 @@ export default function EditorPage() {
                       isSelected={false}
                       onClick={() => {}}
                       size={HEX_SIZE}
+                      customColors={Object.keys(armyColors).length > 0 ? (armyColors as Record<number, string>) : undefined}
                       darkMode={darkMode}
                       glassPieces={glassPieces}
                       hexCells={hexCells}
                       variant={pieceSpecialties.get(coordKey(cubeCoord(q, r))) ?? 'normal'}
+                    />
+                  )}
+                  {/* Promotion tile outline — ONLY while that army is selected
+                      in the promotions tab; invisible everywhere else. */}
+                  {editorGameMode === 'hexchess' && hexMode === 'promotions' && effectivePromoArmy !== null &&
+                    promotionPositions[effectivePromoArmy].has(key) && (
+                    <polygon
+                      points={Array.from({ length: 6 }, (_, i) => {
+                        const angle = (Math.PI / 180) * (60 * i - 30);
+                        return `${x + (HEX_SIZE - 2.5) * Math.cos(angle)},${y + (HEX_SIZE - 2.5) * Math.sin(angle)}`;
+                      }).join(' ')}
+                      fill="none"
+                      stroke={armyColor(effectivePromoArmy)}
+                      strokeWidth={2.2}
+                      strokeDasharray="4,2.5"
+                      style={{ pointerEvents: 'none', filter: 'drop-shadow(0 0 1px rgba(0,0,0,0.5))' }}
                     />
                   )}
                   {editorGameMode === 'hexchess' && hexPieces.has(key) && (() => {
@@ -1602,8 +1636,8 @@ export default function EditorPage() {
                       >
                         <div className="w-5 h-5 rounded-full" style={
                           mode === 'goals'
-                            ? { border: `2.5px solid ${PLAYER_COLORS[player]}` }
-                            : { backgroundColor: PLAYER_COLORS[player] }
+                            ? { border: `2.5px solid ${armyColor(player)}` }
+                            : { backgroundColor: armyColor(player) }
                         } />
                         <div className={`text-xs ${dm('text-gray-400', 'text-gray-600')}`}>
                           {mode === 'starting' ? startingPositions[player].size : goalPositions[player].size}
@@ -1627,6 +1661,24 @@ export default function EditorPage() {
                       Clear Goals
                     </button>
                   )}
+                  {/* Per-player color choice (saved as the board's default colors) */}
+                  <div className="flex gap-1 flex-wrap items-center">
+                    <span className={`text-xs ${dm('text-gray-400', 'text-gray-500')}`}>Color:</span>
+                    {EDITOR_ARMY_COLORS.map((c) => {
+                      const takenByOther = Object.entries(armyColors)
+                        .some(([pl, ac]) => Number(pl) !== selectedPlayer && ac === c);
+                      const isCurrent = armyColor(selectedPlayer) === c;
+                      return (
+                        <button
+                          key={c}
+                          disabled={takenByOther}
+                          onClick={() => setArmyColors(prev => ({ ...prev, [selectedPlayer]: c }))}
+                          className={`w-4 h-4 rounded-full transition-all ${takenByOther ? 'opacity-25 cursor-not-allowed' : 'hover:scale-110'} ${isCurrent ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}
+                          style={{ backgroundColor: c, border: '1px solid rgba(0,0,0,0.3)' }}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -1700,6 +1752,24 @@ export default function EditorPage() {
                     Clear Pieces
                   </button>
                 </div>
+              )}
+
+              {/* Hex chess promotions tab */}
+              {editorGameMode === 'hexchess' && hexMode === 'promotions' && (
+                <HexPromotionsPanel
+                  armies={armiesInUse}
+                  armyColors={armyColors}
+                  promoArmy={effectivePromoArmy}
+                  onSelectArmy={setPromoArmy}
+                  options={promotionOptions}
+                  onToggleOption={(o) => setPromotionOptions(prev => {
+                    const next = new Set(prev);
+                    if (next.has(o)) next.delete(o); else next.add(o);
+                    return next;
+                  })}
+                  forwards={armyForwards}
+                  darkMode={darkMode}
+                />
               )}
 
               {/* Cells mode help */}
@@ -1797,6 +1867,24 @@ export default function EditorPage() {
                 )}
                 <span>Walls: {walls.size}</span>
               </div>
+
+              {/* Live hex chess validation */}
+              {editorGameMode === 'hexchess' && (() => {
+                const v = validateLayout(buildLayout(selectedLayoutId ?? '__editing__'));
+                if (v.valid) {
+                  return (
+                    <div className={`text-xs ${dm('text-green-400', 'text-green-600')}`}>
+                      Board is playable
+                    </div>
+                  );
+                }
+                return (
+                  <div className={`text-xs space-y-0.5 ${dm('text-amber-400', 'text-amber-600')}`}>
+                    {v.errors.slice(0, 4).map((e, i) => <div key={i}>{e}</div>)}
+                    {v.errors.length > 4 && <div>...and {v.errors.length - 4} more</div>}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Divider */}
@@ -1833,7 +1921,7 @@ export default function EditorPage() {
                   6-Way (60°)
                 </button>
               </div>
-              {symmetry !== 'none' && (
+              {symmetry !== 'none' && editorGameMode === 'sternhalma' && (
                 <label className="flex items-center gap-2 cursor-pointer group">
                   <div className="relative shrink-0">
                     <input
@@ -1855,6 +1943,26 @@ export default function EditorPage() {
                   </div>
                 </label>
               )}
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div className="relative shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={rotated30}
+                    onChange={() => setRotated30((v) => !v)}
+                    className="sr-only"
+                  />
+                  <div className={`w-8 h-4 rounded-full transition-colors ${rotated30 ? 'bg-blue-500' : dm('bg-gray-600', 'bg-gray-200')}`} />
+                  <div className={`absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${rotated30 ? 'translate-x-4' : ''}`} />
+                </div>
+                <div>
+                  <div className={`text-xs font-medium ${dm('text-gray-300 group-hover:text-gray-100', 'text-gray-700 group-hover:text-gray-900')}`}>
+                    Rotate board 30&deg;
+                  </div>
+                  <div className={`text-xs ${dm('text-gray-500', 'text-gray-500')}`}>
+                    Saved with the layout
+                  </div>
+                </div>
+              </label>
             </div>
 
           </div>
