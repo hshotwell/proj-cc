@@ -196,6 +196,11 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     const firstHuman = gs.activePlayers.find((p) => !gs.aiPlayers?.[p]) ?? gs.currentPlayer;
     return getTargetRotation(gs, firstHuman);
   });
+  // Display rotation = per-turn cumulative rotation plus the layout's fixed
+  // 30-degree offset (rotated30 boards). The offset is purely visual: rotation
+  // state updates and their deltas stay in un-offset space.
+  const rotationOffset = viewProp?.rotationOffset ?? 0;
+  const displayRotation = (isReplayActive ? 0 : cumulativeRotation) + rotationOffset;
   // Suppress the CSS transition until after the initial render so that any remaining
   // difference (e.g. game state not yet loaded) snaps rather than animates.
   const [rotationInitialized, setRotationInitialized] = useState(false);
@@ -585,6 +590,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
         color: p.color,
         pieceType: p.pieceType,
         faded: p.faded,
+        eliminated: p.eliminated,
       }));
     }
     if (!gameState) return [];
@@ -594,7 +600,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
       animatingPiece && animationPath ? coordKey(animationPath[0]) : null;
     const hideMovingKey =
       isSwapAnimation && animatingPiece ? coordKey(animatingPiece) : null;
-    const result: Array<{ coord: CubeCoord; player: PlayerIndex; color?: string; pieceType?: import('@/types/boardView').BoardPieceType; faded?: boolean }> = [];
+    const result: Array<{ coord: CubeCoord; player: PlayerIndex; color?: string; pieceType?: import('@/types/boardView').BoardPieceType; faded?: boolean; eliminated?: boolean }> = [];
     for (const [key, content] of gameState.board) {
       if (content.type === 'piece') {
         if (hideDisplacedKey && key === hideDisplacedKey) continue;
@@ -609,8 +615,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     return result;
   }, [viewProp, gameState, animatingPiece, animationPath, isSwapAnimation]);
 
-  // Get walls from board state
+  // Get walls from the view (hex chess custom boards) or board state
   const wallPositions = useMemo(() => {
+    if (viewProp) return viewProp.walls ?? [];
     if (!gameState) return [];
     const result: CubeCoord[] = [];
     for (const [key, content] of gameState.board) {
@@ -620,7 +627,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
       }
     }
     return result;
-  }, [gameState]);
+  }, [viewProp, gameState]);
 
   // Displayed moves - filtered by omniscience setting (for rendering indicators)
   const displayedMoves = useMemo(() => {
@@ -1018,9 +1025,9 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     if (!ctm) return;
     const svgCoord = pt.matrixTransform(ctm.inverse());
 
-    // The board <g> has a CSS rotation of cumulativeRotation degrees around (0,0).
+    // The board <g> has a CSS rotation of displayRotation degrees around (0,0).
     // Apply the inverse rotation to get board-local coordinates.
-    const rad = (cumulativeRotation * Math.PI) / 180;
+    const rad = (displayRotation * Math.PI) / 180;
     const cos = Math.cos(rad);
     const sin = Math.sin(rad);
     const localX = svgCoord.x * cos + svgCoord.y * sin;
@@ -1087,7 +1094,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
     >
       <g
         style={{
-          transform: isReplayActive ? undefined : `rotate(${cumulativeRotation}deg)`,
+          transform: displayRotation !== 0 || !isReplayActive ? `rotate(${displayRotation}deg)` : undefined,
           transformOrigin: '0 0',
           transition: rotationInitialized && !isReplayActive && rotateBoard && ((gameState?.activePlayers.length ?? 0) > 1 || viewProp) ? `transform ${BOARD_ROTATION_DURATION}ms ease-in-out` : undefined,
         }}
@@ -1597,7 +1604,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
 
       {/* Layer 3: Pieces */}
       <g>
-        {pieces.map(({ coord, player, color: pieceColor, pieceType: piecePieceType, faded: pieceFaded }) => {
+        {pieces.map(({ coord, player, color: pieceColor, pieceType: piecePieceType, faded: pieceFaded, eliminated: pieceEliminated }) => {
           const displayCoord = getAnimationDisplayCoord(coord);
           const isThisAnimating = !!displayCoord;
 
@@ -1627,7 +1634,13 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
               onMouseEnter={() => setHoveredCell(coord)}
               onMouseLeave={() => setHoveredCell(null)}
               onContextMenu={(e) => e.preventDefault()}
-              style={pieceFaded ? { opacity: 0, animation: 'fadeOut 0.4s ease-out forwards' } : undefined}
+              style={
+                pieceFaded
+                  ? { opacity: 0, animation: 'fadeOut 0.4s ease-out forwards' }
+                  : pieceEliminated
+                    ? { filter: 'grayscale(0.75) brightness(0.85)', opacity: 0.65 }
+                    : undefined
+              }
               onMouseDown={(e) => { if (e.button === 2) annotationDragOriginRef.current = coord; }}
             >
               <Piece
@@ -1658,7 +1671,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
                 glassPieces={glassPieces}
                 hexCells={hexCells}
                 variant={gameState?.pieceVariants?.get(pieceKey) ?? gameState?.playerPieceTypes?.[player] ?? 'normal'}
-                boardRotation={cumulativeRotation}
+                boardRotation={displayRotation}
                 showActivePlayerRing={activePlayerRing}
                 pieceType={piecePieceType}
                 faded={pieceFaded}
@@ -1702,7 +1715,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
               glassPieces={glassPieces}
               hexCells={hexCells}
               variant={movingVariant}
-              boardRotation={cumulativeRotation}
+              boardRotation={displayRotation}
             />
             <Piece
               key="swap-displaced"
@@ -1718,7 +1731,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
               glassPieces={glassPieces}
               hexCells={hexCells}
               variant={displacedVariant}
-              boardRotation={cumulativeRotation}
+              boardRotation={displayRotation}
             />
           </g>
         );
@@ -1952,7 +1965,7 @@ export function Board({ fixedRotationPlayer, isLocalPlayerTurn, onCellClick, onC
       {showCoordinates && hoveredCell && (() => {
         const pixel = cubeToPixel(hoveredCell, HEX_SIZE);
         // Apply the same rotation to position but not to the text
-        const radians = (cumulativeRotation * Math.PI) / 180;
+        const radians = (displayRotation * Math.PI) / 180;
         const rotatedX = pixel.x * Math.cos(radians) - pixel.y * Math.sin(radians);
         const rotatedY = pixel.x * Math.sin(radians) + pixel.y * Math.cos(radians);
         return (

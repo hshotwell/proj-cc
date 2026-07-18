@@ -261,7 +261,6 @@ describe('selectHexChessBoardView', () => {
 // Multiplayer view
 // ---------------------------------------------------------------------------
 
-import { ELIMINATED_GREY } from '@/store/hexChessStore';
 import type { HexChessState, HexPiece, HexPlayerIndex } from '@/game/hexchess';
 import { cubeCoord } from '@/game/coordinates';
 
@@ -300,7 +299,7 @@ function mpView(state: HexChessState) {
 }
 
 describe('selectHexChessBoardView — multiplayer', () => {
-  it('renders eliminated seats in the fixed grey and living seats in their colors', () => {
+  it('marks eliminated seats as ghost pieces keeping their owner colors', () => {
     const state: HexChessState = {
       mode: 'hexchess',
       pieces: [
@@ -319,9 +318,11 @@ describe('selectHexChessBoardView — multiplayer', () => {
       result: null,
     };
     const view = mpView(state);
-    expect(view.pieces.find(p => p.id === 'b3')!.color).toBe(ELIMINATED_GREY);
+    expect(view.pieces.find(p => p.id === 'b3')!.color).toBe('#00ff00');
+    expect(view.pieces.find(p => p.id === 'b3')!.eliminated).toBe(true);
     expect(view.pieces.find(p => p.id === 'k0')!.color).toBe('#ff0000');
-    expect(view.playerColors![3]).toBe(ELIMINATED_GREY);
+    expect(view.pieces.find(p => p.id === 'k0')!.eliminated).toBe(false);
+    expect(view.playerColors![3]).toBe('#00ff00');
     expect(view.playerColors![0]).toBe('#ff0000');
   });
 

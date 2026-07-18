@@ -5,7 +5,6 @@ import { isInCheck } from '@/game/hexchess';
 import { isEliminated } from '@/game/hexchess/board';
 import { getCSSColor } from '@/game/constants';
 import { ColorSwatch } from '@/components/ui/SpecialSwatch';
-import { ELIMINATED_GREY } from '@/store/hexChessStore';
 
 interface HexTurnIndicatorProps {
   state: HexChessState;
@@ -75,8 +74,8 @@ export function HexTurnIndicator({ state, config }: HexTurnIndicatorProps) {
               } ${isCurrent ? 'font-semibold' : ''}`}
             >
               <ColorSwatch
-                color={eliminated ? ELIMINATED_GREY : seatConfig.color}
-                className="w-5 h-5"
+                color={seatConfig.color}
+                className={`w-5 h-5 ${eliminated ? 'grayscale' : ''}`}
               />
               <span className={eliminated ? 'line-through text-gray-500' : ''}>
                 {seatConfig.name}

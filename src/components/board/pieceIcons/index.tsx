@@ -16,8 +16,10 @@ export function pieceIconFor(type: BoardPieceType) {
     case 'rook': return RookIcon;
     case 'bishop': return BishopIcon;
     case 'knight': return KnightIcon;
-    case 'soldier': return PeonIcon;   // Hex Chess "Soldier" is displayed as "Peon"
-    case 'pawn': return PawnIcon;
+    // Unified pawn/peon: one icon regardless of which ruleset the engine
+    // assigned (soldier = point-forward, pawn = edge-forward).
+    case 'soldier': return PeonIcon;
+    case 'pawn': return PeonIcon;
     default: return null;              // marble has no glyph
   }
 }

@@ -13,7 +13,6 @@ import {
 } from '@/game/hexchess';
 import { eliminatePlayer } from '@/game/hexchess/moves';
 import { cubeEquals, parseCoordKey, coordKey } from '@/game/coordinates';
-import { getDefaultBoardCells } from '@/game/defaultLayout';
 import { ROTATION_FOR_PLAYER } from '@/game/constants';
 import type { BoardView, BoardPiece, BoardHighlight } from '@/types/boardView';
 import { kingOf, isEliminated, livingPlayers, nextLivingPlayer } from '@/game/hexchess/board';
@@ -22,9 +21,6 @@ import { playStep, playCapture, playCheck, playCheckmate } from '@/audio/soundEf
 
 /** Duration (ms) the captured piece overlay persists for the fade-out animation. */
 const CAPTURE_ANIM_DURATION_MS = 400;
-
-/** Fixed dull grey for eliminated players' frozen armies. */
-export const ELIMINATED_GREY = '#8a8a8a';
 
 /** Captured piece kept alive in the store for the fade-out window. */
 export interface AnimatingCapture {
@@ -359,19 +355,20 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
 
   if (!state || !config) return null;
 
-  // Build all 121 board cells
-  const defaultCells = getDefaultBoardCells();
-  const cells: CubeCoord[] = Array.from(defaultCells).map(parseCoordKey);
+  // Board cells from geometry: the 121-star for standard games, the custom
+  // layout's cells (minus nothing — walls render separately) otherwise.
+  const geom = geometryOf(state);
+  const cells: CubeCoord[] = Array.from(geom.cells).map(parseCoordKey);
 
   // No home-zone tinting on the star points — the 3-shade beige/brown board
   // pattern already indicates position clearly, and the arms are visually
   // distinct via their star shape.
   const homeZones = new Map<PlayerIndex, CubeCoord[]>();
 
-  // Eliminated players' frozen armies render in a fixed dull grey regardless
-  // of the seat's chosen color.
-  const colorForSeat = (seat: HexPlayerIndex): string =>
-    isEliminated(state, seat) ? ELIMINATED_GREY : config.players[seat]!.color;
+  // Eliminated players' frozen armies keep their owner's color but render as
+  // faded ghosts (grayscale + opacity in Board.tsx) — so a living grey army
+  // stays distinguishable from the dead.
+  const colorForSeat = (seat: HexPlayerIndex): string => config.players[seat]!.color;
 
   // Build pieces list from active pieces in state
   const pieces: BoardPiece[] = state.pieces.map(piece => ({
@@ -380,6 +377,7 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
     color: colorForSeat(piece.player),
     pieceType: piece.type,
     faded: false,
+    eliminated: isEliminated(state, piece.player),
   }));
 
   // If a capture animation is in progress, overlay the captured piece as faded
@@ -393,6 +391,7 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
       color: colorForSeat(cp.player),
       pieceType: cp.type,
       faded: true,
+      eliminated: isEliminated(state, cp.player),
     });
   }
 
@@ -492,5 +491,7 @@ export function selectHexChessBoardView(store: HexChessStoreState): BoardView | 
       config.seats.map(s => [s, colorForSeat(s)])
     ) as Record<number, string>,
     gameId: config.id,
+    walls: Array.from(geom.walls).map(parseCoordKey),
+    rotationOffset: state.layout?.rotated30 ? 30 : 0,
   };
 }

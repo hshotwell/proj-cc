@@ -175,23 +175,22 @@ describe('orderMoves', () => {
 
 describe('quiescence search', () => {
   it('correctly evaluates net material after a free exchange sequence', () => {
-    // Scenario: player 0 rook can capture player 1 pawn.
-    // After the capture, no further recapture is possible (pawn is not defended).
-    // Quiescence should evaluate this better than just stand-pat at depth 0.
+    // Scenario: player 0 rook can capture player 1 knight for free.
+    // (A knight rather than a pawn: under the unified pawn rules a hanging
+    // pawn's only move keeps it on the rook's ray, so delaying the capture
+    // costs nothing and the quiet line legitimately ties. A knight can leap
+    // to safety, so the capture must be taken NOW to win material.)
     //
     // With quiescence: after depth=0 leaf, it will extend into the capture and
-    // correctly account for the captured pawn's value rather than stopping before it.
-    //
-    // We test this by verifying that at depth=1 the search finds the capture,
-    // consistent with quiescence not artificially inflating the score by seeing
-    // a hanging attacker.
+    // correctly account for the captured piece's value rather than stopping
+    // before it.
     const base = createInitialState(config);
     const pieces: HexPiece[] = [
       { id: '0-king', player: 0, type: 'king', cell: { q: 4, r: -8, s: 4 }, hasMoved: true },
       { id: '0-rook', player: 0, type: 'rook', cell: { q: 0, r: 0, s: 0 }, hasMoved: true },
       { id: '1-king', player: 2, type: 'king', cell: { q: -4, r: 8, s: -4 }, hasMoved: true },
-      // Pawn undefended — rook can take it for free
-      { id: '1-pawn', player: 2, type: 'pawn', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
+      // Knight undefended — rook can take it for free, but only right now
+      { id: '1-knight', player: 2, type: 'knight', cell: { q: 1, r: 0, s: -1 }, hasMoved: true },
     ];
     const state: HexChessState = {
       ...base,
@@ -207,9 +206,9 @@ describe('quiescence search', () => {
 
     const result = searchBestMove(state, { budgetMs: 2000, maxDepth: 2 });
     expect(result.move).not.toBeNull();
-    // Should capture the hanging pawn
+    // Should capture the hanging knight
     expect(result.move!.capture).not.toBeNull();
-    expect(result.move!.capture!.pieceId).toBe('1-pawn');
+    expect(result.move!.capture!.pieceId).toBe('1-knight');
   });
 
   it('quiescence does not blunder into a losing exchange (pawn takes defended rook)', () => {

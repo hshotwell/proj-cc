@@ -27,6 +27,8 @@ export interface BoardPiece {
   color: PieceColor;
   pieceType?: BoardPieceType;
   faded?: boolean;
+  /** Render as a faded ghost of its color (eliminated army in 3+ player hex chess). */
+  eliminated?: boolean;
 }
 
 export interface BoardHighlight {
@@ -73,4 +75,8 @@ export interface BoardView {
   /** Stable identity for the current game/replay, used to reset local-only
    * UI state (e.g. board annotations) when it changes. */
   gameId?: string;
+  /** Wall cells to render as impassable terrain (custom layouts). */
+  walls?: CubeCoord[];
+  /** Extra display rotation in degrees (30 for rotated30 layouts). Purely visual. */
+  rotationOffset?: number;
 }
