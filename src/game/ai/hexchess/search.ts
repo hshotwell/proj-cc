@@ -1,7 +1,7 @@
 import type { HexChessState, HexMove } from '@/game/hexchess';
 import { legalMoves, applyMove, confirmPromotion } from '@/game/hexchess';
 import { hashState } from '@/game/hexchess/zobrist';
-import { evaluate } from './evaluate';
+import { evaluate, MATE_CP } from './evaluate';
 import { orderMoves } from './moveOrdering';
 import { TranspositionTable } from './transposition';
 import type { TTFlag } from './transposition';
@@ -99,7 +99,13 @@ function minimax(
   maximizing: boolean,
 ): { score: number; move: HexMove | null } {
   if (state.result !== null) {
-    return { score: evaluate(state), move: null };
+    const raw = evaluate(state);
+    // Scale mate scores by remaining depth: a mate found closer to the root
+    // scores more extreme, so the winner prefers the fastest mate and the
+    // loser the longest resistance.
+    if (raw >= MATE_CP) return { score: raw + depth, move: null };
+    if (raw <= -MATE_CP) return { score: raw - depth, move: null };
+    return { score: raw, move: null };
   }
 
   if (depth === 0) {
@@ -189,12 +195,15 @@ export function searchBestMove(
   for (let depth = 1; depth <= options.maxDepth; depth++) {
     if (Date.now() - startedAt >= options.budgetMs) break;
     const result = minimax(state, depth, -Infinity, Infinity, rootMaximizing);
-    best = {
-      move: result.move,
-      evalCp: result.score,
-      depth,
-      nodes: 0, // node counting deferred (v1)
-    };
+    // Never replace a move found at a shallower depth with null.
+    if (result.move !== null) {
+      best = {
+        move: result.move,
+        evalCp: result.score,
+        depth,
+        nodes: 0, // node counting deferred (v1)
+      };
+    }
   }
 
   return best;

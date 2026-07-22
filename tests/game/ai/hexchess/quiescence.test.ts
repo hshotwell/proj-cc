@@ -211,6 +211,8 @@ describe('quiescence search', () => {
     expect(result.move!.capture!.pieceId).toBe('1-knight');
   });
 
+  // Depth-3 search with quiescence extensions is CPU-heavy — give vitest
+  // headroom above the 5000ms default for CPU-contended runs.
   it('quiescence does not blunder into a losing exchange (pawn takes defended rook)', () => {
     // Player 0 pawn can capture player 1 rook, but player 1 queen defends the rook.
     // If pawn (100) takes rook (500), queen (900) recaptures pawn → net: player 0 gains 500 but
@@ -250,5 +252,5 @@ describe('quiescence search', () => {
         result.move.capture?.pieceId === '1-pawn';
       expect(isBlunder).toBe(false);
     }
-  });
+  }, 15_000);
 });

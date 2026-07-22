@@ -17,6 +17,12 @@ const MATERIAL_VALUES: Record<HexPieceType, number> = {
   soldier: 100,
 };
 
+// 2-player mate score — a large FINITE value. ±Infinity here would make every
+// mated line compare equal (Infinity > Infinity is false), so minimax could
+// never pick a "least bad" move and would return null while legal moves still
+// existed, stalling the game.
+export const MATE_CP = 1_000_000;
+
 // Max^n terminal scores — large finite values keep vector comparisons sane.
 const MAXN_WIN = 1_000_000_000;
 const MAXN_ELIMINATED = -1_000_000;
@@ -80,9 +86,7 @@ export function evaluate(state: HexChessState): number {
 
   if (state.result) {
     if (state.result.winner === 'draw') return 0;
-    return state.result.winner === seatA
-      ? Number.POSITIVE_INFINITY
-      : Number.NEGATIVE_INFINITY;
+    return state.result.winner === seatA ? MATE_CP : -MATE_CP;
   }
 
   const tempo = state.currentPlayer === seatA ? 5 : -5;

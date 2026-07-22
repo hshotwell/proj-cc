@@ -146,9 +146,18 @@ export function useHexChessAITurn(enabled: boolean = true) {
           console.debug(`[hexchess AI] result discarded — turn advanced past player ${currentPlayer}`);
           return;
         }
-        if (result.move === null) {
-          console.debug(`[hexchess AI] no move returned for player ${currentPlayer}`);
-          return;
+        let engineMove = result.move;
+        if (engineMove === null) {
+          // Safety net: the engine should always return a move while legal
+          // moves exist. If it ever fails to, play any legal move rather than
+          // stalling the game forever.
+          const fallbacks = legalMoves(store.state);
+          if (fallbacks.length === 0) {
+            console.debug(`[hexchess AI] no move returned for player ${currentPlayer} (no legal moves)`);
+            return;
+          }
+          console.warn(`[hexchess AI] engine returned no move for player ${currentPlayer} despite ${fallbacks.length} legal moves — playing fallback`);
+          engineMove = fallbacks[0];
         }
         // Handicap: at easier tiers the AI occasionally picks a suboptimal
         // move. Two independent chances:
@@ -156,17 +165,17 @@ export function useHexChessAITurn(enabled: boolean = true) {
         //     onto an attacked cell with no adequate defender).
         //   - shuffleChance: pick a random legal move that is at least NOT a
         //     piece-hanger — wastes a tempo without giving material away.
-        let chosenMove = result.move;
+        let chosenMove = engineMove;
         const profile = DIFFICULTY_BUDGET[difficultyForTurn];
         const currentState = store.state;
         if (currentState) {
           const legals = legalMoves(currentState);
-          const nextState = applyMove(currentState, result.move);
+          const nextState = applyMove(currentState, engineMove);
           const isMultiplayer = rulesModeOf(currentState) === 'king-capture';
           // Never let a found mate (2p) or an actual king capture (3+)
           // get thrown away by a blunder/shuffle roll.
-          const capturedVictim = result.move.capture
-            ? currentState.pieces.find(p => p.id === result.move!.capture!.pieceId)
+          const capturedVictim = engineMove.capture
+            ? currentState.pieces.find(p => p.id === engineMove.capture!.pieceId)
             : undefined;
           const isDecisive = isMultiplayer
             ? capturedVictim?.type === 'king'
@@ -204,7 +213,7 @@ export function useHexChessAITurn(enabled: boolean = true) {
         if (applied) {
           const freshState = useHexChessStore.getState().state;
           if (freshState?.pendingPromotion) {
-            useHexChessStore.getState().confirmPromotion(result.move.promotion ?? 'queen');
+            useHexChessStore.getState().confirmPromotion(engineMove.promotion ?? 'queen');
           }
         }
       })

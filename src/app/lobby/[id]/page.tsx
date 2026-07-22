@@ -12,9 +12,12 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { PLAYER_COLORS, EXTRA_COLORS_NO_GEMS, ROW3_DISPLAY_ORDER, ROW4_DISPLAY_ORDER, ROW5_DISPLAY_ORDER, GEM_COLORS, NEUTRAL_COLORS, getMetallicSwatchStyle, getGemSwatchStyle, getGemSimpleBackground, COLOR_DISPLAY_ORDER, getColorName } from '@/game/constants';
 import { SpecialSwatch, ColorSwatch, FlowerSwatch, EggSwatch, MetallicGemTwinkle } from '@/components/ui/SpecialSwatch';
 import { ColorPicker } from '@/components/ui/ColorPicker';
+import { BoardPreview } from '@/components/ui/BoardPreview';
 import { areTooSimilar } from '@/game/colors';
 import { validateLayout } from '@/game/layoutValidation';
 import { TRADITIONAL_HEX_LAYOUT } from '@/game/hexchess/traditionalLayout';
+import { DEFAULT_BOARD_LAYOUT } from '@/game/defaultLayout';
+import type { PlayerIndex } from '@/types/game';
 
 const AVAILABLE_COLORS = [...Object.values(PLAYER_COLORS), ...NEUTRAL_COLORS, ...EXTRA_COLORS_NO_GEMS, ...GEM_COLORS, ...ROW4_DISPLAY_ORDER, ...ROW5_DISPLAY_ORDER];
 
@@ -30,11 +33,12 @@ const METALLIC_COLORS_LIST = ROW3_DISPLAY_ORDER;
 const FLOWER_COLORS_LIST = ROW4_DISPLAY_ORDER;
 const EGG_COLORS_LIST = ROW5_DISPLAY_ORDER;
 
-const PLAYER_COUNT_OPTIONS = [
-  { count: 2, label: '2 Players' },
-  { count: 3, label: '3 Players' },
-  { count: 4, label: '4 Players' },
-  { count: 6, label: '6 Players' },
+// Mirrors src/app/play/page.tsx so the standard-board setup UI matches.
+const PLAYER_COUNT_OPTIONS: { count: number; description: string }[] = [
+  { count: 2, description: 'Head to head' },
+  { count: 3, description: 'Three-way battle' },
+  { count: 4, description: 'Two vs Two' },
+  { count: 6, description: 'Full board chaos' },
 ];
 
 function FriendPicker({ friends, onSelect, onClose }: {
@@ -308,6 +312,45 @@ function LobbyContent() {
     }
   };
 
+  // Piece positions for a board preview (hexchess stores pieces per cell,
+  // mirrors src/app/play/page.tsx's startsOf/armiesOf).
+  const startsOf = (b: any): Partial<Record<PlayerIndex, string[]>> => {
+    if ((b.gameMode ?? 'sternhalma') !== 'hexchess') return b.startingPositions ?? {};
+    const by: Partial<Record<PlayerIndex, string[]>> = {};
+    for (const [k, pc] of Object.entries(b.hexPieces ?? {})) {
+      (by[(pc as any).player as PlayerIndex] ??= []).push(k);
+    }
+    return by;
+  };
+  const armiesOf = (b: any): number => Object.keys(startsOf(b)).length;
+
+  const selectedCustomBoard = (game as any).selectedLayoutId
+    ? ((lobbyBoards ?? []) as any[]).find((b: any) => b._id === (game as any).selectedLayoutId)
+    : null;
+  const isTraditionalHexBoard = selectedBuiltinLayoutId === TRADITIONAL_HEX_LAYOUT.id;
+
+  const currentBoardName = isTraditionalHexBoard
+    ? TRADITIONAL_HEX_LAYOUT.name
+    : selectedCustomBoard
+      ? selectedCustomBoard.name
+      : 'Standard Board';
+  const previewCells = isTraditionalHexBoard
+    ? TRADITIONAL_HEX_LAYOUT.cells
+    : selectedCustomBoard
+      ? selectedCustomBoard.cells
+      : DEFAULT_BOARD_LAYOUT.cells;
+  const previewStarts = isTraditionalHexBoard
+    ? startsOf(TRADITIONAL_HEX_LAYOUT)
+    : selectedCustomBoard
+      ? startsOf(selectedCustomBoard)
+      : DEFAULT_BOARD_LAYOUT.startingPositions;
+  const previewWalls = isTraditionalHexBoard ? TRADITIONAL_HEX_LAYOUT.walls : selectedCustomBoard?.walls;
+  const previewCellCountLabel = isTraditionalHexBoard
+    ? `${TRADITIONAL_HEX_LAYOUT.cells.length} cells`
+    : selectedCustomBoard
+      ? `${selectedCustomBoard.cells.length} cells`
+      : '121 cells · classic Chinese Checkers';
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
@@ -319,227 +362,271 @@ function LobbyContent() {
 
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Game Lobby</h1>
 
-        {/* Game Config */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Game Setup</h2>
+        {/* Game Mode segmented control — mirrors src/app/play/page.tsx */}
+        <div className="mb-4">
+          <div className="font-medium text-gray-900 mb-1">Game Mode</div>
+          <div className="flex gap-2">
+            {([
+              { value: 'sternhalma' as const, label: 'Chinese Checkers' },
+              { value: 'hexchess' as const, label: 'Hex Chess' },
+            ]).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                disabled={!isHost}
+                onClick={() => isHost && void setGameTypeMutation({ gameId, gameType: value }).catch(console.error)}
+                className={`px-4 py-2 rounded border ${
+                  gameType === value
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : isHost
+                      ? 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      : 'bg-white text-gray-400 border-gray-200 cursor-default'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-          {/* Game type */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Game</label>
-            <div className="flex gap-2">
-              {([
-                { value: 'sternhalma' as const, label: 'Sternhalma' },
-                { value: 'hexchess' as const, label: 'Hex Chess' },
-              ]).map(({ value, label }) => (
+        {/* Board selector — mirrors src/app/play/page.tsx */}
+        <div className="bg-white rounded-xl shadow p-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="flex-shrink-0 rounded overflow-hidden">
+              <BoardPreview cells={previewCells} startingPositions={previewStarts} walls={previewWalls} size={72} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-gray-900">{currentBoardName}</div>
+              <div className="text-sm text-gray-500">{previewCellCountLabel}</div>
+            </div>
+            {isHost && (
+              <button
+                onClick={() => setShowBoardSelector((v) => !v)}
+                className="px-3 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
+              >
+                {showBoardSelector ? 'Close' : 'Select Board'}
+              </button>
+            )}
+          </div>
+
+          {layoutResetNotice && isHost && (
+            <p className="text-xs text-amber-600 mt-2">Board reset — the player who owned that layout left the lobby.</p>
+          )}
+
+          {showBoardSelector && isHost && (
+            <div className="mt-4 border-t border-gray-100 pt-4 space-y-2 max-h-80 overflow-y-auto">
+              {/* Standard board option */}
+              <button
+                onClick={() => void handleSetLayout(null)}
+                className={`w-full p-3 rounded-lg border-2 text-left transition-all flex items-center gap-3 ${
+                  !(game as any).selectedLayoutId && !selectedBuiltinLayoutId ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex-shrink-0">
+                  <BoardPreview cells={DEFAULT_BOARD_LAYOUT.cells} startingPositions={DEFAULT_BOARD_LAYOUT.startingPositions} size={52} />
+                </div>
+                <div>
+                  <div className="font-medium text-gray-900">Standard Board</div>
+                  <div className="text-xs text-gray-500">
+                    {isHexChess ? '2–6 players · star board' : '2–6 players · 121 cells'}
+                  </div>
+                </div>
+              </button>
+
+              {/* Built-in + custom layouts */}
+              {isHexChess && (
                 <button
-                  key={value}
-                  disabled={!isHost}
-                  onClick={() => isHost && void setGameTypeMutation({ gameId, gameType: value }).catch(console.error)}
-                  className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
-                    gameType === value
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : isHost
-                        ? 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                        : 'border-gray-200 bg-white text-gray-400 cursor-default'
+                  onClick={() => void handleSetBuiltinLayout(TRADITIONAL_HEX_LAYOUT.id)}
+                  className={`w-full p-3 rounded-lg border-2 text-left transition-all flex items-center gap-3 ${
+                    isTraditionalHexBoard ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  {label}
+                  <div className="flex-shrink-0">
+                    <BoardPreview cells={TRADITIONAL_HEX_LAYOUT.cells} startingPositions={startsOf(TRADITIONAL_HEX_LAYOUT)} walls={TRADITIONAL_HEX_LAYOUT.walls} size={52} />
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">{TRADITIONAL_HEX_LAYOUT.name}</div>
+                    <div className="text-xs text-gray-500">2 players · {TRADITIONAL_HEX_LAYOUT.cells.length} cells</div>
+                  </div>
+                </button>
+              )}
+
+              {(() => {
+                const boards = ((lobbyBoards ?? []) as any[]).filter(
+                  (b: any) => (b.gameMode ?? 'sternhalma') === gameType
+                );
+                if (boards.length === 0) {
+                  return <p className="text-sm text-gray-400 px-2 py-1">No custom layouts yet.</p>;
+                }
+                const byOwner = new Map<string, { ownerUsername: string; boards: any[] }>();
+                for (const b of boards) {
+                  const entry = byOwner.get(b.ownerId) ?? { ownerUsername: b.ownerUsername, boards: [] as any[] };
+                  entry.boards.push(b);
+                  byOwner.set(b.ownerId, entry);
+                }
+                return [...byOwner.entries()].map(([ownerId, { ownerUsername, boards: ownerBoards }]) => (
+                  <div key={ownerId}>
+                    <div className="px-1 pt-2 pb-1 text-xs font-medium text-gray-500">
+                      {ownerUsername}&apos;s boards
+                    </div>
+                    {ownerBoards.map((board: any) => (
+                      <button
+                        key={board._id}
+                        onClick={() => void handleSetLayout(board._id)}
+                        className={`w-full p-3 rounded-lg border-2 text-left transition-all flex items-center gap-3 ${
+                          (game as any).selectedLayoutId === board._id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex-shrink-0">
+                          <BoardPreview cells={board.cells} startingPositions={startsOf(board)} walls={board.walls} size={52} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-900 truncate">
+                            {board.name}
+                            {board.isDefault && <span className="ml-1 text-xs text-green-600">(default)</span>}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {board.cells.length} cells &middot; {armiesOf(board)} {gameType === 'hexchess' ? 'armies' : 'players'}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ));
+              })()}
+
+              <Link
+                href="/editor"
+                onClick={() => setShowBoardSelector(false)}
+                className="block text-center text-sm text-blue-600 hover:text-blue-500 py-2"
+              >
+                + Create in Board Editor
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Player Count / Armies — mirrors src/app/play/page.tsx */}
+        {isHexChess && (selectedBuiltinLayoutId || (game as any).selectedLayoutId) ? (
+          <div className="bg-white rounded-xl shadow p-4 mb-6">
+            <h2 className="text-sm font-semibold text-gray-900 mb-1">Armies</h2>
+            <p className="text-sm text-gray-500">
+              This board plays with its {game.playerCount} designed armies.
+              {game.playerCount >= 3 && ' Capture a king to eliminate that player — last one standing wins.'}
+            </p>
+          </div>
+        ) : (
+          <div className="mb-6">
+            {isHexChess && game.playerCount !== 2 && (
+              <p className="text-sm text-gray-500 italic mb-2">
+                Multiplayer hex chess: capture a king to eliminate that player. Last one standing wins.
+              </p>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {PLAYER_COUNT_OPTIONS.map(({ count, description }) => (
+                <button
+                  key={count}
+                  disabled={!isHost}
+                  onClick={() => isHost && void handlePlayerCountChange(count)}
+                  className={`p-6 rounded-xl border-2 transition-all ${
+                    game.playerCount === count
+                      ? 'border-blue-500 bg-blue-50 shadow-lg'
+                      : isHost
+                        ? 'border-gray-200 bg-white hover:border-gray-300'
+                        : 'border-gray-200 bg-white cursor-default'
+                  }`}
+                >
+                  <div className="text-4xl font-bold text-gray-900 mb-1">{count}</div>
+                  <div className="text-sm text-gray-500">{description}</div>
                 </button>
               ))}
             </div>
           </div>
+        )}
 
-          {/* Player Count (host only; hidden when a hex chess board fixes the seats) */}
-          {isHost && (!isHexChess || (!selectedBuiltinLayoutId && !(game as any).selectedLayoutId)) && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Players</label>
-              <div className="flex gap-2">
-                {PLAYER_COUNT_OPTIONS.map(({ count, label }) => (
+        {/* Variant Rules — mirrors src/app/play/page.tsx */}
+        <div className="bg-white rounded-xl shadow p-4 mb-6">
+          <div className="font-medium text-gray-900 mb-1">Variant Rules</div>
+          {!isHexChess ? (
+            <>
+              <div className="text-sm text-gray-500 mb-3">Sets the movement style for all players&apos; pieces</div>
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  { value: 'normal' as const, label: 'Normal',   desc: 'Classic hop over adjacent piece' },
+                  { value: 'turbo'  as const, label: 'Turbo',    desc: 'Hop any distance, land same distance away — smaller pieces' },
+                  { value: 'ghost'  as const, label: 'Spectral', desc: 'Hop through a row of pieces, land after the run — translucent pieces' },
+                  { value: 'big'    as const, label: 'Blockade', desc: 'Opponents cannot jump over your pieces' },
+                ]).map(({ value, label, desc }) => (
                   <button
-                    key={count}
-                    onClick={() => void handlePlayerCountChange(count)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      game.playerCount === count
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    key={value}
+                    disabled={!isHost}
+                    onClick={() => isHost && void handleSetGameMode(value)}
+                    title={desc}
+                    className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
+                      ((game as any).gameMode ?? 'normal') === value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : isHost
+                          ? 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                          : 'border-gray-200 bg-white text-gray-400 cursor-default'
                     }`}
                   >
                     {label}
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Game Mode (sternhalma only) */}
-          {!isHexChess && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Game Mode</label>
-            <div className="flex gap-2 flex-wrap">
-              {([
-                { value: 'normal' as const, label: 'Normal',   desc: 'Standard movement rules' },
-                { value: 'turbo'  as const, label: 'Turbo',    desc: 'Pieces scan past empty cells and hop the same distance on the other side' },
-                { value: 'ghost'  as const, label: 'Spectral', desc: 'Hop over an entire adjacent run, land in the first open cell after the run' },
-                { value: 'big'    as const, label: 'Blockade', desc: 'Opponents cannot jump over your pieces' },
-              ]).map(({ value, label, desc }) => (
-                <button
-                  key={value}
-                  disabled={!isHost}
-                  onClick={() => isHost && void handleSetGameMode(value)}
-                  title={desc}
-                  className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border-2 transition-colors ${
-                    ((game as any).gameMode ?? 'normal') === value
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : isHost
-                        ? 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                        : 'border-gray-200 bg-white text-gray-400 cursor-default'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          )}
-
-          {/* Team Mode (sternhalma, 4 or 6 players only) */}
-          {!isHexChess && (game.playerCount === 4 || game.playerCount === 6) && (
-            <div className="mb-4 flex items-center gap-2">
-              <input
-                id="teamMode"
-                type="checkbox"
-                disabled={!isHost}
-                checked={(game as any).teamMode ?? false}
-                onChange={(e) => isHost && void handleSetTeamMode(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded border-gray-300 disabled:opacity-50"
-              />
-              <label
-                htmlFor="teamMode"
-                className={`text-sm font-medium ${isHost ? 'text-gray-700 cursor-pointer' : 'text-gray-400'}`}
-              >
-                Team mode — opposite players are teammates, both must finish to win
-              </label>
-            </div>
-          )}
-
-          {/* Board Selection */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Board</label>
-            {layoutResetNotice && isHost && (
-              <p className="text-xs text-amber-600 mb-2">Board reset — the player who owned that layout left the lobby.</p>
-            )}
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-700">
-                {selectedBuiltinLayoutId === TRADITIONAL_HEX_LAYOUT.id
-                  ? TRADITIONAL_HEX_LAYOUT.name
-                  : (game as any).selectedLayoutId
-                    ? ((lobbyBoards ?? []) as any[]).find((b: any) => b._id === (game as any).selectedLayoutId)?.name ?? 'Custom Board'
-                    : 'Standard Board'}
-              </span>
-              {isHost && (
-                <button
-                  onClick={() => setShowBoardSelector((v) => !v)}
-                  className="px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  {showBoardSelector ? 'Close' : 'Select Board'}
-                </button>
-              )}
-            </div>
-            {showBoardSelector && isHost && (
-              <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => void handleSetLayout(null)}
-                  className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 ${
-                    !(game as any).selectedLayoutId && !selectedBuiltinLayoutId ? 'font-medium text-blue-700 bg-blue-50' : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Standard Board
-                  <span className="ml-2 text-xs text-gray-400">
-                    {isHexChess ? '2–6 players · star board' : '2–6 players · 121 cells'}
-                  </span>
-                </button>
-                {isHexChess && (
-                  <button
-                    onClick={() => void handleSetBuiltinLayout(TRADITIONAL_HEX_LAYOUT.id)}
-                    className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 ${
-                      selectedBuiltinLayoutId === TRADITIONAL_HEX_LAYOUT.id
-                        ? 'font-medium text-blue-700 bg-blue-50'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    {TRADITIONAL_HEX_LAYOUT.name}
-                    <span className="ml-2 text-xs text-gray-400">2 players · 91 cells</span>
-                  </button>
-                )}
-                {((lobbyBoards ?? []) as any[]).length > 0 && (() => {
-                  const boards = ((lobbyBoards ?? []) as any[]).filter(
-                    (b: any) => (b.gameMode ?? 'sternhalma') === gameType
-                  );
-                  const byOwner = new Map<string, { ownerUsername: string; boards: any[] }>();
-                  for (const b of boards) {
-                    const entry = byOwner.get(b.ownerId) ?? { ownerUsername: b.ownerUsername, boards: [] as any[] };
-                    entry.boards.push(b);
-                    byOwner.set(b.ownerId, entry);
-                  }
-                  return [...byOwner.entries()].map(([ownerId, { ownerUsername, boards: ownerBoards }]) => (
-                    <div key={ownerId}>
-                      <div className="px-4 py-1.5 text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-100">
-                        {ownerUsername}&apos;s boards
-                      </div>
-                      {ownerBoards.map((board: any) => (
-                        <button
-                          key={board._id}
-                          onClick={() => void handleSetLayout(board._id)}
-                          className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 ${
-                            (game as any).selectedLayoutId === board._id
-                              ? 'font-medium text-blue-700 bg-blue-50'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          {board.name}
-                          {board.playerCounts?.length > 0 && (
-                            <span className="ml-2 text-xs text-gray-400">
-                              {board.playerCounts.join('/')} players
-                            </span>
-                          )}
-                        </button>
-                      ))}
+              {(game.playerCount === 4 || game.playerCount === 6) && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      disabled={!isHost}
+                      checked={(game as any).teamMode ?? false}
+                      onChange={(e) => isHost && void handleSetTeamMode(e.target.checked)}
+                      className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">Team Mode</div>
+                      <div className="text-sm text-gray-500">Opposite players are teammates — both must finish to win</div>
                     </div>
-                  ));
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* AI Config for adding to empty slots (host only) */}
-          {isHost && hasEmptySlots && (
-            <div className="border-t pt-4 mt-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">AI Settings (for empty slots)</label>
-              <div className="flex gap-4">
-                <select
-                  value={aiDifficulty}
-                  onChange={(e) => setAiDifficulty(e.target.value)}
-                  className="px-3 py-1.5 border rounded-lg text-sm"
-                >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
-                {!isHexChess && (
-                  <select
-                    value={aiPersonality}
-                    onChange={(e) => setAiPersonality(e.target.value)}
-                    className="px-3 py-1.5 border rounded-lg text-sm"
-                  >
-                    <option value="generalist">Generalist</option>
-                    <option value="defensive">Defensive</option>
-                    <option value="aggressive">Aggressive</option>
-                  </select>
-                )}
-              </div>
-            </div>
+                  </label>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 italic">No variants available yet for Hex Chess.</p>
           )}
         </div>
+
+        {/* AI Settings for empty slots (host only) */}
+        {isHost && hasEmptySlots && (
+          <div className="bg-white rounded-xl shadow p-4 mb-6">
+            <div className="font-medium text-gray-900 mb-2">
+              AI Settings <span className="text-sm font-normal text-gray-500">(for empty slots)</span>
+            </div>
+            <div className="flex gap-4">
+              <select
+                value={aiDifficulty}
+                onChange={(e) => setAiDifficulty(e.target.value)}
+                className="px-3 py-1.5 border rounded-lg text-sm"
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+              {!isHexChess && (
+                <select
+                  value={aiPersonality}
+                  onChange={(e) => setAiPersonality(e.target.value)}
+                  className="px-3 py-1.5 border rounded-lg text-sm"
+                >
+                  <option value="generalist">Generalist</option>
+                  <option value="defensive">Defensive</option>
+                  <option value="aggressive">Aggressive</option>
+                </select>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Player Slots */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">

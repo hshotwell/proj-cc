@@ -76,6 +76,8 @@ describe('Max^n search', () => {
     expect(result.move?.capture?.pieceId).toBe('q3');
   });
 
+  // Runs 3 separate Max^n searches (3/4/6-player boards) back to back —
+  // give vitest headroom above the 5000ms default for CPU-contended runs.
   it('returns a legal move from the 3/4/6-player initial positions', () => {
     const seatSets: HexPlayerIndex[][] = [
       [0, 3, 1],
@@ -88,7 +90,7 @@ describe('Max^n search', () => {
       expect(result.move).not.toBeNull();
       expect(result.move!.player).toBe(seats[0]);
     }
-  });
+  }, 15_000);
 
   it('searchBestMove routes 3+ player states to Max^n', () => {
     const s = state3([

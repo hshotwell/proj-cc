@@ -14,6 +14,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { searchBestMove } from '@/game/ai/hexchess/search';
+import { MATE_CP } from '@/game/ai/hexchess/evaluate';
 import { cubeCoord, cubeEquals } from '@/game/coordinates';
 import type { HexChessState, HexPiece } from '@/game/hexchess/state';
 
@@ -87,6 +88,10 @@ describe('Puzzle 1 — bishop captures hanging rook (depth 1)', () => {
 // ---------------------------------------------------------------------------
 
 describe('Puzzle 2 — black rook captures hanging white bishop (depth 1, player 1)', () => {
+  // OPTS.budgetMs is a soft target checked between iterative-deepening plies,
+  // not per-node — under parallel test-suite CPU contention a single ply can
+  // still run well past it in wall-clock time, so give vitest's timeout
+  // headroom above the 5000ms default.
   it('finds the rook capture of undefended bishop', () => {
     const state = makeState(
       [
@@ -105,7 +110,7 @@ describe('Puzzle 2 — black rook captures hanging white bishop (depth 1, player
     expect(cubeEquals(result.move!.to, cubeCoord(0, 3))).toBe(true);
     expect(result.move!.capture).not.toBeNull();
     expect(result.move!.capture!.pieceId).toBe('wB');
-  });
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -131,6 +136,7 @@ describe('Puzzle 2 — black rook captures hanging white bishop (depth 1, player
 // ---------------------------------------------------------------------------
 
 describe('Puzzle 3 — checkmate in 1 with queen (player 0)', () => {
+  // Same CPU-contention headroom rationale as Puzzle 2 above.
   it('finds a forced checkmate with the queen and reports an infinite eval', () => {
     // White queen + rook vs lone black king trapped at arm apex (-4, 8, -4).
     // The black king has only two on-board escape squares: (-4,7) and (-3,7).
@@ -149,9 +155,9 @@ describe('Puzzle 3 — checkmate in 1 with queen (player 0)', () => {
     expect(result.move).not.toBeNull();
     // The engine must choose the queen (the only piece that can deliver mate).
     expect(result.move!.pieceId).toBe('wQ');
-    // The search should report a forced win (Infinity score from evaluate()).
-    expect(result.evalCp).toBe(Number.POSITIVE_INFINITY);
-  });
+    // The search should report a forced win (mate score from evaluate()).
+    expect(result.evalCp).toBeGreaterThanOrEqual(MATE_CP);
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------

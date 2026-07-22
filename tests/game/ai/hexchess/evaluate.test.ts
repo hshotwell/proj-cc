@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluate } from '@/game/ai/hexchess/evaluate';
+import { evaluate, MATE_CP } from '@/game/ai/hexchess/evaluate';
 import { createInitialState } from '@/game/hexchess/starting';
 import type { HexChessConfig, HexChessState, HexPiece } from '@/game/hexchess/state';
 import { cubeCoord } from '@/game/coordinates';
@@ -56,22 +56,24 @@ describe('evaluate', () => {
     expect(score).toBeGreaterThan(-1100);
   });
 
-  it('checkmate with player 0 winning evaluates to +Infinity', () => {
+  it('checkmate with player 0 winning evaluates to +MATE_CP (finite)', () => {
     const state = createInitialState(config);
     const matedState: HexChessState = {
       ...state,
       result: { winner: 0, reason: 'checkmate' },
     };
-    expect(evaluate(matedState)).toBe(Number.POSITIVE_INFINITY);
+    expect(evaluate(matedState)).toBe(MATE_CP);
+    expect(Number.isFinite(evaluate(matedState))).toBe(true);
   });
 
-  it('checkmate with player 1 winning evaluates to -Infinity', () => {
+  it('checkmate with player 1 winning evaluates to -MATE_CP (finite)', () => {
     const state = createInitialState(config);
     const matedState: HexChessState = {
       ...state,
       result: { winner: 1, reason: 'checkmate' },
     };
-    expect(evaluate(matedState)).toBe(Number.NEGATIVE_INFINITY);
+    expect(evaluate(matedState)).toBe(-MATE_CP);
+    expect(Number.isFinite(evaluate(matedState))).toBe(true);
   });
 
   it('draw evaluates to exactly 0', () => {
