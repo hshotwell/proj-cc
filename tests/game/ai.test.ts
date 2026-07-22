@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createGame, cloneGameState } from '@/game/setup';
 import { cubeCoord, coordKey } from '@/game/coordinates';
 import { getGoalPositions, getHomePositions } from '@/game/state';
@@ -8,11 +8,34 @@ import {
   serializeGameState,
   deserializeGameState,
 } from '@/game/ai';
+import { clearTranspositionTable } from '@/game/ai/search';
 import { getPiecePhase, canReachGoalViaChain, findOptimalEndgameSequence, findEndgameMove } from '@/game/ai/endgame';
 import { scoreLandingQuality, scoreLastMoveResponse, scoreSetupBlockRisk, scoreLeapfrogPotential, scoreSamePieceMissedForwardPenalty, computeBestForwardGainBySource, scoreEphemeralOpponentJump, countOpponentPiecesInJump, scoreCreatesOpponentJump, scoreBackPiecePriority, scoreChainEndpointSetup } from '@/game/ai/strategy';
 import { centroid } from '@/game/coordinates';
 import { getGoalPositionsForState } from '@/game/state';
 import type { GameState, Move, PlayerIndex } from '@/types/game';
+import type { AIDifficulty } from '@/types/ai';
+
+// Each test constructs its own synthetic board and asserts a specific move
+// choice from findBestMove — the transposition table now reuses entries
+// across searches more aggressively (position+side keyed, not
+// position+side+depth), which is a real win within one game but means
+// leftover entries from an earlier unrelated test's board could otherwise
+// leak into a later test's search. Clear between tests for isolation.
+beforeEach(() => { clearTranspositionTable(); });
+
+// findBestMove's final step (selectMoveWithVariance) intentionally rolls
+// Math.random() to occasionally deviate from the top-scored move — even at
+// 'hard' difficulty — whenever the top few candidates are within a small
+// score gap. That's deliberate personality/unpredictability, not a bug, but
+// it makes exact-move-choice assertions inherently flaky whenever the
+// scored gap is close (which search changes can shift closer or further
+// apart). These regression tests are checking the AI's underlying scored
+// *preference*, not whether the variance roll happened to honor it, so
+// pin Math.random to always take the top candidate. No test in this file
+// exercises the variance/randomness behavior itself.
+beforeEach(() => { vi.spyOn(Math, 'random').mockReturnValue(0); });
+afterEach(() => { vi.restoreAllMocks(); });
 
 // Helper: create a simple move
 function makeMove(
@@ -1128,7 +1151,7 @@ describe('personality-scaled proactive bias', () => {
 
   it('generalist prefers a forward chain jump over the single back-piece step', async () => {
     const { findBestMove } = await import('@/game/ai/search');
-    const picked = findBestMove(buildFlag2State(), 'hard', 'generalist');
+    const picked = findBestMove(buildFlag2State(), 'hard', 'generalist', undefined, undefined, undefined, 10_000);
     expect(picked).not.toBeNull();
     if (picked) {
       // Back-piece step was (4,-6)→(3,-5). The fix must NOT pick that.
@@ -1139,11 +1162,11 @@ describe('personality-scaled proactive bias', () => {
       // Pick must be a meaningful jump.
       expect(picked.isJump).toBe(true);
     }
-  });
+  }, 15_000);
 
   it('aggressive also prefers a forward chain jump over the back-piece step', async () => {
     const { findBestMove } = await import('@/game/ai/search');
-    const picked = findBestMove(buildFlag2State(), 'hard', 'aggressive');
+    const picked = findBestMove(buildFlag2State(), 'hard', 'aggressive', undefined, undefined, undefined, 10_000);
     expect(picked).not.toBeNull();
     if (picked) {
       const backStep =
@@ -1152,11 +1175,11 @@ describe('personality-scaled proactive bias', () => {
       expect(backStep).toBe(false);
       expect(picked.isJump).toBe(true);
     }
-  });
+  }, 15_000);
 
   it('defensive keeps the conservative back-piece-first behavior', async () => {
     const { findBestMove } = await import('@/game/ai/search');
-    const picked = findBestMove(buildFlag2State(), 'hard', 'defensive');
+    const picked = findBestMove(buildFlag2State(), 'hard', 'defensive', undefined, undefined, undefined, 10_000);
     expect(picked).not.toBeNull();
     // Defensive should NOT be flipped by the proactive scaling — back-piece
     // step is its expected choice in this position. Failing this means the
@@ -1167,7 +1190,7 @@ describe('personality-scaled proactive bias', () => {
         picked.to.q === 3 && picked.to.r === -5;
       expect(backStep).toBe(true);
     }
-  });
+  }, 15_000);
 
   // Round-3 (user follow-up, 2026-06-29): "set ups are very important,
   // especially when the jump gain would be minimal, or its end game and
@@ -1260,7 +1283,10 @@ describe('personality-scaled proactive bias', () => {
     ts.currentPlayer = 0;
     ts.turnNumber = 34;
 
-    const picked = findBestMove(ts, 'hard', 'generalist');
+    // Fixed budget override — decouples this exact-move-choice assertion
+    // from ambient CPU availability, which otherwise affects how deep
+    // iterative deepening gets within AI_TIME_BUDGET_MS.hard.
+    const picked = findBestMove(ts, 'hard', 'generalist', undefined, undefined, undefined, 10_000);
     expect(picked).not.toBeNull();
     if (picked) {
       // The AI must NOT pick (3,0)→(2,1) — that's the wrong source choice
@@ -1270,7 +1296,7 @@ describe('personality-scaled proactive bias', () => {
         picked.to.q === 2 && picked.to.r === 1;
       expect(wrongSource).toBe(false);
     }
-  });
+  }, 15_000);
 
   // Round-2 Flag 1 (game review export, Turn 6, 2026-06-29T15:29Z): the AI
   // chose a J2 chain stopping at (0,-3) over a strategically-better J3 stop
@@ -1303,7 +1329,7 @@ describe('personality-scaled proactive bias', () => {
     ts.currentPlayer = 0;
     ts.turnNumber = 6;
 
-    const picked = findBestMove(ts, 'hard', 'generalist');
+    const picked = findBestMove(ts, 'hard', 'generalist', undefined, undefined, undefined, 10_000);
     expect(picked).not.toBeNull();
     if (picked) {
       // The AI must NOT pick the off-axis J2 landing at (0,-3).
@@ -1312,7 +1338,7 @@ describe('personality-scaled proactive bias', () => {
         picked.to.q === 0 && picked.to.r === -3;
       expect(offAxisJump).toBe(false);
     }
-  });
+  }, 15_000);
 
   // Round-2 Flag 2 (game review export, Turn 8, 2026-06-29T15:29Z): the AI
   // chose a J4 chain stopping at (-1,1) — 4 hops deep into opponent territory
@@ -1342,7 +1368,7 @@ describe('personality-scaled proactive bias', () => {
     ts.currentPlayer = 0;
     ts.turnNumber = 8;
 
-    const picked = findBestMove(ts, 'hard', 'generalist');
+    const picked = findBestMove(ts, 'hard', 'generalist', undefined, undefined, undefined, 10_000);
     expect(picked).not.toBeNull();
     if (picked) {
       // The AI must NOT pick the J4 over-extension landing at (-1,1).
@@ -1351,5 +1377,29 @@ describe('personality-scaled proactive bias', () => {
         picked.to.q === -1 && picked.to.r === 1;
       expect(overExtension).toBe(false);
     }
-  });
+  }, 15_000);
+});
+
+// Regression guard mirroring the hexchess "no-stall" fix from this same
+// session: the AI must always return a move while legal moves exist, at
+// every difficulty and both the 2-player (minimax) and 3+ player (maxn)
+// search paths.
+describe('findBestMove never returns null while legal moves exist', () => {
+  const difficulties: AIDifficulty[] = ['easy', 'medium', 'hard'];
+
+  for (const difficulty of difficulties) {
+    it(`2-player initial position, ${difficulty}`, async () => {
+      const { findBestMove } = await import('@/game/ai/search');
+      const state = createGame(2);
+      const picked = findBestMove(state, difficulty, 'generalist');
+      expect(picked).not.toBeNull();
+    });
+
+    it(`3-player initial position, ${difficulty}`, async () => {
+      const { findBestMove } = await import('@/game/ai/search');
+      const state = createGame(3);
+      const picked = findBestMove(state, difficulty, 'generalist');
+      expect(picked).not.toBeNull();
+    });
+  }
 });

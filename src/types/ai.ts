@@ -45,11 +45,18 @@ export const RICEFISH_PLUS_DEPTH_MP = RICEFISH_DEPTH_MP;
 
 export type AIPlayerMap = Partial<Record<PlayerIndex, AIConfig>>;
 
-/** Base mid-game search depth. */
+/**
+ * Base mid-game search depth. `hard` bumped 3->4: the default engine's
+ * interior search nodes now use a cheap O(1) move-ordering heuristic
+ * (+ killer moves + a real position hash) instead of evaluating every
+ * candidate move with the full heuristic stack, so the extra ply fits
+ * comfortably in the same time budget. This is a ceiling, not a target —
+ * iterative deepening only reaches it if the budget allows.
+ */
 export const AI_DEPTH: Record<AIDifficulty, number> = {
   easy: 2,
   medium: 2,
-  hard: 3,
+  hard: 4,
 };
 
 /** Deeper search used in early-game and end-game phases. */
@@ -86,9 +93,16 @@ export type ChampionGenomeSet = {
  */
 export const USE_TRAINED_GENOMES = true;
 
-/** Time budget for iterative deepening search (milliseconds). */
+/**
+ * Time budget for iterative deepening search (milliseconds). `hard`/`medium`
+ * bumped up now that interior search nodes are much cheaper per-node (see
+ * AI_DEPTH comment) — the search reaches further within the same wall clock
+ * time even without a budget increase; this bump lets it go further still.
+ * `easy` stays put: its character is intentional weakness/randomness via
+ * move filtering, not raw search depth.
+ */
 export const AI_TIME_BUDGET_MS: Record<AIDifficulty, number> = {
   easy:   250,
-  medium: 600,
-  hard:   1200,
+  medium: 900,
+  hard:   2000,
 };

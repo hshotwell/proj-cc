@@ -13,6 +13,7 @@ import { findEndgameMove, isLateEndgame, scoreEndgameMove, evaluateEndgameLatera
 import { findGenomeEndgameMove } from '@/game/training/endgameRunner';
 import { getOpeningMove } from './openingBook';
 import { clearApproachLaneCache } from './corridors';
+import { buildZobristTable, hashWithTable, type ZobristTable } from './zobrist';
 
 // Track recent board states to detect loops at the game state level
 const recentBoardStates = new Map<string, number>(); // hash -> count
@@ -22,26 +23,59 @@ const MAX_STATE_HISTORY = 20;
 let _searchStartTime = 0;
 let _searchTimeBudget = 0;
 
+// Zobrist table for the current top-level findBestMove call — board topology
+// (which cells exist) is fixed for the duration of one call, so this is
+// rebuilt once per call rather than assuming a fixed universe of cells.
+// Cheap (one O(cells) pass) relative to the many per-node hashes it enables.
+let _zobristTable: ZobristTable | null = null;
+
+function getPositionHash(state: GameState): string {
+  return hashWithTable(state, _zobristTable!);
+}
+
 // ── Transposition table ────────────────────────────────────────────────────
 type TTFlag = 'exact' | 'lower' | 'upper';
-interface TTEntry { score: number; flag: TTFlag; depth: number; }
+interface TTEntry { score: number; flag: TTFlag; depth: number; bestMove: Move | null; }
 const transpositionTable = new Map<string, TTEntry>();
 const MAX_TT_SIZE = 60000;
 
-function getTTKey(state: GameState, depth: number): string {
-  return `${getBoardStateHash(state)}|${depth}|${state.currentPlayer}`;
+// Key is position+side only (no depth) so a shallower iterative-deepening
+// pass's result can seed a deeper pass's move ordering; `entry.depth >= depth`
+// is the actual depth-sufficiency guard on read.
+function getTTKey(state: GameState): string {
+  return `${getPositionHash(state)}|${state.currentPlayer}`;
 }
 
-function storeTT(key: string, score: number, flag: TTFlag, depth: number): void {
+function storeTT(key: string, score: number, flag: TTFlag, depth: number, bestMove: Move | null): void {
   if (transpositionTable.size >= MAX_TT_SIZE) {
     const firstKey = transpositionTable.keys().next().value;
     if (firstKey !== undefined) transpositionTable.delete(firstKey);
   }
-  transpositionTable.set(key, { score, flag, depth });
+  transpositionTable.set(key, { score, flag, depth, bestMove });
 }
 
 export function clearTranspositionTable(): void {
   transpositionTable.clear();
+}
+
+// ── Killer moves ────────────────────────────────────────────────────────
+// Non-capturing/non-scoring move-ordering hint: a move that caused a beta
+// cutoff at a given remaining-depth is likely good at sibling nodes of the
+// same depth too. Cleared at the start of each findBestMove call. A stale
+// killer from a different position is harmless — it just won't match any
+// current candidate and gets ignored.
+const killerMoves = new Map<number, Move[]>();
+
+function sameMove(a: Move, b: Move): boolean {
+  return a.from.q === b.from.q && a.from.r === b.from.r && a.to.q === b.to.q && a.to.r === b.to.r;
+}
+
+function recordKiller(depth: number, move: Move): void {
+  const arr = killerMoves.get(depth) ?? [];
+  if (arr.some((m) => sameMove(m, move))) return;
+  arr.unshift(move);
+  if (arr.length > 2) arr.length = 2;
+  killerMoves.set(depth, arr);
 }
 
 // ── Game phase detection ────────────────────────────────────────────────────
@@ -313,13 +347,18 @@ export function computeRegressionPenalty(
   state: GameState,
   move: Move,
   player: PlayerIndex,
-  difficulty?: AIDifficulty
+  difficulty?: AIDifficulty,
+  // Optional pre-computed computePlayerProgress(state, player) — it's the
+  // same value for every candidate move at a given state, so a caller
+  // scoring many moves at once can compute it once and pass it in instead
+  // of every call redoing the same state-only work.
+  cachedProgressBefore?: number
 ): number {
   // For custom layouts, penalties are handled in findBestMoveForCustomLayout
   // This function is only used for standard layouts now
   if (state.isCustomLayout) {
     // Simple progress-based penalty as fallback (shouldn't be called normally)
-    const progressBefore = computePlayerProgress(state, player);
+    const progressBefore = cachedProgressBefore ?? computePlayerProgress(state, player);
     const nextState = applyMove(state, move);
     const progressAfter = computePlayerProgress(nextState, player);
     const progressDelta = progressAfter - progressBefore;
@@ -336,7 +375,7 @@ export function computeRegressionPenalty(
   const goalCenter = centroid(goalPositions);
 
   // Calculate progress change - this is the PRIMARY factor
-  const progressBefore = computePlayerProgress(state, player);
+  const progressBefore = cachedProgressBefore ?? computePlayerProgress(state, player);
   const nextState = applyMove(state, move);
   const progressAfter = computePlayerProgress(nextState, player);
   const progressDelta = progressAfter - progressBefore; // Positive = good
@@ -953,6 +992,75 @@ function getTopMoves(
   return keepGoalEntryJumps(deduped, goalKeySetForBonus, limit, state).map((s) => s.move);
 }
 
+// Cheap O(1)-per-move ordering heuristic for *interior* search-tree nodes
+// (ply >= 2, inside minimax/maxn). Root move selection stays on the full
+// getTopMoves()/getTopMovesFromList() heuristic stack above — this one is
+// for search-tree coverage/pruning quality, not final scoring, so it
+// deliberately skips evaluatePosition() and every strategy.ts scorer.
+// Reward moving toward the goal center (not just raw distance travelled,
+// since sternhalma has a well-defined forward direction unlike a generic
+// hex-distance metric); small jump bonus; aggressive personality leans in
+// further on forward progress. Modeled on ricefish/ordering.ts, which uses
+// an equivalent cheap heuristic successfully for this same game.
+function fastOrderingScore(move: Move, goalCenter: CubeCoord, personality: AIPersonality): number {
+  const progressDelta = cubeDistance(move.from, goalCenter) - cubeDistance(move.to, goalCenter);
+  let score = progressDelta + (move.isJump ? 2 : 0);
+  if (personality === 'aggressive' && progressDelta > 0) score += 0.5 * progressDelta;
+  return score;
+}
+
+function getTopMovesFast(
+  state: GameState,
+  player: PlayerIndex,
+  personality: AIPersonality,
+  difficulty: AIDifficulty,
+  limit: number,
+  ttBestMove: Move | null,
+  killers: Move[] | undefined
+): Move[] {
+  const allMoves = getAllValidMoves(state, player);
+
+  // Same hard-veto correctness gate as getTopMoves (illegal-feeling
+  // backward/repetition moves), computed once per state instead of once
+  // per candidate move via the optional cachedProgressBefore param.
+  const progressBefore = computePlayerProgress(state, player);
+  const viableMoves = allMoves.filter((m) => {
+    const regPenalty = computeRegressionPenalty(state, m, player, difficulty, progressBefore);
+    const repPenalty = computeRepetitionPenalty(state, m, player, difficulty);
+    return regPenalty < Infinity && repPenalty < Infinity;
+  });
+
+  const moves = viableMoves.length > 0 ? viableMoves : allMoves;
+  if (moves.length <= limit) return moves;
+
+  const goalPositions = getGoalPositionsForState(state, player);
+  const goalCenter = centroid(goalPositions);
+  const goalKeySet = new Set(goalPositions.map(g => coordKey(g)));
+
+  // TT best-move and killer moves get a priority bump above the natural
+  // heuristic range so they sort first (better alpha-beta cutoffs) without
+  // special-casing the truncation/goal-entry-protection logic below.
+  const PRIORITY_TT = 100000;
+  const PRIORITY_KILLER = 50000;
+
+  const scored = moves.map((move) => {
+    let score = fastOrderingScore(move, goalCenter, personality);
+    if (ttBestMove && sameMove(move, ttBestMove)) score += PRIORITY_TT;
+    else if (killers?.some((k) => sameMove(move, k))) score += PRIORITY_KILLER;
+    return { move, score };
+  });
+
+  // Collapse a single piece's multiple chain-jump stopping points down to
+  // its best (+ longest) variant before truncating — otherwise the limited
+  // candidate budget can get consumed by several near-duplicate stops of
+  // one piece's jump chain, crowding out a different piece's move that the
+  // deeper search needs to see (e.g. the refutation of an over-extension).
+  const deduped = selectBestChainStop(scored);
+  deduped.sort((a, b) => b.score - a.score);
+
+  return keepGoalEntryJumps(deduped, goalKeySet, limit, state).map((s) => s.move);
+}
+
 /**
  * Slice to `limit`, but guarantee that every chain jump entering the goal zone
  * survives. Without this, a piece's longest goal-entering chain can rank just
@@ -991,7 +1099,13 @@ function minimax(
   beta: number,
   maximizingPlayer: PlayerIndex,
   personality: AIPersonality,
-  difficulty: AIDifficulty
+  difficulty: AIDifficulty,
+  // True only for the ply immediately below the root (the opponent's most
+  // immediate response to a candidate root move). That's where the
+  // hand-tuned tactical corrections in getTopMoves matter most in practice
+  // — deeper plies use the cheap heuristic. Root itself already uses the
+  // full heuristic via getTopMovesFromList, untouched by this flag.
+  fullOrderingPly: boolean = false
 ): number {
   // Time-guard: abort deep recursion if budget exceeded
   if (depth > 0 && performance.now() - _searchStartTime >= _searchTimeBudget) {
@@ -1002,7 +1116,7 @@ function minimax(
   const origBeta = beta;
 
   // Transposition table lookup
-  const ttKey = getTTKey(state, depth);
+  const ttKey = getTTKey(state);
   const ttEntry = transpositionTable.get(ttKey);
   if (ttEntry !== undefined && ttEntry.depth >= depth) {
     if (ttEntry.flag === 'exact') return ttEntry.score;
@@ -1013,38 +1127,42 @@ function minimax(
 
   if (depth === 0) {
     const score = evaluatePosition(state, maximizingPlayer, personality, difficulty);
-    storeTT(ttKey, score, 'exact', 0);
+    storeTT(ttKey, score, 'exact', 0, null);
     return score;
   }
 
   const currentPlayer = state.currentPlayer;
   const isMaximizing = currentPlayer === maximizingPlayer;
   const limit = AI_MOVE_LIMIT[difficulty];
-  const moves = getTopMoves(state, currentPlayer, personality, difficulty, limit);
+  const killers = killerMoves.get(depth);
+  const moves = fullOrderingPly
+    ? getTopMoves(state, currentPlayer, personality, difficulty, limit)
+    : getTopMovesFast(state, currentPlayer, personality, difficulty, limit, ttEntry?.bestMove ?? null, killers);
 
   if (moves.length === 0) {
     return evaluatePosition(state, maximizingPlayer, personality, difficulty);
   }
 
   let score: number;
+  let bestMoveAtNode: Move | null = null;
 
   if (isMaximizing) {
     score = -Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
       const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty);
-      if (eval_ > score) score = eval_;
+      if (eval_ > score) { score = eval_; bestMoveAtNode = move; }
       if (score > alpha) alpha = score;
-      if (alpha >= beta) break;
+      if (alpha >= beta) { recordKiller(depth, move); break; }
     }
   } else {
     score = Infinity;
     for (const move of moves) {
       const next = applyMove(state, move);
       const eval_ = minimax(next, depth - 1, alpha, beta, maximizingPlayer, personality, difficulty);
-      if (eval_ < score) score = eval_;
+      if (eval_ < score) { score = eval_; bestMoveAtNode = move; }
       if (score < beta) beta = score;
-      if (alpha >= beta) break;
+      if (alpha >= beta) { recordKiller(depth, move); break; }
     }
   }
 
@@ -1052,7 +1170,7 @@ function minimax(
   const flag: TTFlag =
     score <= origAlpha ? 'upper' :
     score >= origBeta  ? 'lower' : 'exact';
-  storeTT(ttKey, score, flag, depth);
+  storeTT(ttKey, score, flag, depth, bestMoveAtNode);
 
   return score;
 }
@@ -1063,7 +1181,10 @@ function maxn(
   depth: number,
   aiPlayer: PlayerIndex,
   personality: AIPersonality,
-  difficulty: AIDifficulty
+  difficulty: AIDifficulty,
+  // Same rationale as minimax's fullOrderingPly: use the full heuristic
+  // stack only for the ply immediately below the root.
+  fullOrderingPly: boolean = false
 ): number {
   // Time-guard: abort deep recursion if budget exceeded
   if (depth > 0 && performance.now() - _searchStartTime >= _searchTimeBudget) {
@@ -1076,7 +1197,10 @@ function maxn(
 
   const currentPlayer = state.currentPlayer;
   const limit = AI_MOVE_LIMIT[difficulty];
-  const moves = getTopMoves(state, currentPlayer, personality, difficulty, limit);
+  // maxn has no alpha-beta cutoffs, so no TT/killer-move ordering hints apply.
+  const moves = fullOrderingPly
+    ? getTopMoves(state, currentPlayer, personality, difficulty, limit)
+    : getTopMovesFast(state, currentPlayer, personality, difficulty, limit, null, undefined);
 
   if (moves.length === 0) {
     return evaluatePosition(state, aiPlayer, personality, difficulty);
@@ -1578,6 +1702,10 @@ export function findBestMove(
   openingMoves?: { from: { q: number; r: number; s: number }; to: { q: number; r: number; s: number } }[] | null,
   genome?: import('@/game/training-v2/genomes').DefaultGenome,
   endgameGenome?: import('@/types/training').Genome,
+  // Overrides AI_TIME_BUDGET_MS[difficulty] when provided. Lets tests pin a
+  // large fixed budget so search-depth-dependent assertions don't depend on
+  // ambient CPU availability; production call sites omit it.
+  budgetOverrideMs?: number,
 ): Move | null {
   setInjectedDefaultGenome(genome);
   try {
@@ -1585,7 +1713,7 @@ export function findBestMove(
 
   // Set timer immediately so time-guards in minimax/maxn are valid for this call
   _searchStartTime = performance.now();
-  _searchTimeBudget = AI_TIME_BUDGET_MS[difficulty];
+  _searchTimeBudget = budgetOverrideMs ?? AI_TIME_BUDGET_MS[difficulty];
 
   // PRIORITY 0: Opening book — play textbook lines in the early game
   if (!state.isCustomLayout && openingMoves && openingMoves.length > 0) {
@@ -1819,6 +1947,11 @@ export function findBestMove(
     }
   }
 
+  // Board topology (which cells exist) is fixed for this whole call, so
+  // build the hash table once here rather than per search node.
+  _zobristTable = buildZobristTable(state);
+  killerMoves.clear();
+
   // Iterative deepening: search depth 1, then 2, ... up to maxDepth.
   // Each iteration overwrites the previous result, so even if we abort
   // mid-iteration we still have the previous depth's best move.
@@ -1848,9 +1981,9 @@ export function findBestMove(
       let score: number;
 
       if (is2Player) {
-        score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty);
+        score = minimax(next, depth - 1, -Infinity, Infinity, player, personality, difficulty, true);
       } else {
-        score = maxn(next, depth - 1, player, personality, difficulty);
+        score = maxn(next, depth - 1, player, personality, difficulty, true);
       }
 
       score -= penalty;
